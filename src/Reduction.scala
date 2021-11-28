@@ -15,6 +15,7 @@ object Reduction {
       case Variable(k)    => (k < c) || (k+d >= 0)
       case Abs(_, body)   => negativeShiftValidity(body, d, c+1)
       case App(t1, t2)    => negativeShiftValidity(t1, d, c) && negativeShiftValidity(t2, d, c)
+      case Fix(f)         => negativeShiftValidity(f, d, c)
     }
   }
 
@@ -26,6 +27,7 @@ object Reduction {
       case Variable(k)    => if (k < c) Variable(k) else Variable(k + d)
       case Abs(typ, body) => Abs(typ, shift(body, d, c+1))
       case App(t1, t2)    => App(shift(t1, d, c), shift(t2, d, c))
+      case Fix(f)         => Fix(shift(f, d, c))
     }
   }
 
@@ -35,6 +37,7 @@ object Reduction {
       case Variable(k) => if (k == j) s else t 
       case Abs(typ, body) => Abs(typ, substitute(body, j+1, shift(s, 1, 0)))
       case App(t1, t2) => App(substitute(t1, j, s), substitute(t2, j, s))
+      case Fix(f) => Fix(substitute(f, j, s))
     }
   }
 
@@ -62,6 +65,15 @@ object Reduction {
           case _ => false
         })
       }
+      case Fix(f) => {
+        (tp match {
+          case Fix(fp) => reducesTo(f, fp)
+          case _ => false
+        }) || (f match {
+          case Abs(_, body) => absSubsitution(body, t) == tp
+          case _ => false
+        })
+      }
     }
   }
 
@@ -77,6 +89,13 @@ object Reduction {
             case Abs(_, body) => Set[Term](absSubsitution(body, t2))
             case _ => Set[Term]()
           })
+      }
+      case Fix(f) => {
+        f match {
+          case Abs(_, body) => reduceAll(f).map[Term](Fix(_)) + absSubsitution(body, t)
+          case _ => reduceAll(f).map(Fix(_))
+        }
+        
       }
     }
   }
@@ -100,6 +119,18 @@ object Reduction {
               Some(absSubsitution(body, t2))
             }
             case _ => None[Term]
+          }
+        }
+      }
+      case Fix(f) => {
+        if(!f.isValue) {
+          reduceCallByValue(f).map(Fix(_))
+        }
+        else {
+          f match {
+            case Abs(_, body) => {
+              Some(absSubsitution(body, t))
+            }
           }
         }
       }
@@ -154,6 +185,9 @@ object ReductionProperties {
         boundRangeShiftComposition(t1, a, b, c, d)
         boundRangeShiftComposition(t2, a, b, c, d)
       }
+      case Fix(f) => {
+        boundRangeShiftComposition(f, a, b, c, d)
+      }
     }
   }.ensuring(shift(shift(t, a, c), b, d) == shift(t, a + b, c))
 
@@ -174,6 +208,7 @@ object ReductionProperties {
         boundRangeShift(t2, d, c, b)
         assert(!shift(t, d, c).hasFreeVariablesIn(c, d+b))
       }
+      case Fix(f) => boundRangeShift(f, d, c, b)
     }
 
   }.ensuring(!shift(t, d, c).hasFreeVariablesIn(c, d+b))
@@ -189,9 +224,11 @@ object ReductionProperties {
       case Variable(k) => ()
       case Abs(targ, body) => 
         boundRangeShiftBelowCutoff(body, d, c + 1, a + 1, b)
-      case App(t1, t2) => 
+      case App(t1, t2) => {
         boundRangeShiftBelowCutoff(t1, d, c, a, b)
         boundRangeShiftBelowCutoff(t2, d, c, a, b)
+      }
+      case Fix(f) => boundRangeShiftBelowCutoff(f, d, c, a, b)
     }
   }.ensuring(!shift(t, d, c).hasFreeVariablesIn(a, b))
 
@@ -212,6 +249,9 @@ object ReductionProperties {
         boundRangeSubstitutionLemma(t1, j, s)
         boundRangeSubstitutionLemma(t2, j, s)
       }
+      case Fix(f) => {
+        boundRangeSubstitutionLemma(f, j, s)
+      }
     }
   }.ensuring(!substitute(t, j, s).hasFreeVariable(j))
 
@@ -231,6 +271,7 @@ object ReductionProperties {
         boundRangeShiftBackLemma(t2, d, c)
         assert(negativeShiftValidity(t, -d, c))
       }
+      case Fix(f) => boundRangeShiftBackLemma(f, d, c)
     }
   }.ensuring(negativeShiftValidity(t, -d, c))
 
@@ -251,6 +292,15 @@ object ReductionProperties {
           case App(t1p, t2p) if t1 == t1p && reducesTo(t2, t2p) => {
             reduceAllCompleteness(t2, t2p)
             reduceAll(t2).mapPost1[Term](t2p => App(t1, t2p))(t2p)
+          }
+          case _ => assert(reduceAll(t).contains(tp))
+        })
+      }
+      case Fix(f) => {
+        (tp match {
+          case Fix(fp) if reducesTo(f, fp) => {
+            reduceAllCompleteness(f, fp)
+            reduceAll(f).mapPost1[Term](Fix(_))(fp)
           }
           case _ => assert(reduceAll(t).contains(tp))
         })
@@ -278,6 +328,16 @@ object ReductionProperties {
           assert(reducesTo(t, tp))
         }
       }
+      case Fix(f) => {
+        if(reduceAll(f).map[Term](Fix(_)).contains(tp)) {
+          val Fix(fp) = tp
+          reduceAll(f).mapPost2[Term](Fix(_))(tp)
+          reduceAllSoundness(f, fp)
+        }
+        else {
+          assert(reducesTo(t, tp))
+        }
+      }
     }
   }.ensuring(reducesTo(t, tp))
 
@@ -296,6 +356,14 @@ object ReductionProperties {
         }
         else if(!t2.isValue) {
           reduceCallByValueSoundness(t2)
+        }
+        else {
+          assert(reducesTo(t, tp))
+        }
+      }
+      case Fix(f) => {
+        if(!f.isValue) {
+          reduceCallByValueSoundness(f)
         }
         else {
           assert(reducesTo(t, tp))

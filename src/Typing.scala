@@ -1,6 +1,7 @@
 import stainless.lang._
 import stainless.collection._
 import stainless.annotation._
+import stainless.proof._
 
 object Typing {
   import STLC._
@@ -11,18 +12,21 @@ object Typing {
       case VarDeriv(e, _, _) => e
       case AbsDeriv(e, _, _, _) => e
       case AppDeriv(e, _, _, _, _) => e
+      case FixDeriv(e, _, _, _) => e
     }
 
     def t: Type = this match {
       case VarDeriv(_, t, _) => t
       case AbsDeriv(_, t, _, _) => t
       case AppDeriv(_, t, _, _, _) => t
+      case FixDeriv(_, t, _, _) => t
     }
 
     def term: Term = this match{
       case VarDeriv(_, _, term) => term
       case AbsDeriv(_, _, term, _) => term
       case AppDeriv(_, _, term, _, _) => term
+      case FixDeriv(_, _, term, _) => term
     }
 
     def isValid: Boolean = {
@@ -33,6 +37,7 @@ object Typing {
           case ArrowType(t1, t2) => abs.b == t1 && btd.t == t2
         })
         case AppDeriv(env, t, app, btd1, btd2) => btd1.term == app.t1 && btd2.term == app.t2 && btd1.env == env && btd2.env == env && btd1.t == ArrowType(btd2.t, t) && btd1.isValid && btd2.isValid
+        case FixDeriv(env, t, Fix(f), ftd) => ftd.term == f && ftd.env == env && ftd.t == ArrowType(t, t) && ftd.isValid
       }
     }
     
@@ -40,6 +45,7 @@ object Typing {
   case class VarDeriv(env: Environment, t: Type, term: Variable) extends TypeDeriv
   case class AbsDeriv(env: Environment, t: Type, term: Abs, btd: TypeDeriv) extends TypeDeriv
   case class AppDeriv(env: Environment, t: Type, term: App, btd1: TypeDeriv, btd2: TypeDeriv) extends TypeDeriv
+  case class FixDeriv(env: Environment, t: Type, term: Fix, ftd: TypeDeriv) extends TypeDeriv
 
 
   def deriveType(env: Environment, t: Term): Option[TypeDeriv] = {
@@ -64,11 +70,26 @@ object Typing {
           case (_, _) => None()
         }
       }
+      case fix@Fix(f) => {
+        deriveType(env, f) match {
+          case Some(ftd) => {
+            ftd.t match {
+              case ArrowType(typ1, typ2) if typ1 == typ2 => Some(FixDeriv(env, typ1, fix, ftd))
+              case _ => None()
+            }
+          }
+          case _ => None()
+        }
+      }
     }
   }
   
   def typeOf(env: Environment, t: Term): Option[Type] = {
     deriveType(env, t).map(der => der.t)
+  }
+
+  def typeOf(t: Term): Option[Type] = {
+    typeOf(Nil(), t)
   }
 }
 
@@ -87,12 +108,17 @@ object TypingProperties {
 
   def deriveTypeValidity(env: Environment, t: Term): Unit = {
     t match {
-      case App(t1, t2) => 
+      case Variable(_) => ()
+      case Abs(targ, body) => {
+        deriveTypeValidity(targ :: env, body)
+      }
+      case App(t1, t2) => {
         deriveTypeValidity(env, t1)
         deriveTypeValidity(env, t2)
-      case Abs(targ, body) =>
-        deriveTypeValidity(targ :: env, body)
-      case Variable(_) => ()
+      }
+      case Fix(f) => {
+        deriveTypeValidity(env, f)
+      }
     }
   }.ensuring(deriveType(env, t) match {
     case Some(td: TypeDeriv) => td.isValid && td.term == t && td.env == env
@@ -137,9 +163,11 @@ object TypingProperties {
     t match{
       case Variable(_) => ()
       case Abs(_, _) => ()
-      case App(t1, t2) =>
+      case App(t1, t2) => {
         callByValueProgress(t1)
         callByValueProgress(t2) 
+      }
+      case Fix(f) => callByValueProgress(f)
     }
   }.ensuring(reduceCallByValue(t).isDefined || t.isValue)
 
@@ -158,6 +186,9 @@ object TypingProperties {
       case App(t1, t2) => {
         environmentWeakening(t1, env, envExt)
         environmentWeakening(t2, env, envExt)
+      }
+      case Fix(f) => {
+        environmentWeakening(f, env, envExt)
       }
     }
   }.ensuring(typeOf(env, t) == typeOf(env ++ envExt, t))
@@ -202,26 +233,29 @@ object TypingProperties {
       case Variable(k) => {
         if (k < env1.size){
           variableEnvironmentUpdate(Variable(k), env1, env2, (typ :: env2))
-          assert(typeOf(env1 ++ env2, t) == typeOf(env1 ++ (typ :: env2), shift(t, 1, env1.size)))
+          check(typeOf(env1 ++ env2, t) == typeOf(env1 ++ (typ :: env2), shift(t, 1, env1.size)))
         }
         else{
           insertionIndexing(env1, env2, typ, k)
-          assert(typeOf(env1 ++ env2, t) == typeOf(env1 ++ (typ :: env2), shift(t, 1, env1.size)))
+          check(typeOf(env1 ++ env2, t) == typeOf(env1 ++ (typ :: env2), shift(t, 1, env1.size)))
         }
-        assert(typeOf(env1 ++ env2, t) == typeOf(env1 ++ (typ :: env2), shift(t, 1, env1.size)))
       }
       case Abs(targ, body) => {
         absInversionLemma(env1 ++ env2, targ, body)
         insertTypeInEnv(targ :: env1, typ, env2, body)
         absInversionLemma(env1 ++ (typ :: env2), targ, shift(body, 1, env1.size + 1))
-        assert(typeOf(env1 ++ env2, t) == typeOf(env1 ++ (typ :: env2), shift(t, 1, env1.size)))
+        check(typeOf(env1 ++ env2, t) == typeOf(env1 ++ (typ :: env2), shift(t, 1, env1.size)))
       }
       case App(t1, t2) => {
         appInversionLemma(env1 ++ env2, t1, t2)
         insertTypeInEnv(env1, typ, env2, t2)
         insertTypeInEnv(env1, typ, env2, t1)
         appInversionLemma(env1 ++ (typ :: env2), shift(t1, 1, env1.size), shift(t2, 1, env1.size))
-        assert(typeOf(env1 ++ env2, t) == typeOf(env1 ++ (typ :: env2), shift(t, 1, env1.size)))
+        check(typeOf(env1 ++ env2, t) == typeOf(env1 ++ (typ :: env2), shift(t, 1, env1.size)))
+      }
+      case Fix(f) => {
+        insertTypeInEnv(env1, typ, env2, f)
+        check(typeOf(env1 ++ env2, t) == typeOf(env1 ++ (typ :: env2), shift(t, 1, env1.size)))
       }
     }
 
@@ -245,19 +279,18 @@ object TypingProperties {
       case Variable(k) => {
         if (k < env1.size) {
           variableEnvironmentUpdate(Variable(k), env1, typ :: env2, env2)
-          assert(typeOf(env1 ++ (typ :: env2), t) == typeOf(env1 ++ env2, shift(t, -1, env1.size)))
+          check(typeOf(env1 ++ (typ :: env2), t) == typeOf(env1 ++ env2, shift(t, -1, env1.size)))
         }
         else {
           insertionIndexing(env1, env2, typ, k - 1)
-          assert(typeOf(env1 ++ (typ :: env2), t) == typeOf(env1 ++ env2, shift(t, -1, env1.size)))
+          check(typeOf(env1 ++ (typ :: env2), t) == typeOf(env1 ++ env2, shift(t, -1, env1.size)))
         }
-        assert(typeOf(env1 ++ (typ :: env2), t) == typeOf(env1 ++ env2, shift(t, -1, env1.size)))
       }
       case Abs(targ, body) => {
         absInversionLemma(env1 ++ (typ :: env2), targ, body)
         removeTypeInEnv(targ :: env1, typ, env2, body)
         absInversionLemma(env1 ++ env2, targ, shift(body, -1, env1.size + 1))
-        assert(typeOf(env1 ++ (typ :: env2), t) == typeOf(env1 ++ env2, shift(t, -1, env1.size)))
+        check(typeOf(env1 ++ (typ :: env2), t) == typeOf(env1 ++ env2, shift(t, -1, env1.size)))
       }
       case App(t1, t2) => {
         appInversionLemma(env1 ++ (typ :: env2), t1, t2)
@@ -265,7 +298,11 @@ object TypingProperties {
         removeTypeInEnv(env1, typ, env2, t1)
         appInversionLemma(env1 ++ env2, shift(t1, -1, env1.size), shift(t2, -1, env1.size))
         assert(App(shift(t1, -1, env1.size), shift(t2, -1, env1.size)) == shift(t, -1, env1.size))
-        assert(typeOf(env1 ++ (typ :: env2), t) == typeOf(env1 ++ env2, shift(t, -1, env1.size)))
+        check(typeOf(env1 ++ (typ :: env2), t) == typeOf(env1 ++ env2, shift(t, -1, env1.size)))
+      }
+      case Fix(f) => {
+        removeTypeInEnv(env1, typ, env2, f)
+        check(typeOf(env1 ++ (typ :: env2), t) == typeOf(env1 ++ env2, shift(t, -1, env1.size)))
       }
     }
 
@@ -295,6 +332,9 @@ object TypingProperties {
       case App(t1, t2) => {
         preservationUnderSubst(env, t1, j, s)
         preservationUnderSubst(env, t2, j, s)
+      }
+      case Fix(f) => {
+        preservationUnderSubst(env, f, j, s)
       }
     }
   }.ensuring(typeOf(env, t) == typeOf(env, substitute(t, j, s)))
@@ -327,7 +367,7 @@ object TypingProperties {
     t match{
       case Variable(_) => ()
       case Abs(_, _) => ()
-      case App(t1, t2) =>
+      case App(t1, t2) => {
         if(!t1.isValue) {
           callByValuePreservationTheorem(env, t1)
         }
@@ -336,11 +376,22 @@ object TypingProperties {
         else {
           assert(t1.isValue && t2.isValue)
           t1 match {
-              case Abs(targ, body) => 
+              case Abs(_, body) => 
                 preservationUnderAbsSubst(env, body, t2)
               case _ => ()
           }
         }
+      }
+      case Fix(f) => {
+        if(!f.isValue) {
+          callByValuePreservationTheorem(env, f)
+        }
+        else {
+          f match {
+            case Abs(_, body) => preservationUnderAbsSubst(env, body, t)
+          }
+        }
+      }
     }
   }.ensuring( typeOf(env, reduceCallByValue(t).get) == typeOf(env, t) )
 

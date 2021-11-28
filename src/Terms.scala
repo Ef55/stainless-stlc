@@ -20,6 +20,7 @@ object STLC {
         case Variable(k)    => k == i
         case Abs(_, body)   => body.hasFreeVariable(i+1)
         case App(t1, t2)    => t1.hasFreeVariable(i) || t2.hasFreeVariable(i)
+        case Fix(f)         => f.hasFreeVariable(i)
       }
     }.ensuring(res => res == this.hasFreeVariablesIn(i, 1))
 
@@ -30,6 +31,7 @@ object STLC {
         case Variable(k)    => (c <= k) && (k < c+d)
         case Abs(_, body)   => body.hasFreeVariablesIn(c+1, d)
         case App(t1, t2)    => t1.hasFreeVariablesIn(c, d) || t2.hasFreeVariablesIn(c, d)
+        case Fix(f)         => f.hasFreeVariablesIn(c, d)
       }
     }.ensuring(res => (d == 0) ==> !res)
   }
@@ -37,7 +39,9 @@ object STLC {
       require(k >= 0)
   }
   case class Abs(b: Type, t: Term) extends Term
-  case class App(t1: Term, t2: Term) extends Term
+  sealed trait AppLike extends Term
+  case class App(t1: Term, t2: Term) extends AppLike
+  case class Fix(t: Term) extends AppLike
 
   sealed trait Type
   case class BasicType(s: String) extends Type
@@ -50,6 +54,7 @@ object STLC {
         case Variable(k)    => k < c
         case Abs(_, body)   => rec(body, c+1)
         case App(t1, t2)    => rec(t1, c) && rec(t2, c)
+        case Fix(f)         => rec(f, c)
       }
     }
 
@@ -74,6 +79,7 @@ object TermsProperties{
         boundRangeDecrease(t1, c, d1, d2)
         boundRangeDecrease(t2, c, d1, d2)
       }
+      case Fix(f) => boundRangeDecrease(f, c, d1, d2)
     }
   }.ensuring(!t.hasFreeVariablesIn(c, d2))
 
@@ -85,12 +91,12 @@ object TermsProperties{
 
     t match {
       case Variable(_) => ()
-      case Abs(targ, body) => 
-        noFreeVariablesIncreaseCutoff(body, c1 + 1, c2 + 1, d)
+      case Abs(targ, body) => noFreeVariablesIncreaseCutoff(body, c1 + 1, c2 + 1, d)
       case App(t1, t2) => {
         noFreeVariablesIncreaseCutoff(t1, c1, c2, d)
         noFreeVariablesIncreaseCutoff(t2, c1, c2, d)
       }
+      case Fix(f) => noFreeVariablesIncreaseCutoff(f, c1, c2, d)
     }
   }.ensuring(!t.hasFreeVariablesIn(c2, d - (c2 - c1)))
 
@@ -109,6 +115,7 @@ object TermsProperties{
         boundRangeConcatenation(t1, a, b, c)
         boundRangeConcatenation(t2, a, b, c)
       }
+      case Fix(f) => boundRangeConcatenation(f, a, b, c)
     }
   }.ensuring(!t.hasFreeVariablesIn(a, b + c))
 
@@ -129,6 +136,7 @@ object TermsProperties{
         boundRangeSinglize(t2, j, d, i)
         assert(!t.hasFreeVariable(i))
       }
+      case Fix(f) => boundRangeSinglize(f, j, d, i)
     }
   }.ensuring(!t.hasFreeVariable(i))
 }
