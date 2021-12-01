@@ -13,6 +13,7 @@ object Reduction {
     require(d < 0)
     t match {
       case Variable(k)    => (k < c) || (k+d >= 0)
+      case Cst(_)         => true
       case Abs(_, body)   => negativeShiftValidity(body, d, c+1)
       case App(t1, t2)    => negativeShiftValidity(t1, d, c) && negativeShiftValidity(t2, d, c)
       case Fix(f)         => negativeShiftValidity(f, d, c)
@@ -25,6 +26,7 @@ object Reduction {
     require(c >= 0)
     t match {
       case Variable(k)    => if (k < c) Variable(k) else Variable(k + d)
+      case Cst(_)         => t
       case Abs(typ, body) => Abs(typ, shift(body, d, c+1))
       case App(t1, t2)    => App(shift(t1, d, c), shift(t2, d, c))
       case Fix(f)         => Fix(shift(f, d, c))
@@ -34,10 +36,11 @@ object Reduction {
   // [j -> s]t
   def substitute(t: Term, j: BigInt, s: Term): Term = {
     t match {
-      case Variable(k) => if (k == j) s else t 
+      case Variable(k)    => if (k == j) s else t 
+      case Cst(_)         => t
       case Abs(typ, body) => Abs(typ, substitute(body, j+1, shift(s, 1, 0)))
-      case App(t1, t2) => App(substitute(t1, j, s), substitute(t2, j, s))
-      case Fix(f) => Fix(substitute(f, j, s))
+      case App(t1, t2)    => App(substitute(t1, j, s), substitute(t2, j, s))
+      case Fix(f)         => Fix(substitute(f, j, s))
     }
   }
 
@@ -54,6 +57,7 @@ object Reduction {
   def reducesTo(t: Term, tp: Term): Boolean = {
     t match {
       case Variable(_) => false
+      case Cst(_) => false
       case Abs(_, _) => false
       case App(t1, t2) => {
         (tp match {
@@ -81,6 +85,7 @@ object Reduction {
   def reduceAll(t: Term): Set[Term] = {
     t match {
       case Variable(_) => Set[Term]()
+      case Cst(_) => Set[Term]()
       case Abs(_, _) => Set[Term]()
       case App(t1, t2) => {
         reduceAll(t1).map[Term](t1p => App(t1p, t2)) ++ 
@@ -104,8 +109,9 @@ object Reduction {
 
   def reduceCallByValue(t: Term): Option[Term] = {
     t match {
-      case Variable(_) => None[Term]
-      case Abs(_, _) => None[Term]
+      case Variable(_) => None[Term]()
+      case Cst(_) => None[Term]()
+      case Abs(_, _) => None[Term]()
       case App(t1, t2) => {
         if(!t1.isValue) {
           reduceCallByValue(t1).map(t1p => App(t1p, t2))
@@ -118,7 +124,7 @@ object Reduction {
             case Abs(_, body) => {
               Some(absSubsitution(body, t2))
             }
-            case _ => None[Term]
+            case _ => None[Term]()
           }
         }
       }
@@ -131,6 +137,7 @@ object Reduction {
             case Abs(_, body) => {
               Some(absSubsitution(body, t))
             }
+            case _ => None[Term]()
           }
         }
       }
@@ -146,6 +153,7 @@ object ReductionProperties {
 
   // Substitution & shifting lemmas
 
+  @opaque @pure
   def boundRangeShiftComposition(t: Term, a: BigInt, b: BigInt, c: BigInt, d: BigInt): Unit = {
     require(a >= 0)
     require(c >= 0)
@@ -177,7 +185,8 @@ object ReductionProperties {
 
 
     t match {
-      case Variable(k) => ()
+      case Variable(_) => ()
+      case Cst(_) => ()
       case Abs(targ, body) => {
         boundRangeShiftComposition(body, a, b, c + 1, d + 1)
       }
@@ -191,6 +200,7 @@ object ReductionProperties {
     }
   }.ensuring(shift(shift(t, a, c), b, d) == shift(t, a + b, c))
 
+  @opaque @pure
   def boundRangeShift(t: Term, d: BigInt, c: BigInt, b: BigInt): Unit = {
     require(c >= 0)
     require(d >= 0)
@@ -199,6 +209,7 @@ object ReductionProperties {
 
     t match {
       case Variable(_)    => assert(!shift(t, d, c).hasFreeVariablesIn(c, d+b))
+      case Cst(_)    => assert(!shift(t, d, c).hasFreeVariablesIn(c, d+b))
       case Abs(_, body)   => {
         boundRangeShift(body, d, c+1, b)
         assert(!shift(t, d, c).hasFreeVariablesIn(c, d+b))
@@ -213,6 +224,7 @@ object ReductionProperties {
 
   }.ensuring(!shift(t, d, c).hasFreeVariablesIn(c, d+b))
 
+  @opaque @pure
   def boundRangeShiftBelowCutoff(t: Term, d: BigInt, c: BigInt, a: BigInt, b: BigInt): Unit = {
     require(d >= 0)
     require(c >= 0)
@@ -222,6 +234,7 @@ object ReductionProperties {
     require(!t.hasFreeVariablesIn(a, b))
     t match {
       case Variable(k) => ()
+      case Cst(_) => ()
       case Abs(targ, body) => 
         boundRangeShiftBelowCutoff(body, d, c + 1, a + 1, b)
       case App(t1, t2) => {
@@ -232,12 +245,16 @@ object ReductionProperties {
     }
   }.ensuring(!shift(t, d, c).hasFreeVariablesIn(a, b))
 
+  @opaque @pure
   def boundRangeSubstitutionLemma(t: Term, j: BigInt, s: Term): Unit = {
     require(j >= 0)
     require(!s.hasFreeVariablesIn(0, j+1))
 
     t match {
-      case Variable(k) => {
+      case Variable(_) => {
+        boundRangeSinglize(s, 0, j+1, j)
+      }
+      case Cst(_) => {
         boundRangeSinglize(s, 0, j+1, j)
       }
       case Abs(_, body) => {
@@ -255,13 +272,15 @@ object ReductionProperties {
     }
   }.ensuring(!substitute(t, j, s).hasFreeVariable(j))
 
+  @opaque @pure
   def boundRangeShiftBackLemma(t: Term, d: BigInt, c: BigInt): Unit = {
     require(c >= 0)
     require(d > 0)
     require(!t.hasFreeVariablesIn(c, d))
 
     t match {
-      case Variable(k) => assert(negativeShiftValidity(t, -d, c))
+      case Variable(_) => assert(negativeShiftValidity(t, -d, c))
+      case Cst(_) => assert(negativeShiftValidity(t, -d, c))
       case Abs(_, body) => {
         boundRangeShiftBackLemma(body, d, c+1)
         assert(negativeShiftValidity(t, -d, c))
@@ -277,11 +296,13 @@ object ReductionProperties {
 
   // ReduceAll correctness
 
+  @opaque @pure
   def reduceAllCompleteness(t: Term, tp: Term): Unit = {
     require(reducesTo(t, tp))
 
     t match {
       case Variable(_) => assert(reduceAll(t).contains(tp))
+      case Cst(_) => assert(reduceAll(t).contains(tp))
       case Abs(_, _) => assert(reduceAll(t).contains(tp))
       case App(t1, t2) => {
         (tp match {
@@ -308,10 +329,12 @@ object ReductionProperties {
     }
   }.ensuring(reduceAll(t).contains(tp))
 
+  @opaque @pure
   def reduceAllSoundness(t: Term, tp: Term): Unit = {
     require(reduceAll(t).contains(tp))
     t match {
       case Variable(_) => assert(reducesTo(t, tp))
+      case Cst(_) => assert(reducesTo(t, tp))
       case Abs(_, _) => assert(reducesTo(t, tp))
       case App(t1, t2) => {
         if(reduceAll(t1).map[Term](t1p => App(t1p, t2)).contains(tp)) {
@@ -343,12 +366,14 @@ object ReductionProperties {
 
   // Call-by-value soudness
 
+  @opaque @pure
   def reduceCallByValueSoundness(t: Term): Unit = {
     require(reduceCallByValue(t).isDefined)
     val tp = reduceCallByValue(t).get
 
     t match {
       case Variable(_) => assert(false)
+      case Cst(_) => assert(false)
       case Abs(_, _) => assert(false)
       case App(t1, t2) => {
         if(!t1.isValue) {
