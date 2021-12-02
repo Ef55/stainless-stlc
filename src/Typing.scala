@@ -331,94 +331,108 @@ object TypingProperties {
     ( typeOf(env1 ++ env2, t) == typeOf(env1 ++ (typ :: env2), shift(t, 1, env1.size)) )
   )
 
-//   def removeTypeInEnv(env1: Environment, typ: Type, env2: Environment, t: Term): Unit = {
-//     require(typeOf(env1 ++ (typ :: env2), t).isDefined)
-//     require(!t.hasFreeVariablesIn(env1.size, 1))
+  def removeTypeInEnv(env1: Environment, typ: Type, env2: Environment, t: Term): Unit = {
+    require(typeOf(env1 ++ (typ :: env2), t).isDefined)
+    require(!t.hasFreeVariablesIn(env1.size, 1))
 
-//     ReductionProperties.boundRangeShiftBackLemma(t, 1, env1.size)
-//     t match {
-//       case Var(k) => {
-//         if (k < env1.size) {
-//           variableEnvironmentUpdate(Variable(k), env1, typ :: env2, env2)
-//           check(typeOf(env1 ++ (typ :: env2), t) == typeOf(env1 ++ env2, shift(t, -1, env1.size)))
-//         }
-//         else {
-//           insertionIndexing(env1, env2, typ, k - 1)
-//           check(typeOf(env1 ++ (typ :: env2), t) == typeOf(env1 ++ env2, shift(t, -1, env1.size)))
-//         }
-//       }
-//       case Abs(targ, body) => {
-//         absInversionLemma(env1 ++ (typ :: env2), targ, body)
-//         removeTypeInEnv(targ :: env1, typ, env2, body)
-//         absInversionLemma(env1 ++ env2, targ, shift(body, -1, env1.size + 1))
-//         check(typeOf(env1 ++ (typ :: env2), t) == typeOf(env1 ++ env2, shift(t, -1, env1.size)))
-//       }
-//       case App(t1, t2) => {
-//         appInversionLemma(env1 ++ (typ :: env2), t1, t2)
-//         removeTypeInEnv(env1, typ, env2, t2)
-//         removeTypeInEnv(env1, typ, env2, t1)
-//         appInversionLemma(env1 ++ env2, shift(t1, -1, env1.size), shift(t2, -1, env1.size))
-//         assert(App(shift(t1, -1, env1.size), shift(t2, -1, env1.size)) == shift(t, -1, env1.size))
-//         check(typeOf(env1 ++ (typ :: env2), t) == typeOf(env1 ++ env2, shift(t, -1, env1.size)))
-//       }
-//       case Fix(f) => {
-//         removeTypeInEnv(env1, typ, env2, f)
-//         check(typeOf(env1 ++ (typ :: env2), t) == typeOf(env1 ++ env2, shift(t, -1, env1.size)))
-//       }
-//     }
+    ReductionProperties.boundRangeShiftBackLemma(t, 1, env1.size)
+    t match {
+      case Var(k) => {
+        if (k < env1.size) {
+          variableEnvironmentUpdate(Var(k), env1, typ :: env2, env2)
+          check(typeOf(env1 ++ (typ :: env2), t) == typeOf(env1 ++ env2, shift(t, -1, env1.size)))
+        }
+        else {
+          insertionIndexing(env1, env2, typ, k - 1)
+          check(typeOf(env1 ++ (typ :: env2), t) == typeOf(env1 ++ env2, shift(t, -1, env1.size)))
+        }
+      }
+      case Abs(targ, body) => {
+        absInversionLemma(env1 ++ (typ :: env2), targ, body)
+        removeTypeInEnv(targ :: env1, typ, env2, body)
+        absInversionLemma(env1 ++ env2, targ, shift(body, -1, env1.size + 1))
+        check(typeOf(env1 ++ (typ :: env2), t) == typeOf(env1 ++ env2, shift(t, -1, env1.size)))
+      }
+      case App(t1, t2) => {
+        appInversionLemma(env1 ++ (typ :: env2), t1, t2)
+        removeTypeInEnv(env1, typ, env2, t2)
+        removeTypeInEnv(env1, typ, env2, t1)
+        appInversionLemma(env1 ++ env2, shift(t1, -1, env1.size), shift(t2, -1, env1.size))
+        assert(App(shift(t1, -1, env1.size), shift(t2, -1, env1.size)) == shift(t, -1, env1.size))
+        check(typeOf(env1 ++ (typ :: env2), t) == typeOf(env1 ++ env2, shift(t, -1, env1.size)))
+      }
+      case Fix(f) => {
+        removeTypeInEnv(env1, typ, env2, f)
+        check(typeOf(env1 ++ (typ :: env2), t) == typeOf(env1 ++ env2, shift(t, -1, env1.size)))
+      }
+      case TAbs(body) => {
+        removeTypeInEnv(env1, typ, env2, body)
+        check(typeOf(env1 ++ (typ :: env2), t) == typeOf(env1 ++ env2, shift(t, -1, env1.size)))
+      }
+      case TApp(body, _) => {
+        removeTypeInEnv(env1, typ, env2, body)
+        check(typeOf(env1 ++ (typ :: env2), t) == typeOf(env1 ++ env2, shift(t, -1, env1.size)))
+      }
+    }
 
-//     assert(typeOf(env1 ++ (typ :: env2), t) == typeOf(env1 ++ env2, shift(t, -1, env1.size)))
-//     OptionProperties.equalityImpliesDefined(
-//       typeOf(env1 ++ (typ :: env2), t), 
-//       typeOf(env1 ++ env2, shift(t, -1, env1.size))
-//     )
-//   }.ensuring(
-//     typeOf(env1 ++ env2, shift(t, -1, env1.size)).isDefined 
-//     &&
-//     ( typeOf(env1 ++ (typ :: env2), t) == typeOf(env1 ++ env2, shift(t, -1, env1.size)) )
-//   )
+    assert(typeOf(env1 ++ (typ :: env2), t) == typeOf(env1 ++ env2, shift(t, -1, env1.size)))
+    OptionProperties.equalityImpliesDefined(
+      typeOf(env1 ++ (typ :: env2), t), 
+      typeOf(env1 ++ env2, shift(t, -1, env1.size))
+    )
+  }.ensuring(
+    typeOf(env1 ++ env2, shift(t, -1, env1.size)).isDefined 
+    &&
+    ( typeOf(env1 ++ (typ :: env2), t) == typeOf(env1 ++ env2, shift(t, -1, env1.size)) )
+  )
 
-//   def preservationUnderSubst(env: Environment, t: Term, j: BigInt, s: Term): Unit = {
-//     require(typeOf(env, t).isDefined)
-//     require(typeOf(env, s).isDefined)
-//     require(0 <= j && j < env.size)
-//     require(env(j) == typeOf(env, s).get)
+  def preservationUnderSubst(env: Environment, t: Term, j: BigInt, s: Term): Unit = {
+    require(typeOf(env, t).isDefined)
+    require(typeOf(env, s).isDefined)
+    require(0 <= j && j < env.size)
+    require(env(j) == typeOf(env, s).get)
 
-//     t match {
-//       case Var(_) => assert(typeOf(env, t) == typeOf(env, substitute(t, j, s)))
-//       case Abs(typ, body) => {
-//         insertTypeInEnv(Nil(), typ, env, s)
-//         preservationUnderSubst(typ :: env, body, j+1, shift(s, 1, 0))
-//       }
-//       case App(t1, t2) => {
-//         preservationUnderSubst(env, t1, j, s)
-//         preservationUnderSubst(env, t2, j, s)
-//       }
-//       case Fix(f) => {
-//         preservationUnderSubst(env, f, j, s)
-//       }
-//     }
-//   }.ensuring(typeOf(env, t) == typeOf(env, substitute(t, j, s)))
+    t match {
+      case Var(_) => assert(typeOf(env, t) == typeOf(env, substitute(t, j, s)))
+      case Abs(typ, body) => {
+        insertTypeInEnv(Nil(), typ, env, s)
+        preservationUnderSubst(typ :: env, body, j+1, shift(s, 1, 0))
+      }
+      case App(t1, t2) => {
+        preservationUnderSubst(env, t1, j, s)
+        preservationUnderSubst(env, t2, j, s)
+      }
+      case Fix(f) => {
+        preservationUnderSubst(env, f, j, s)
+      }
+      case TAbs(body) => {
+        preservationUnderSubst(env, body, j, s)
+      }
+      case TApp(body, _) => {
+        preservationUnderSubst(env, body, j, s)
+      }
+    }
+  }.ensuring(typeOf(env, t) == typeOf(env, substitute(t, j, s)))
 
-//   def preservationUnderAbsSubst(env: Environment, body: Term, arg: Term) = {
-//     require(typeOf(env, arg).isDefined)
-//     require(typeOf(typeOf(env, arg).get :: env, body).isDefined)
+  def preservationUnderAbsSubst(env: Environment, body: Term, arg: Term) = {
+    require(typeOf(env, arg).isDefined)
+    require(typeOf(typeOf(env, arg).get :: env, body).isDefined)
 
     
-//     val Some(argType) = typeOf(env, arg)
-//     val Some(typ) = typeOf(argType :: env, body)
+    val Some(argType) = typeOf(env, arg)
+    val Some(typ) = typeOf(argType :: env, body)
 
-//     insertTypeInEnv(Nil(), argType, env, arg)
-//     assert(typeOf(argType :: env, shift(arg, 1, 0)).get == argType)
-//     preservationUnderSubst(argType :: env, body, 0, shift(arg, 1, 0))
+    insertTypeInEnv(Nil(), argType, env, arg)
+    assert(typeOf(argType :: env, shift(arg, 1, 0)).get == argType)
+    preservationUnderSubst(argType :: env, body, 0, shift(arg, 1, 0))
 
-//     assert(!arg.hasFreeVariablesIn(0, 0))
-//     ReductionProperties.boundRangeShift(arg, 1, 0, 0)
-//     ReductionProperties.boundRangeSubstitutionLemma(body, 0, shift(arg, 1, 0))
-//     ReductionProperties.boundRangeShiftBackLemma(substitute(body, 0, shift(arg, 1, 0)), 1, 0)
-//     removeTypeInEnv(Nil(), argType, env, substitute(body, 0, shift(arg, 1, 0)))
+    assert(!arg.hasFreeVariablesIn(0, 0))
+    ReductionProperties.boundRangeShift(arg, 1, 0, 0)
+    ReductionProperties.boundRangeSubstitutionLemma(body, 0, shift(arg, 1, 0))
+    ReductionProperties.boundRangeShiftBackLemma(substitute(body, 0, shift(arg, 1, 0)), 1, 0)
+    removeTypeInEnv(Nil(), argType, env, substitute(body, 0, shift(arg, 1, 0)))
 
-//   }.ensuring(typeOf(env, absSubsitution(body, arg)) == typeOf(typeOf(env, arg).get :: env, body))
+  }.ensuring(typeOf(env, absSubsitution(body, arg)) == typeOf(typeOf(env, arg).get :: env, body))
   
 //   def callByValuePreservationTheorem(env: Environment, t: Term): Unit = {
 //     require(typeOf(env, t).isDefined)
