@@ -13,3 +13,6 @@ smt-sessions
 # VSCode and scala-metals plugin files
 .vscode
 .metals
+
+# Scripts
+*.sh
