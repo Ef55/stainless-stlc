@@ -48,8 +48,9 @@ object STLC {
   sealed trait Term {
     def isValue: Boolean = {
         this match {
-            case Abs(_, _) => true
-            case _ => false
+            case Abs(_, _)  => true
+            case TAbs(_)    => true
+            case _          => false
         }
     }
 
@@ -60,6 +61,8 @@ object STLC {
         case Abs(_, body)   => body.hasFreeVariable(i+1)
         case App(t1, t2)    => t1.hasFreeVariable(i) || t2.hasFreeVariable(i)
         case Fix(f)         => f.hasFreeVariable(i)
+        case TAbs(body)     => body.hasFreeVariable(i)
+        case TApp(t, _)     => t.hasFreeVariable(i)
       }
     }.ensuring(res => res == this.hasFreeVariablesIn(i, 1))
 
@@ -71,6 +74,8 @@ object STLC {
         case Abs(_, body)   => body.hasFreeVariablesIn(c+1, d)
         case App(t1, t2)    => t1.hasFreeVariablesIn(c, d) || t2.hasFreeVariablesIn(c, d)
         case Fix(f)         => f.hasFreeVariablesIn(c, d)
+        case TAbs(body)     => body.hasFreeVariablesIn(c, d)
+        case TApp(t, _)     => t.hasFreeVariablesIn(c, d)
       }
     }.ensuring(res => (d == 0) ==> !res)
 
@@ -81,6 +86,8 @@ object STLC {
           case Abs(_, body)   => rec(body, c+1)
           case App(t1, t2)    => rec(t1, c) && rec(t2, c)
           case Fix(f)         => rec(f, c)
+          case TAbs(body)     => rec(body, c)
+          case TApp(t, _)     => rec(t, c)
         }
       }
 
@@ -91,11 +98,15 @@ object STLC {
   case class Abs(b: Type, t: Term) extends Term
   case class App(t1: Term, t2: Term) extends Term
   case class Fix(t: Term) extends Term
+  case class TAbs(t: Term) extends Term
+  case class TApp(t: Term, typ: Type) extends Term
 
 }
 
-object TermsProperties{
+object STLCProperties{
   import STLC._
+
+  /// Properties of terms
 
   @opaque @pure
   def boundRangeDecrease(t: Term, c: BigInt, d1: BigInt, d2: BigInt): Unit = {
@@ -114,11 +125,13 @@ object TermsProperties{
         boundRangeDecrease(t2, c, d1, d2)
       }
       case Fix(f) => boundRangeDecrease(f, c, d1, d2)
+      case TAbs(body) => boundRangeDecrease(body, c, d1, d2)
+      case TApp(t, _) => boundRangeDecrease(t, c, d1, d2)
     }
   }.ensuring(!t.hasFreeVariablesIn(c, d2))
 
   @opaque @pure
-  def noFreeVarsIncreaseCutoff(t: Term, c1: BigInt, c2: BigInt, d: BigInt): Unit = {
+  def boundRangeIncreaseCutoff(t: Term, c1: BigInt, c2: BigInt, d: BigInt): Unit = {
     require(c1 >= 0 && c2 >= 0)
     require(0 <= d && c2 - c1 <= d)
     require(c1 <= c2)
@@ -126,12 +139,14 @@ object TermsProperties{
 
     t match {
       case Var(_) => ()
-      case Abs(targ, body) => noFreeVarsIncreaseCutoff(body, c1 + 1, c2 + 1, d)
+      case Abs(targ, body) => boundRangeIncreaseCutoff(body, c1 + 1, c2 + 1, d)
       case App(t1, t2) => {
-        noFreeVarsIncreaseCutoff(t1, c1, c2, d)
-        noFreeVarsIncreaseCutoff(t2, c1, c2, d)
+        boundRangeIncreaseCutoff(t1, c1, c2, d)
+        boundRangeIncreaseCutoff(t2, c1, c2, d)
       }
-      case Fix(f) => noFreeVarsIncreaseCutoff(f, c1, c2, d)
+      case Fix(f) => boundRangeIncreaseCutoff(f, c1, c2, d)
+      case TAbs(body) => boundRangeIncreaseCutoff(body, c1, c2, d)
+      case TApp(t, _) => boundRangeIncreaseCutoff(t, c1, c2, d)
     }
   }.ensuring(!t.hasFreeVariablesIn(c2, d - (c2 - c1)))
 
@@ -153,6 +168,8 @@ object TermsProperties{
         boundRangeConcatenation(t2, a, b, c)
       }
       case Fix(f) => boundRangeConcatenation(f, a, b, c)
+      case TAbs(body) => boundRangeConcatenation(body, a, b, c)
+      case TApp(t, _) => boundRangeConcatenation(t, a, b, c)
     }
   }.ensuring(!t.hasFreeVariablesIn(a, b + c))
 
@@ -175,12 +192,12 @@ object TermsProperties{
         assert(!t.hasFreeVariable(i))
       }
       case Fix(f) => boundRangeSinglize(f, j, d, i)
+      case TAbs(body) => boundRangeSinglize(body, j, d, i)
+      case TApp(t, _) => boundRangeSinglize(t, j, d, i)
     }
   }.ensuring(!t.hasFreeVariable(i))
-}
 
-object TypesProperties{
-  import STLC._
+  /// Properties of types
 
   @opaque @pure
   def boundRangeDecrease(t: Type, c: BigInt, d1: BigInt, d2: BigInt): Unit = {
@@ -201,7 +218,7 @@ object TypesProperties{
   }.ensuring(!t.hasFreeVariablesIn(c, d2))
 
   @opaque @pure
-  def noFreeVarsIncreaseCutoff(t: Type, c1: BigInt, c2: BigInt, d: BigInt): Unit = {
+  def boundRangeIncreaseCutoff(t: Type, c1: BigInt, c2: BigInt, d: BigInt): Unit = {
     require(c1 >= 0 && c2 >= 0)
     require(0 <= d && c2 - c1 <= d)
     require(c1 <= c2)
@@ -210,11 +227,11 @@ object TypesProperties{
     t match {
       case BasicType(_) => ()
       case ArrowType(t1, t2) => {
-        noFreeVarsIncreaseCutoff(t1, c1, c2, d)
-        noFreeVarsIncreaseCutoff(t2, c1, c2, d)
+        boundRangeIncreaseCutoff(t1, c1, c2, d)
+        boundRangeIncreaseCutoff(t2, c1, c2, d)
       }
       case VariableType(v) => ()
-      case UniversalType(body) => noFreeVarsIncreaseCutoff(body, c1 + 1, c2 + 1, d)
+      case UniversalType(body) => boundRangeIncreaseCutoff(body, c1 + 1, c2 + 1, d)
     }
   }.ensuring(!t.hasFreeVariablesIn(c2, d - (c2 - c1)))
 
@@ -254,4 +271,5 @@ object TypesProperties{
       case UniversalType(body) => boundRangeSinglize(body, j+1, d, i+1)
     }
   }.ensuring(!t.hasFreeVariable(i))
+
 }

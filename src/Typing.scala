@@ -110,8 +110,8 @@ object TypingProperties {
   import STLC._
   import Typing._
   import Reduction._
+  import STLCProperties._
   import ListProperties._
-  import TermsProperties._
 
   // Type derivations
 
