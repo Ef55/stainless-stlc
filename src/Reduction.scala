@@ -43,7 +43,7 @@ object Reduction {
 
   // ↑⁻¹( [0 -> ↑¹(arg)]body )
   def absSubsitution(body: Term, arg: Term): Term = {
-    assert(!arg.hasFreeVarsIn(0, 0))
+    assert(!arg.hasFreeVariablesIn(0, 0))
     boundRangeShift(arg, 1, 0, 0)
     boundRangeSubstitutionLemma(body, 0, shift(arg, 1, 0))
     boundRangeShiftBackLemma(substitute(body, 0, shift(arg, 1, 0)), 1, 0)
@@ -152,7 +152,7 @@ object ReductionProperties {
     require(c >= 0)
     require(d >= 0)
     require(d <= c + a)
-    require(if(d < c) !t.hasFreeVarsIn(d, c - d) else !t.hasFreeVarsIn(c, d - c))
+    require(if(d < c) !t.hasFreeVariablesIn(d, c - d) else !t.hasFreeVariablesIn(c, d - c))
     require(if (b < 0) -b <= a else true)
 
 
@@ -167,7 +167,7 @@ object ReductionProperties {
       noFreeVarsIncreaseCutoff(shift(t, a, c), c, d, a + d - c)
     }
 
-    assert(!shift(t, a, c).hasFreeVarsIn(d, a))
+    assert(!shift(t, a, c).hasFreeVariablesIn(d, a))
     if(b < 0){
       boundRangeDecrease(shift(t, a, c), d, a, -b)
       boundRangeShiftBackLemma(shift(t, a, c), -b, d)        
@@ -197,23 +197,23 @@ object ReductionProperties {
     require(c >= 0)
     require(d >= 0)
     require(b >= 0)
-    require(!t.hasFreeVarsIn(c, b))
+    require(!t.hasFreeVariablesIn(c, b))
 
     t match {
-      case Var(_)    => assert(!shift(t, d, c).hasFreeVarsIn(c, d+b))
+      case Var(_)    => assert(!shift(t, d, c).hasFreeVariablesIn(c, d+b))
       case Abs(_, body)   => {
         boundRangeShift(body, d, c+1, b)
-        assert(!shift(t, d, c).hasFreeVarsIn(c, d+b))
+        assert(!shift(t, d, c).hasFreeVariablesIn(c, d+b))
       }
       case App(t1, t2)    => {
         boundRangeShift(t1, d, c, b)
         boundRangeShift(t2, d, c, b)
-        assert(!shift(t, d, c).hasFreeVarsIn(c, d+b))
+        assert(!shift(t, d, c).hasFreeVariablesIn(c, d+b))
       }
       case Fix(f) => boundRangeShift(f, d, c, b)
     }
 
-  }.ensuring(!shift(t, d, c).hasFreeVarsIn(c, d+b))
+  }.ensuring(!shift(t, d, c).hasFreeVariablesIn(c, d+b))
 
   @opaque @pure
   def boundRangeShiftBelowCutoff(t: Term, d: BigInt, c: BigInt, a: BigInt, b: BigInt): Unit = {
@@ -222,7 +222,7 @@ object ReductionProperties {
     require(a >= 0)
     require(b >= 0)
     require(a + b <= c)
-    require(!t.hasFreeVarsIn(a, b))
+    require(!t.hasFreeVariablesIn(a, b))
     t match {
       case Var(k) => ()
       case Abs(targ, body) => 
@@ -233,12 +233,12 @@ object ReductionProperties {
       }
       case Fix(f) => boundRangeShiftBelowCutoff(f, d, c, a, b)
     }
-  }.ensuring(!shift(t, d, c).hasFreeVarsIn(a, b))
+  }.ensuring(!shift(t, d, c).hasFreeVariablesIn(a, b))
 
   @opaque @pure
   def boundRangeSubstitutionLemma(t: Term, j: BigInt, s: Term): Unit = {
     require(j >= 0)
-    require(!s.hasFreeVarsIn(0, j+1))
+    require(!s.hasFreeVariablesIn(0, j+1))
 
     t match {
       case Var(k) => {
@@ -257,13 +257,13 @@ object ReductionProperties {
         boundRangeSubstitutionLemma(f, j, s)
       }
     }
-  }.ensuring(!substitute(t, j, s).hasFreeVar(j))
+  }.ensuring(!substitute(t, j, s).hasFreeVariable(j))
 
   @opaque @pure
   def boundRangeShiftBackLemma(t: Term, d: BigInt, c: BigInt): Unit = {
     require(c >= 0)
     require(d > 0)
-    require(!t.hasFreeVarsIn(c, d))
+    require(!t.hasFreeVariablesIn(c, d))
 
     t match {
       case Var(k) => assert(negativeShiftValidity(t, -d, c))

@@ -296,7 +296,7 @@ object TypingProperties {
   @opaque @pure
   def removeTypeInEnv(env1: Environment, typ: Type, env2: Environment, t: Term): Unit = {
     require(typeOf(env1 ++ (typ :: env2), t).isDefined)
-    require(!t.hasFreeVarsIn(env1.size, 1))
+    require(!t.hasFreeVariablesIn(env1.size, 1))
 
     ReductionProperties.boundRangeShiftBackLemma(t, 1, env1.size)
     t match {
@@ -377,7 +377,7 @@ object TypingProperties {
     assert(typeOf(argType :: env, shift(arg, 1, 0)).get == argType)
     preservationUnderSubst(argType :: env, body, 0, shift(arg, 1, 0))
 
-    assert(!arg.hasFreeVarsIn(0, 0))
+    assert(!arg.hasFreeVariablesIn(0, 0))
     ReductionProperties.boundRangeShift(arg, 1, 0, 0)
     ReductionProperties.boundRangeSubstitutionLemma(body, 0, shift(arg, 1, 0))
     ReductionProperties.boundRangeShiftBackLemma(substitute(body, 0, shift(arg, 1, 0)), 1, 0)
