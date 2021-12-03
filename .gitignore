@@ -17,4 +17,6 @@ smt-sessions
 # Scripts
 *.sh
 
+# Sbt files
 target
+project
