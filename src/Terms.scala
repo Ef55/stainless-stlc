@@ -93,6 +93,32 @@ object STLC {
 
       rec(this, 0)
     }
+
+    def hasFreeTypeVariable(i: BigInt): Boolean = {
+      require(i >= 0)
+      this match {
+        case Var(k)         => false
+        case Abs(typ, body) => typ.hasFreeVariable(i) || body.hasFreeTypeVariable(i)
+        case App(t1, t2)    => t1.hasFreeTypeVariable(i) || t2.hasFreeTypeVariable(i)
+        case Fix(f)         => f.hasFreeTypeVariable(i)
+        case TAbs(body)     => body.hasFreeTypeVariable(i+1)
+        case TApp(t, typ)   => t.hasFreeTypeVariable(i) || typ.hasFreeVariable(i)
+      }
+    }.ensuring(res => res == this.hasFreeTypeVariablesIn(i, 1))
+
+    def hasFreeTypeVariablesIn(c: BigInt, d: BigInt): Boolean = {
+      require(c >= 0)
+      require(d >= 0)
+      this match {
+        case Var(k)         => false
+        case Abs(typ, body) => typ.hasFreeVariablesIn(c, d) || body.hasFreeTypeVariablesIn(c, d)
+        case App(t1, t2)    => t1.hasFreeTypeVariablesIn(c, d) || t2.hasFreeTypeVariablesIn(c, d)
+        case Fix(f)         => f.hasFreeTypeVariablesIn(c, d)
+        case TAbs(body)     => body.hasFreeTypeVariablesIn(c+1, d)
+        case TApp(t, typ)   => t.hasFreeTypeVariablesIn(c, d) || typ.hasFreeVariablesIn(c, d)
+      }
+    }.ensuring(res => (d == 0) ==> !res)
+
   }
   case class Var(k: BigInt) extends Term { require(k >= 0) }
   case class Abs(b: Type, t: Term) extends Term
@@ -271,5 +297,112 @@ object STLCProperties{
       case UniversalType(body) => boundRangeSinglize(body, j+1, d, i+1)
     }
   }.ensuring(!t.hasFreeVariable(i))
+
+  /// Properties of types in terms
+
+  @opaque @pure
+  def boundTypeRangeDecrease(t: Term, c: BigInt, d1: BigInt, d2: BigInt): Unit = {
+    require(d1 >= 0 && d2 >= 0)
+    require(c >= 0)
+    require(d2 <= d1)
+    require(!t.hasFreeTypeVariablesIn(c, d1))
+
+    t match{
+      case Var(_) => ()
+      case Abs(targ, body) => {
+        boundRangeDecrease(targ, c, d1, d2)
+        boundTypeRangeDecrease(body, c, d1, d2)
+      }
+      case App(t1, t2) => {
+        boundTypeRangeDecrease(t1, c, d1, d2)
+        boundTypeRangeDecrease(t2, c, d1, d2)
+      }
+      case Fix(f) => boundTypeRangeDecrease(f, c, d1, d2)
+      case TAbs(body) => boundTypeRangeDecrease(body, c+1, d1, d2)
+      case TApp(t, typ) => {
+        boundTypeRangeDecrease(t, c, d1, d2)
+        boundRangeDecrease(typ, c, d1, d2)
+      }
+    }
+  }.ensuring(!t.hasFreeTypeVariablesIn(c, d2))
+
+  @opaque @pure
+  def boundTypeRangeIncreaseCutoff(t: Term, c1: BigInt, c2: BigInt, d: BigInt): Unit = {
+    require(c1 >= 0 && c2 >= 0)
+    require(0 <= d && c2 - c1 <= d)
+    require(c1 <= c2)
+    require(!t.hasFreeTypeVariablesIn(c1, d))
+
+    t match{
+      case Var(_) => ()
+      case Abs(targ, body) => {
+        boundRangeIncreaseCutoff(targ, c1, c2, d)
+        boundTypeRangeIncreaseCutoff(body, c1, c2, d)
+      }
+      case App(t1, t2) => {
+        boundTypeRangeIncreaseCutoff(t1, c1, c2, d)
+        boundTypeRangeIncreaseCutoff(t2, c1, c2, d)
+      }
+      case Fix(f) => boundTypeRangeIncreaseCutoff(f, c1, c2, d)
+      case TAbs(body) => boundTypeRangeIncreaseCutoff(body, c1+1, c2+1, d)
+      case TApp(t, typ) => {
+        boundTypeRangeIncreaseCutoff(t, c1, c2, d)
+        boundRangeIncreaseCutoff(typ, c1, c2, d)
+      }
+    }
+  }.ensuring(!t.hasFreeTypeVariablesIn(c2, d - (c2 - c1)))
+
+  @opaque @pure
+  def boundTypeRangeConcatenation(t: Term, a: BigInt, b: BigInt, c: BigInt): Unit = {
+    require(a >= 0)
+    require(b >= 0)
+    require(c >= 0)
+    require(!t.hasFreeTypeVariablesIn(a, b))
+    require(!t.hasFreeTypeVariablesIn(a + b, c))
+
+    t match{
+      case Var(_) => ()
+      case Abs(targ, body) => {
+        boundRangeConcatenation(targ, a, b, c)
+        boundTypeRangeConcatenation(body, a, b, c)
+      }
+      case App(t1, t2) => {
+        boundTypeRangeConcatenation(t1, a, b, c)
+        boundTypeRangeConcatenation(t2, a, b, c)
+      }
+      case Fix(f) => boundTypeRangeConcatenation(f, a, b, c)
+      case TAbs(body) => boundTypeRangeConcatenation(body, a+1, b, c)
+      case TApp(t, typ) => {
+        boundTypeRangeConcatenation(t, a, b, c)
+        boundRangeConcatenation(typ, a, b, c)
+      }
+    }
+  }.ensuring(!t.hasFreeTypeVariablesIn(a, b + c))
+
+  @opaque @pure
+  def boundTypeRangeSinglize(t: Term, j: BigInt, d: BigInt, i: BigInt): Unit = {
+    require(j >= 0)
+    require(d >= 0)
+    require(j <= i && i < j+d)
+    require(!t.hasFreeTypeVariablesIn(j, d))
+
+    t match{
+      case Var(_) => ()
+      case Abs(targ, body) => {
+        boundRangeSinglize(targ, j, d, i)
+        boundTypeRangeSinglize(body, j, d, i)
+      }
+      case App(t1, t2) => {
+        boundTypeRangeSinglize(t1, j, d, i)
+        boundTypeRangeSinglize(t2, j, d, i)
+      }
+      case Fix(f) => boundTypeRangeSinglize(f, j, d, i)
+      case TAbs(body) => boundTypeRangeSinglize(body, j+1, d, i+1)
+      case TApp(t, typ) => {
+        boundTypeRangeSinglize(t, j, d, i)
+        boundRangeSinglize(typ, j, d, i)
+      }
+    }
+  }.ensuring(!t.hasFreeTypeVariable(i))
 
 }
