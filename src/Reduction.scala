@@ -3,37 +3,37 @@ import stainless.collection._
 import stainless.annotation._
 
 object Reduction {
-  import STLC._
+  import SystemF._
+
   import Transformations._
-  import TransformationsProperties._
+  import TransformationsProperties.{Terms => TermsProp, Types => TypesProp}
 
   // ↑⁻¹( [0 -> ↑¹(arg)]body )
   def absSubsitution(body: Term, arg: Term): Term = {
     assert(!arg.hasFreeVariablesIn(0, 0))
-    boundRangeShift(arg, 1, 0, 0)
-    boundRangeSubstitutionLemma(body, 0, shift(arg, 1, 0))
-    boundRangeShiftBackLemma(substitute(body, 0, shift(arg, 1, 0)), 1, 0)
-    shift(substitute(body, 0, shift(arg, 1, 0)), -1, 0)
+    TermsProp.boundRangeShift(arg, 1, 0, 0)
+    TermsProp.boundRangeSubstitutionLemma(body, 0, Terms.shift(arg, 1, 0))
+    TermsProp.boundRangeShiftBackLemma(Terms.substitute(body, 0, Terms.shift(arg, 1, 0)), 1, 0)
+    Terms.shift(Terms.substitute(body, 0, Terms.shift(arg, 1, 0)), -1, 0)
   }
 
   // ↑⁻¹( [0 -> ↑¹(arg)]body )
-  def absSubstitution(body: Type, arg: Type): Type = {
+  def universalSubstitution(body: Type, arg: Type): Type = {
     assert(!arg.hasFreeVariablesIn(0, 0))
-    boundRangeShift(arg, 1, 0, 0)
-    boundRangeSubstitutionLemma(body, 0, shift(arg, 1, 0))
-    boundRangeShiftBackLemma(substitute(body, 0, shift(arg, 1, 0)), 1, 0)
-    shift(substitute(body, 0, shift(arg, 1, 0)), -1, 0)
+    TypesProp.boundRangeShift(arg, 1, 0, 0)
+    TypesProp.boundRangeSubstitutionLemma(body, 0, Types.shift(arg, 1, 0))
+    TypesProp.boundRangeShiftBackLemma(Types.substitute(body, 0, Types.shift(arg, 1, 0)), 1, 0)
+    Types.shift(Types.substitute(body, 0, Types.shift(arg, 1, 0)), -1, 0)
   }
 
+  // ↑⁻¹( [0 -> ↑¹(arg)]body )
   def tabsSubstitution(body: Term, arg: Type): Term = {
     assert(!arg.hasFreeVariablesIn(0, 0))
-    boundRangeShift(arg, 1, 0, 0)
-    boundTypeRangeSubstitutionLemma(body, 0, shift(arg, 1, 0))
-    boundTypeRangeShiftBackLemma(substitute(body, 0, shift(arg, 1, 0)), 1, 0)
-    typesShift(substitute(body, 0, shift(arg, 1, 0)), -1, 0)
+    TypesProp.boundRangeShift(arg, 1, 0, 0)
+    TypesProp.boundRangeSubstitutionLemma(body, 0, Types.shift(arg, 1, 0))
+    TypesProp.boundRangeShiftBackLemma(Types.substitute(body, 0, Types.shift(arg, 1, 0)), 1, 0)
+    Types.shift(Types.substitute(body, 0, Types.shift(arg, 1, 0)), -1, 0)
   }
-
-  /// General lambda calculus evaluation
 
   // [t -> t']
   def reducesTo(t: Term, tp: Term): Boolean = {
@@ -155,7 +155,7 @@ object Reduction {
 }
 
 object ReductionProperties {
-  import STLC._
+  import SystemF._
   import Reduction._
 
   /// ReduceAll correctness

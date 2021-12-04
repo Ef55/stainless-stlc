@@ -4,7 +4,7 @@ import stainless.annotation._
 import stainless.proof._
 
 object Typing {
-  import STLC._
+  import SystemF._
   import Reduction._
 
   type Environment = List[Type]
@@ -151,11 +151,11 @@ object Typing {
  }
 
 object TypingProperties {
-  import STLC._
+  import SystemF._
   import Typing._
   import Reduction._
   import ListProperties._
-  import STLCProperties._
+  import SystemFProperties._
 
 //   Type derivations
   @opaque @pure
