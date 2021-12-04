@@ -128,7 +128,7 @@ object Reduction {
       case Abs(typ, body) => Abs(substitute(typ, v, s), substitute(body, v, s))
       case App(t1, t2) => App(substitute(t1, v, s), substitute(t2, v, s))
       case Fix(f) => Fix(substitute(f, v, s))
-      case TAbs(body) => TAbs(substitute(body, v+1, s))
+      case TAbs(body) => TAbs(substitute(body, v+1, shift(s, 1, 0)))
       case TApp(t, typ) => TApp(substitute(t, v, s), substitute(typ, v, s))
     }
   }
@@ -241,6 +241,7 @@ object Reduction {
             case Abs(_, body) => {
               Some(absSubsitution(body, t))
             }
+            case _ => None[Term]()
           }
         }
       }
@@ -559,19 +560,22 @@ object ReductionProperties {
     require(!s.hasFreeVariablesIn(0, j+1))
 
     t match {
-      case Var(k) => assert(!substitute(t, j, s).hasFreeVariable(j))
+      case Var(k) => assert(!substitute(t, j, s).hasFreeTypeVariable(j))
       case Abs(targ, body) => {
         boundRangeSubstitutionLemma(targ, j, s)
         boundTypeRangeSubstitutionLemma(body, j, s)
-        assert(!substitute(t, j, s).hasFreeVariable(j))
+        assert(!substitute(t, j, s).hasFreeTypeVariable(j))
       }
       case App(t1, t2) => {
         boundTypeRangeSubstitutionLemma(t1, j, s)
         boundTypeRangeSubstitutionLemma(t2, j, s)
-        assert(!substitute(t, j, s).hasFreeVariable(j))
+        assert(!substitute(t, j, s).hasFreeTypeVariable(j))
       }
       case Fix(f) => boundTypeRangeSubstitutionLemma(f, j, s)
-      case TAbs(body) => boundTypeRangeSubstitutionLemma(body, j+1, s)
+      case TAbs(body) => {
+        boundRangeShift(s, 1, 0, j+1)
+        boundTypeRangeSubstitutionLemma(body, j+1, shift(s, 1, 0))
+      }
       case TApp(term, typ) => {
         boundTypeRangeSubstitutionLemma(term, j, s)
         boundRangeSubstitutionLemma(typ, j, s)
@@ -608,102 +612,132 @@ object ReductionProperties {
 
   /// ReduceAll correctness
 
-  // @opaque @pure
-  // def reduceAllCompleteness(t: Term, tp: Term): Unit = {
-  //   require(reducesTo(t, tp))
+  @opaque @pure
+  def reduceAllCompleteness(t: Term, tp: Term): Unit = {
+    require(reducesTo(t, tp))
 
-  //   t match {
-  //     case Var(_) => assert(reduceAll(t).contains(tp))
-  //     case Abs(_, _) => assert(reduceAll(t).contains(tp))
-  //     case App(t1, t2) => {
-  //       (tp match {
-  //         case App(t1p, t2p) if reducesTo(t1, t1p) && t2 == t2p  => {
-  //           reduceAllCompleteness(t1, t1p)
-  //           reduceAll(t1).mapPost1[Term](t1p => App(t1p, t2))(t1p)
-  //         }
-  //         case App(t1p, t2p) if t1 == t1p && reducesTo(t2, t2p) => {
-  //           reduceAllCompleteness(t2, t2p)
-  //           reduceAll(t2).mapPost1[Term](t2p => App(t1, t2p))(t2p)
-  //         }
-  //         case _ => assert(reduceAll(t).contains(tp))
-  //       })
-  //     }
-  //     case Fix(f) => {
-  //       (tp match {
-  //         case Fix(fp) if reducesTo(f, fp) => {
-  //           reduceAllCompleteness(f, fp)
-  //           reduceAll(f).mapPost1[Term](Fix(_))(fp)
-  //         }
-  //         case _ => assert(reduceAll(t).contains(tp))
-  //       })
-  //     }
-  //   }
-  // }.ensuring(reduceAll(t).contains(tp))
+    t match {
+      case Var(_) => assert(reduceAll(t).contains(tp))
+      case Abs(_, _) => assert(reduceAll(t).contains(tp))
+      case App(t1, t2) => {
+        tp match {
+          case App(t1p, t2p) if reducesTo(t1, t1p) && t2 == t2p  => {
+            reduceAllCompleteness(t1, t1p)
+            reduceAll(t1).mapPost1[Term](t1p => App(t1p, t2))(t1p)
+          }
+          case App(t1p, t2p) if t1 == t1p && reducesTo(t2, t2p) => {
+            reduceAllCompleteness(t2, t2p)
+            reduceAll(t2).mapPost1[Term](t2p => App(t1, t2p))(t2p)
+          }
+          case _ => assert(reduceAll(t).contains(tp))
+        }
+      }
+      case Fix(f) => {
+        tp match {
+          case Fix(fp) if reducesTo(f, fp) => {
+            reduceAllCompleteness(f, fp)
+            reduceAll(f).mapPost1[Term](Fix(_))(fp)
+          }
+          case _ => assert(reduceAll(t).contains(tp))
+        }
+      }
+      case TAbs(body) => assert(reducesTo(t, tp))
+      case TApp(term, typ) => {
+        tp match {
+          case TApp(termp, typp) if reducesTo(term, termp) && typ == typp => {
+            reduceAllCompleteness(term, termp)
+            reduceAll(term).mapPost1[Term](TApp(_, typ))(termp)
+          }
+          case _ => assert(reduceAll(t).contains(tp))
+        }
+      }
+    }
+  }.ensuring(reduceAll(t).contains(tp))
 
-  // @opaque @pure
-  // def reduceAllSoundness(t: Term, tp: Term): Unit = {
-  //   require(reduceAll(t).contains(tp))
-  //   t match {
-  //     case Var(_) => assert(reducesTo(t, tp))
-  //     case Abs(_, _) => assert(reducesTo(t, tp))
-  //     case App(t1, t2) => {
-  //       if(reduceAll(t1).map[Term](t1p => App(t1p, t2)).contains(tp)) {
-  //         val App(t1p, t2p) = tp
-  //         reduceAll(t1).mapPost2[Term](t1p => App(t1p, t2))(tp)
-  //         reduceAllSoundness(t1, t1p)
-  //       }
-  //       else if(reduceAll(t2).map[Term](t2p => App(t1, t2p)).contains(tp)) {
-  //         val App(t1p, t2p) = tp
-  //         reduceAll(t2).mapPost2[Term](t2p => App(t1, t2p))(tp)
-  //         reduceAllSoundness(t2, t2p)
-  //       }
-  //       else {
-  //         assert(reducesTo(t, tp))
-  //       }
-  //     }
-  //     case Fix(f) => {
-  //       if(reduceAll(f).map[Term](Fix(_)).contains(tp)) {
-  //         val Fix(fp) = tp
-  //         reduceAll(f).mapPost2[Term](Fix(_))(tp)
-  //         reduceAllSoundness(f, fp)
-  //       }
-  //       else {
-  //         assert(reducesTo(t, tp))
-  //       }
-  //     }
-  //   }
-  // }.ensuring(reducesTo(t, tp))
+  @opaque @pure
+  def reduceAllSoundness(t: Term, tp: Term): Unit = {
+    require(reduceAll(t).contains(tp))
+    t match {
+      case Var(_) => assert(reducesTo(t, tp))
+      case Abs(_, _) => assert(reducesTo(t, tp))
+      case App(t1, t2) => {
+        if(reduceAll(t1).map[Term](t1p => App(t1p, t2)).contains(tp)) {
+          val App(t1p, t2p) = tp
+          reduceAll(t1).mapPost2[Term](t1p => App(t1p, t2))(tp)
+          reduceAllSoundness(t1, t1p)
+        }
+        else if(reduceAll(t2).map[Term](t2p => App(t1, t2p)).contains(tp)) {
+          val App(t1p, t2p) = tp
+          reduceAll(t2).mapPost2[Term](t2p => App(t1, t2p))(tp)
+          reduceAllSoundness(t2, t2p)
+        }
+        else {
+          assert(reducesTo(t, tp))
+        }
+      }
+      case Fix(f) => {
+        if(reduceAll(f).map[Term](Fix(_)).contains(tp)) {
+          val Fix(fp) = tp
+          reduceAll(f).mapPost2[Term](Fix(_))(tp)
+          reduceAllSoundness(f, fp)
+        }
+        else {
+          assert(reducesTo(t, tp))
+        }
+      }
+      case TAbs(body) => assert(reducesTo(t, tp))
+      case TApp(term, typ) => {
+        if(reduceAll(term).map[Term](TApp(_, typ)).contains(tp)) {
+          val TApp(termp, typp) = tp
+          reduceAll(term).mapPost2[Term](TApp(_, typ))(tp)
+          reduceAllSoundness(term, termp)
+        }
+        else {
+          assert(reducesTo(t, tp))
+        }
+      }
+    }
+  }.ensuring(reducesTo(t, tp))
 
   // Call-by-value soudness
 
-  // @opaque @pure
-  // def reduceCallByValueSoundness(t: Term): Unit = {
-  //   require(reduceCallByValue(t).isDefined)
-  //   val tp = reduceCallByValue(t).get
+  @opaque @pure
+  def reduceCallByValueSoundness(t: Term): Unit = {
+    require(reduceCallByValue(t).isDefined)
+    val tp = reduceCallByValue(t).get
 
-  //   t match {
-  //     case Var(_) => assert(false)
-  //     case Abs(_, _) => assert(false)
-  //     case App(t1, t2) => {
-  //       if(!t1.isValue) {
-  //         reduceCallByValueSoundness(t1)
-  //       }
-  //       else if(!t2.isValue) {
-  //         reduceCallByValueSoundness(t2)
-  //       }
-  //       else {
-  //         assert(reducesTo(t, tp))
-  //       }
-  //     }
-  //     case Fix(f) => {
-  //       if(!f.isValue) {
-  //         reduceCallByValueSoundness(f)
-  //       }
-  //       else {
-  //         assert(reducesTo(t, tp))
-  //       }
-  //     }
-  //   }
+    t match {
+      case Var(_) => assert(false)
+      case Abs(_, _) => assert(false)
+      case App(t1, t2) => {
+        if(!t1.isValue) {
+          reduceCallByValueSoundness(t1)
+        }
+        else if(!t2.isValue) {
+          reduceCallByValueSoundness(t2)
+        }
+        else {
+          assert(reducesTo(t, tp))
+        }
+      }
+      case Fix(f) => {
+        if(!f.isValue) {
+          reduceCallByValueSoundness(f)
+        }
+        else {
+          assert(reducesTo(t, tp))
+        }
+      }
+      case TAbs(_) => assert(false)
+      case TApp(term, typ) => {
+        if(!term.isValue) {
+          reduceCallByValueSoundness(term)
+        }
+        else {
+          assert(reducesTo(t, tp))
+        }
+      }
+    }
 
-  // }.ensuring(reducesTo(t, reduceCallByValue(t).get))
+  }.ensuring(reducesTo(t, reduceCallByValue(t).get))
 }
