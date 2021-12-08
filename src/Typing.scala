@@ -224,21 +224,21 @@ object TypingProperties {
 
 
 //   Progress
-  //@opaque @pure
-  // def callByValueProgress(t: Term): Unit = {
-  //   require(deriveType(Nil(), t).isDefined)
-  //   t match{
-  //     case Var(_) => ()
-  //     case Abs(_, _) => ()
-  //     case App(t1, t2) => {
-  //       callByValueProgress(t1)
-  //       callByValueProgress(t2) 
-  //     }
-  //     case Fix(f) => callByValueProgress(f)
-  //     case TAbs(t) => callByValueProgress(t)
-  //     case TApp(t, typ) => callByValueProgress(t)
-  //   }
-  // }.ensuring(reduceCallByValue(t).isDefined || t.isValue)
+  @opaque @pure
+  def callByValueProgress(t: Term): Unit = {
+    require(deriveType(Nil(), t).isDefined)
+    t match{
+      case Var(_) => ()
+      case Abs(_, _) => ()
+      case App(t1, t2) => {
+        callByValueProgress(t1)
+        callByValueProgress(t2) 
+      }
+      case Fix(f) => callByValueProgress(f)
+      case TAbs(t) => ()
+      case TApp(t, typ) => callByValueProgress(t)
+    }
+  }.ensuring(reduceCallByValue(t).isDefined || t.isValue)
 
 //   Preservation
 
@@ -469,41 +469,84 @@ object TypingProperties {
     removeTypeInEnv(Nil(), argType, env, substitute(body, 0, shift(arg, 1, 0)))
 
   }.ensuring(typeOf(env, absSubsitution(body, arg)) == typeOf(typeOf(env, arg).get :: env, body))
-  
-//   def callByValuePreservationTheorem(env: Environment, t: Term): Unit = {
-//     require(typeOf(env, t).isDefined)
-//     require(reduceCallByValue(t).isDefined)
-//     val typeT = typeOf(env, t).get
 
-//     t match{
-//       case Var(_) => ()
-//       case Abs(_, _) => ()
-//       case App(t1, t2) => {
-//         if(!t1.isValue) {
-//           callByValuePreservationTheorem(env, t1)
-//         }
-//         else if(!t2.isValue)
-//           callByValuePreservationTheorem(env, t2)
-//         else {
-//           assert(t1.isValue && t2.isValue)
-//           t1 match {
-//               case Abs(_, body) => 
-//                 preservationUnderAbsSubst(env, body, t2)
-//               case _ => ()
-//           }
-//         }
-//       }
-//       case Fix(f) => {
-//         if(!f.isValue) {
-//           callByValuePreservationTheorem(env, f)
-//         }
-//         else {
-//           f match {
-//             case Abs(_, body) => preservationUnderAbsSubst(env, body, t)
-//           }
-//         }
-//       }
-//     }
-//   }.ensuring( typeOf(env, reduceCallByValue(t).get) == typeOf(env, t) )
+  @opaque @pure
+  def preservationUnderTypeAbsSubst(env: Environment, body: Term, typ: Type) = {
+    require(typeOf(env, body).isDefined)
+    body match{
+      case Var(k) => 
+        assert(substitute(body, 0, shift(typ, 1, 0)) == body)
+        assert(typeShift(body, 1, 0) == body)
+      case Abs(targ, b) => ()
+      case App(t1, t2) => ()
+      case Fix(f) => ()
+      case TAbs(b) => ()
+      case TApp(b, t) => ()
+    }
+  }.ensuring(typeOf(env, tabsSubstitution(body, typ)) == Some(absSubstitution(typeOf(env, body).get, typ)))
+  
+  @opaque @pure
+  def callByValuePreservationTheorem(env: Environment, t: Term): Unit = {
+    require(typeOf(env, t).isDefined)
+    require(reduceCallByValue(t).isDefined)
+    val typeT = typeOf(env, t).get
+
+    t match{
+      case Var(_) => ()
+      case Abs(_, _) => ()
+      case App(t1, t2) => {
+        if(!t1.isValue) {
+          callByValuePreservationTheorem(env, t1)
+        }
+        else if(!t2.isValue)
+          callByValuePreservationTheorem(env, t2)
+        else {
+          assert(t1.isValue && t2.isValue)
+          t1 match {
+              case Abs(_, body) => 
+                preservationUnderAbsSubst(env, body, t2)
+              case _ => ()
+          }
+        }
+        check( typeOf(env, reduceCallByValue(t).get) == typeOf(env, t) )
+      }
+      case Fix(f) => {
+        if(!f.isValue) {
+          callByValuePreservationTheorem(env, f)
+        }
+        else {
+          f match {
+            case Abs(_, body) => preservationUnderAbsSubst(env, body, t)
+          }
+        }
+        check( typeOf(env, reduceCallByValue(t).get) == typeOf(env, t) )
+      }
+      case TAbs(_) => {
+        check( typeOf(env, reduceCallByValue(t).get) == typeOf(env, t) )
+      }
+
+      case TApp(term, typ) => 
+        if(!term.isValue) {
+          callByValuePreservationTheorem(env, term)
+          check( typeOf(env, reduceCallByValue(t).get) == typeOf(env, t) )
+        }
+        else {
+          term match {
+              case TAbs(body) => 
+              //   assert(typeOf(env, reduceCallByValue(t).get) == typeOf(env, tabsSubstitution(body, typ)))
+              //   assert(typeOf(env, t) == typeOf(env, TApp(TAbs(body), typ)))
+              //   assert(typeOf(env, body).isDefined)
+              //   assert(typeOf(env, term).get == UniversalType(typeOf(env, body).get))
+              //   assert(typeOf(env, t).get == absSubstitution(typeOf(env, body).get, typ)) 
+                preservationUnderTypeAbsSubst(env, body, typ)
+                check( typeOf(env, reduceCallByValue(t).get) == typeOf(env, t) )
+              case _ => 
+              check( typeOf(env, reduceCallByValue(t).get) == typeOf(env, t) )
+              ()
+          }
+        }
+        assert( typeOf(env, reduceCallByValue(t).get) == typeOf(env, t) )
+    }
+  }.ensuring( typeOf(env, reduceCallByValue(t).get) == typeOf(env, t) )
 
 }
