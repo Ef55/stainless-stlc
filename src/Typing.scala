@@ -66,14 +66,15 @@ object Typing {
           btd.t == b
         }
         case TAbsDerivation(_ ,_, _, _) => false
-        case TAppDerivation(env, t, tapp, btd) => 
-        btd.term == tapp.t && 
-        btd.isValid && 
-        btd.env == env && 
-        (btd.t match{
-          case UniversalType(b) => t == absSubstitution(b, tapp.typ)
-          case _ => false
-        })
+        case TAppDerivation(env, t, tapp, btd) => {
+          btd.term == tapp.t && 
+          btd.isValid && 
+          btd.env == env && 
+          (btd.t match{
+            case UniversalType(b) => t == universalSubstitution(b, tapp.typ)
+            case _ => false
+          })
+        }
       }
     }
     
@@ -130,7 +131,7 @@ object Typing {
         deriveType(env, t) match{
           case Some(btd) => {
             btd.t match{
-              case UniversalType(b) => Some(TAppDerivation(env, absSubstitution(b, typ), tapp, btd))
+              case UniversalType(b) => Some(TAppDerivation(env, universalSubstitution(b, typ), tapp, btd))
               case _ => None()
             }
             
@@ -153,11 +154,14 @@ object Typing {
 object TypingProperties {
   import SystemF._
   import Typing._
-  import Reduction._
-  import ListProperties._
-  import SystemFProperties._
+  import Reduction._  
+  import Transformations.{ Terms => TermTr, Types => TypeTr }
 
-//   Type derivations
+  import ListProperties._
+  import SystemFProperties.{ Terms => TermProp, Types => TypeProp }
+  import TransformationsProperties.{ Terms => TermTrProp, Types => TypeTrProp }
+
+  // Type derivations
   @opaque @pure
   def deriveTypeCompleteness(@induct td: TypeDerivation): Unit = {
     require(td.isValid)
@@ -215,7 +219,7 @@ object TypingProperties {
     (td.isValid && td.env == env && td.term == term)
   )
   
-//   TypeOf
+  // TypeOf
   @opaque @pure
   def typeOfCompleteness(td: TypeDerivation): Unit ={
     require(td.isValid)
@@ -223,24 +227,24 @@ object TypingProperties {
   }.ensuring(typeOf(td.env, td.term) == Some(td.t))
 
 
-//   Progress
-  //@opaque @pure
-  // def callByValueProgress(t: Term): Unit = {
-  //   require(deriveType(Nil(), t).isDefined)
-  //   t match{
-  //     case Var(_) => ()
-  //     case Abs(_, _) => ()
-  //     case App(t1, t2) => {
-  //       callByValueProgress(t1)
-  //       callByValueProgress(t2) 
-  //     }
-  //     case Fix(f) => callByValueProgress(f)
-  //     case TAbs(t) => callByValueProgress(t)
-  //     case TApp(t, typ) => callByValueProgress(t)
-  //   }
-  // }.ensuring(reduceCallByValue(t).isDefined || t.isValue)
+  // Progress
+  @opaque @pure
+  def callByValueProgress(t: Term): Unit = {
+    require(deriveType(Nil(), t).isDefined)
+    t match{
+      case Var(_) => ()
+      case Abs(_, _) => ()
+      case App(t1, t2) => {
+        callByValueProgress(t1)
+        callByValueProgress(t2) 
+      }
+      case Fix(f) => callByValueProgress(f)
+      case TAbs(t) => ()
+      case TApp(t, typ) => callByValueProgress(t)
+    }
+  }.ensuring(reduceCallByValue(t).isDefined || t.isValue)
 
-//   Preservation
+  // Preservation
 
   @opaque @pure
   def environmentWeakening(t: Term, env: Environment, envExt: Environment): Unit = {
@@ -314,49 +318,49 @@ object TypingProperties {
       case Var(k) => {
         if (k < env1.size){
           variableEnvironmentUpdate(Var(k), env1, env2, (typ :: env2))
-          check(typeOf(env1 ++ env2, t) == typeOf(env1 ++ (typ :: env2), shift(t, 1, env1.size)))
+          check(typeOf(env1 ++ env2, t) == typeOf(env1 ++ (typ :: env2), TermTr.shift(t, 1, env1.size)))
         }
         else{
           insertionIndexing(env1, env2, typ, k)
-          check(typeOf(env1 ++ env2, t) == typeOf(env1 ++ (typ :: env2), shift(t, 1, env1.size)))
+          check(typeOf(env1 ++ env2, t) == typeOf(env1 ++ (typ :: env2), TermTr.shift(t, 1, env1.size)))
         }
       }
       case Abs(targ, body) => {
         absInversionLemma(env1 ++ env2, targ, body)
         insertTypeInEnv(targ :: env1, typ, env2, body)
-        absInversionLemma(env1 ++ (typ :: env2), targ, shift(body, 1, env1.size + 1))
-        check(typeOf(env1 ++ env2, t) == typeOf(env1 ++ (typ :: env2), shift(t, 1, env1.size)))
+        absInversionLemma(env1 ++ (typ :: env2), targ, TermTr.shift(body, 1, env1.size + 1))
+        check(typeOf(env1 ++ env2, t) == typeOf(env1 ++ (typ :: env2), TermTr.shift(t, 1, env1.size)))
       }
       case App(t1, t2) => {
         appInversionLemma(env1 ++ env2, t1, t2)
         insertTypeInEnv(env1, typ, env2, t2)
         insertTypeInEnv(env1, typ, env2, t1)
-        appInversionLemma(env1 ++ (typ :: env2), shift(t1, 1, env1.size), shift(t2, 1, env1.size))
-        check(typeOf(env1 ++ env2, t) == typeOf(env1 ++ (typ :: env2), shift(t, 1, env1.size)))
+        appInversionLemma(env1 ++ (typ :: env2), TermTr.shift(t1, 1, env1.size), TermTr.shift(t2, 1, env1.size))
+        check(typeOf(env1 ++ env2, t) == typeOf(env1 ++ (typ :: env2), TermTr.shift(t, 1, env1.size)))
       }
       case Fix(f) => {
         insertTypeInEnv(env1, typ, env2, f)
-        check(typeOf(env1 ++ env2, t) == typeOf(env1 ++ (typ :: env2), shift(t, 1, env1.size)))
+        check(typeOf(env1 ++ env2, t) == typeOf(env1 ++ (typ :: env2), TermTr.shift(t, 1, env1.size)))
       }
       case TAbs(body) => {
         insertTypeInEnv(env1, typ, env2, body)
-        check(typeOf(env1 ++ env2, t) == typeOf(env1 ++ (typ :: env2), shift(t, 1, env1.size)))
+        check(typeOf(env1 ++ env2, t) == typeOf(env1 ++ (typ :: env2), TermTr.shift(t, 1, env1.size)))
       }
       case TApp(body, _) => {
         insertTypeInEnv(env1, typ, env2, body)
-        check(typeOf(env1 ++ env2, t) == typeOf(env1 ++ (typ :: env2), shift(t, 1, env1.size)))
+        check(typeOf(env1 ++ env2, t) == typeOf(env1 ++ (typ :: env2), TermTr.shift(t, 1, env1.size)))
       }
     }
 
-    assert(typeOf(env1 ++ env2, t) == typeOf(env1 ++ (typ :: env2), shift(t, 1, env1.size)))
+    assert(typeOf(env1 ++ env2, t) == typeOf(env1 ++ (typ :: env2), TermTr.shift(t, 1, env1.size)))
     OptionProperties.equalityImpliesDefined(
       typeOf(env1 ++ env2, t),
-      typeOf(env1 ++ (typ :: env2), shift(t, 1, env1.size)), 
+      typeOf(env1 ++ (typ :: env2), TermTr.shift(t, 1, env1.size)), 
     )
   }.ensuring(
-    typeOf(env1 ++ (typ :: env2), shift(t, 1, env1.size)).isDefined 
+    typeOf(env1 ++ (typ :: env2), TermTr.shift(t, 1, env1.size)).isDefined 
     &&
-    ( typeOf(env1 ++ env2, t) == typeOf(env1 ++ (typ :: env2), shift(t, 1, env1.size)) )
+    ( typeOf(env1 ++ env2, t) == typeOf(env1 ++ (typ :: env2), TermTr.shift(t, 1, env1.size)) )
   )
 
   @opaque @pure
@@ -364,55 +368,55 @@ object TypingProperties {
     require(typeOf(env1 ++ (typ :: env2), t).isDefined)
     require(!t.hasFreeVariablesIn(env1.size, 1))
 
-    ReductionProperties.boundRangeShiftBackLemma(t, 1, env1.size)
+    TermTrProp.boundRangeShiftBackLemma(t, 1, env1.size)
     t match {
       case Var(k) => {
         if (k < env1.size) {
           variableEnvironmentUpdate(Var(k), env1, typ :: env2, env2)
-          check(typeOf(env1 ++ (typ :: env2), t) == typeOf(env1 ++ env2, shift(t, -1, env1.size)))
+          check(typeOf(env1 ++ (typ :: env2), t) == typeOf(env1 ++ env2, TermTr.shift(t, -1, env1.size)))
         }
         else {
           insertionIndexing(env1, env2, typ, k - 1)
-          check(typeOf(env1 ++ (typ :: env2), t) == typeOf(env1 ++ env2, shift(t, -1, env1.size)))
+          check(typeOf(env1 ++ (typ :: env2), t) == typeOf(env1 ++ env2, TermTr.shift(t, -1, env1.size)))
         }
       }
       case Abs(targ, body) => {
         absInversionLemma(env1 ++ (typ :: env2), targ, body)
         removeTypeInEnv(targ :: env1, typ, env2, body)
-        absInversionLemma(env1 ++ env2, targ, shift(body, -1, env1.size + 1))
-        check(typeOf(env1 ++ (typ :: env2), t) == typeOf(env1 ++ env2, shift(t, -1, env1.size)))
+        absInversionLemma(env1 ++ env2, targ, TermTr.shift(body, -1, env1.size + 1))
+        check(typeOf(env1 ++ (typ :: env2), t) == typeOf(env1 ++ env2, TermTr.shift(t, -1, env1.size)))
       }
       case App(t1, t2) => {
         appInversionLemma(env1 ++ (typ :: env2), t1, t2)
         removeTypeInEnv(env1, typ, env2, t2)
         removeTypeInEnv(env1, typ, env2, t1)
-        appInversionLemma(env1 ++ env2, shift(t1, -1, env1.size), shift(t2, -1, env1.size))
-        assert(App(shift(t1, -1, env1.size), shift(t2, -1, env1.size)) == shift(t, -1, env1.size))
-        check(typeOf(env1 ++ (typ :: env2), t) == typeOf(env1 ++ env2, shift(t, -1, env1.size)))
+        appInversionLemma(env1 ++ env2, TermTr.shift(t1, -1, env1.size), TermTr.shift(t2, -1, env1.size))
+        assert(App(TermTr.shift(t1, -1, env1.size), TermTr.shift(t2, -1, env1.size)) == TermTr.shift(t, -1, env1.size))
+        check(typeOf(env1 ++ (typ :: env2), t) == typeOf(env1 ++ env2, TermTr.shift(t, -1, env1.size)))
       }
       case Fix(f) => {
         removeTypeInEnv(env1, typ, env2, f)
-        check(typeOf(env1 ++ (typ :: env2), t) == typeOf(env1 ++ env2, shift(t, -1, env1.size)))
+        check(typeOf(env1 ++ (typ :: env2), t) == typeOf(env1 ++ env2, TermTr.shift(t, -1, env1.size)))
       }
       case TAbs(body) => {
         removeTypeInEnv(env1, typ, env2, body)
-        check(typeOf(env1 ++ (typ :: env2), t) == typeOf(env1 ++ env2, shift(t, -1, env1.size)))
+        check(typeOf(env1 ++ (typ :: env2), t) == typeOf(env1 ++ env2, TermTr.shift(t, -1, env1.size)))
       }
       case TApp(body, _) => {
         removeTypeInEnv(env1, typ, env2, body)
-        check(typeOf(env1 ++ (typ :: env2), t) == typeOf(env1 ++ env2, shift(t, -1, env1.size)))
+        check(typeOf(env1 ++ (typ :: env2), t) == typeOf(env1 ++ env2, TermTr.shift(t, -1, env1.size)))
       }
     }
 
-    assert(typeOf(env1 ++ (typ :: env2), t) == typeOf(env1 ++ env2, shift(t, -1, env1.size)))
+    assert(typeOf(env1 ++ (typ :: env2), t) == typeOf(env1 ++ env2, TermTr.shift(t, -1, env1.size)))
     OptionProperties.equalityImpliesDefined(
       typeOf(env1 ++ (typ :: env2), t), 
-      typeOf(env1 ++ env2, shift(t, -1, env1.size))
+      typeOf(env1 ++ env2, TermTr.shift(t, -1, env1.size))
     )
   }.ensuring(
-    typeOf(env1 ++ env2, shift(t, -1, env1.size)).isDefined 
+    typeOf(env1 ++ env2, TermTr.shift(t, -1, env1.size)).isDefined 
     &&
-    ( typeOf(env1 ++ (typ :: env2), t) == typeOf(env1 ++ env2, shift(t, -1, env1.size)) )
+    ( typeOf(env1 ++ (typ :: env2), t) == typeOf(env1 ++ env2, TermTr.shift(t, -1, env1.size)) )
   )
 
   @opaque @pure
@@ -423,31 +427,31 @@ object TypingProperties {
     require(env(j) == typeOf(env, s).get)
 
     t match {
-      case Var(_) => assert(typeOf(env, t) == typeOf(env, substitute(t, j, s)))
+      case Var(_) => assert(typeOf(env, t) == typeOf(env, TermTr.substitute(t, j, s)))
       case Abs(typ, body) => {
         insertTypeInEnv(Nil(), typ, env, s)
-        preservationUnderSubst(typ :: env, body, j+1, shift(s, 1, 0))
-        assert(typeOf(env, t) == typeOf(env, substitute(t, j, s)))
+        preservationUnderSubst(typ :: env, body, j+1, TermTr.shift(s, 1, 0))
+        assert(typeOf(env, t) == typeOf(env, TermTr.substitute(t, j, s)))
       }
       case App(t1, t2) => {
         preservationUnderSubst(env, t1, j, s)
         preservationUnderSubst(env, t2, j, s)
-        assert(typeOf(env, t) == typeOf(env, substitute(t, j, s)))
+        assert(typeOf(env, t) == typeOf(env, TermTr.substitute(t, j, s)))
       }
       case Fix(f) => {
         preservationUnderSubst(env, f, j, s)
-        assert(typeOf(env, t) == typeOf(env, substitute(t, j, s)))
+        assert(typeOf(env, t) == typeOf(env, TermTr.substitute(t, j, s)))
       }
       case TAbs(body) => {
         preservationUnderSubst(env, body, j, s)
-        assert(typeOf(env, t) == typeOf(env, substitute(t, j, s)))
+        assert(typeOf(env, t) == typeOf(env, TermTr.substitute(t, j, s)))
       }
       case TApp(body, _) => {
         preservationUnderSubst(env, body, j, s)
-        check(typeOf(env, t) == typeOf(env, substitute(t, j, s)))
+        check(typeOf(env, t) == typeOf(env, TermTr.substitute(t, j, s)))
       }
     }
-  }.ensuring(typeOf(env, t) == typeOf(env, substitute(t, j, s)))
+  }.ensuring(typeOf(env, t) == typeOf(env, TermTr.substitute(t, j, s)))
 
   @opaque @pure
   def preservationUnderAbsSubst(env: Environment, body: Term, arg: Term) = {
@@ -459,51 +463,94 @@ object TypingProperties {
     val Some(typ) = typeOf(argType :: env, body)
 
     insertTypeInEnv(Nil(), argType, env, arg)
-    assert(typeOf(argType :: env, shift(arg, 1, 0)).get == argType)
-    preservationUnderSubst(argType :: env, body, 0, shift(arg, 1, 0))
+    assert(typeOf(argType :: env, TermTr.shift(arg, 1, 0)).get == argType)
+    preservationUnderSubst(argType :: env, body, 0, TermTr.shift(arg, 1, 0))
 
     assert(!arg.hasFreeVariablesIn(0, 0))
-    ReductionProperties.boundRangeShift(arg, 1, 0, 0)
-    ReductionProperties.boundRangeSubstitutionLemma(body, 0, shift(arg, 1, 0))
-    ReductionProperties.boundRangeShiftBackLemma(substitute(body, 0, shift(arg, 1, 0)), 1, 0)
-    removeTypeInEnv(Nil(), argType, env, substitute(body, 0, shift(arg, 1, 0)))
+    TermTrProp.boundRangeShift(arg, 1, 0, 0)
+    TermTrProp.boundRangeSubstitutionLemma(body, 0, TermTr.shift(arg, 1, 0))
+    TermTrProp.boundRangeShiftBackLemma(TermTr.substitute(body, 0, TermTr.shift(arg, 1, 0)), 1, 0)
+    removeTypeInEnv(Nil(), argType, env, TermTr.substitute(body, 0, TermTr.shift(arg, 1, 0)))
 
   }.ensuring(typeOf(env, absSubsitution(body, arg)) == typeOf(typeOf(env, arg).get :: env, body))
-  
-//   def callByValuePreservationTheorem(env: Environment, t: Term): Unit = {
-//     require(typeOf(env, t).isDefined)
-//     require(reduceCallByValue(t).isDefined)
-//     val typeT = typeOf(env, t).get
 
-//     t match{
-//       case Var(_) => ()
-//       case Abs(_, _) => ()
-//       case App(t1, t2) => {
-//         if(!t1.isValue) {
-//           callByValuePreservationTheorem(env, t1)
-//         }
-//         else if(!t2.isValue)
-//           callByValuePreservationTheorem(env, t2)
-//         else {
-//           assert(t1.isValue && t2.isValue)
-//           t1 match {
-//               case Abs(_, body) => 
-//                 preservationUnderAbsSubst(env, body, t2)
-//               case _ => ()
-//           }
-//         }
-//       }
-//       case Fix(f) => {
-//         if(!f.isValue) {
-//           callByValuePreservationTheorem(env, f)
-//         }
-//         else {
-//           f match {
-//             case Abs(_, body) => preservationUnderAbsSubst(env, body, t)
-//           }
-//         }
-//       }
-//     }
-//   }.ensuring( typeOf(env, reduceCallByValue(t).get) == typeOf(env, t) )
+  @opaque @pure
+  def preservationUnderTypeAbsSubst(env: Environment, body: Term, typ: Type) = {
+    require(typeOf(env, body).isDefined)
+    body match{
+      case Var(k) => 
+        assert(TypeTr.substitute(body, 0, TypeTr.shift(typ, 1, 0)) == body)
+        assert(TypeTr.shift(body, 1, 0) == body)
+      case Abs(targ, b) => ()
+      case App(t1, t2) => ()
+      case Fix(f) => ()
+      case TAbs(b) => ()
+      case TApp(b, t) => ()
+    }
+  }.ensuring(typeOf(env, tabsSubstitution(body, typ)) == Some(universalSubstitution(typeOf(env, body).get, typ)))
+  
+  @opaque @pure
+  def callByValuePreservationTheorem(env: Environment, t: Term): Unit = {
+    require(typeOf(env, t).isDefined)
+    require(reduceCallByValue(t).isDefined)
+    val typeT = typeOf(env, t).get
+
+    t match{
+      case Var(_) => ()
+      case Abs(_, _) => ()
+      case App(t1, t2) => {
+        if(!t1.isValue) {
+          callByValuePreservationTheorem(env, t1)
+        }
+        else if(!t2.isValue)
+          callByValuePreservationTheorem(env, t2)
+        else {
+          assert(t1.isValue && t2.isValue)
+          t1 match {
+              case Abs(_, body) => 
+                preservationUnderAbsSubst(env, body, t2)
+              case _ => ()
+          }
+        }
+        check( typeOf(env, reduceCallByValue(t).get) == typeOf(env, t) )
+      }
+      case Fix(f) => {
+        if(!f.isValue) {
+          callByValuePreservationTheorem(env, f)
+        }
+        else {
+          f match {
+            case Abs(_, body) => preservationUnderAbsSubst(env, body, t)
+          }
+        }
+        check( typeOf(env, reduceCallByValue(t).get) == typeOf(env, t) )
+      }
+      case TAbs(_) => {
+        check( typeOf(env, reduceCallByValue(t).get) == typeOf(env, t) )
+      }
+
+      case TApp(term, typ) => 
+        if(!term.isValue) {
+          callByValuePreservationTheorem(env, term)
+          check( typeOf(env, reduceCallByValue(t).get) == typeOf(env, t) )
+        }
+        else {
+          term match {
+              case TAbs(body) => 
+              //   assert(typeOf(env, reduceCallByValue(t).get) == typeOf(env, tabsSubstitution(body, typ)))
+              //   assert(typeOf(env, t) == typeOf(env, TApp(TAbs(body), typ)))
+              //   assert(typeOf(env, body).isDefined)
+              //   assert(typeOf(env, term).get == UniversalType(typeOf(env, body).get))
+              //   assert(typeOf(env, t).get == absSubstitution(typeOf(env, body).get, typ)) 
+                preservationUnderTypeAbsSubst(env, body, typ)
+                check( typeOf(env, reduceCallByValue(t).get) == typeOf(env, t) )
+              case _ => 
+              check( typeOf(env, reduceCallByValue(t).get) == typeOf(env, t) )
+              ()
+          }
+        }
+        assert( typeOf(env, reduceCallByValue(t).get) == typeOf(env, t) )
+    }
+  }.ensuring( typeOf(env, reduceCallByValue(t).get) == typeOf(env, t) )
 
 }

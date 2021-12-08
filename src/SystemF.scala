@@ -129,7 +129,7 @@ object SystemF {
 
 }
 
-object SystemFProperties{
+object SystemFProperties {
   import SystemF._
 
   object Terms {
