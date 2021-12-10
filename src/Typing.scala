@@ -9,6 +9,10 @@ object Typing {
 
   type Environment = List[Type]
 
+  def shift(env: Environment, d: BigInt, c: BigInt): Environment = {
+    env.map(Transformations.Types.shift(_, d, c))
+  }
+
   sealed trait TypeDerivation {
 
     def env: Environment = this match {
@@ -60,18 +64,17 @@ object Typing {
           ftd.term == f && ftd.env == env && // and has matching attributes
           ftd.t == ArrowType(t, t) // Fixed term is a function
         }
-        case TAbsDerivation(env, UniversalType(b), tabs, btd) => {
-          btd.isValid &&
-          btd.term == tabs.t && btd.env == env &&
-          btd.t == b
+        case TAbsDerivation(env, UniversalType(b), TAbs(body), btd) => {
+          btd.isValid && // Premise is valid
+          btd.term == body && btd.env == shift(env, 1, 0) && // and has matching attributes
+          btd.t == b // The types are related as expected
         }
         case TAbsDerivation(_ ,_, _, _) => false
-        case TAppDerivation(env, t, tapp, btd) => {
-          btd.term == tapp.t && 
-          btd.isValid && 
-          btd.env == env && 
+        case TAppDerivation(env, t, TApp(body, typ), btd) => {
+          btd.isValid && // Premise is valid
+          btd.term == body && btd.env == env &&  // and has matching attributes
           (btd.t match{
-            case UniversalType(b) => t == universalSubstitution(b, tapp.typ)
+            case UniversalType(b) => t == universalSubstitution(b, typ)
             case _ => false
           })
         }
@@ -125,11 +128,10 @@ object Typing {
       }
       case tabs@TAbs(t) => {
         deriveType(env, t) match{
-          case Some(btd) => Some(TAbsDerivation(env, UniversalType(btd.t), tabs, btd))
+          case Some(btd) => Some(TAbsDerivation(shift(env, 1, 0), UniversalType(btd.t), tabs, btd))
           case None() => None()
         }
       }
-
       case tapp@TApp(t, typ) => {
         deriveType(env, t) match{
           case Some(btd) => {
