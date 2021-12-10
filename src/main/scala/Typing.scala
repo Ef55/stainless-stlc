@@ -87,12 +87,12 @@ object Typing {
       this.t == that.t
     }
   }
-  case class VarDerivation(env: Environment, t: Type, term: Var) extends TypeDerivation
-  case class AbsDerivation(env: Environment, t: Type, term: Abs, btd: TypeDerivation) extends TypeDerivation
-  case class AppDerivation(env: Environment, t: Type, term: App, btd1: TypeDerivation, btd2: TypeDerivation) extends TypeDerivation
-  case class FixDerivation(env: Environment, t: Type, term: Fix, ftd: TypeDerivation) extends TypeDerivation
-  case class TAbsDerivation(env: Environment, t: Type, term: TAbs, btd: TypeDerivation) extends TypeDerivation
-  case class TAppDerivation(env: Environment, t: Type, term: TApp, btd: TypeDerivation) extends TypeDerivation
+  case class VarDerivation(e: Environment, typ: Type, ter: Var) extends TypeDerivation
+  case class AbsDerivation(e: Environment, typ: Type, ter: Abs, btd: TypeDerivation) extends TypeDerivation
+  case class AppDerivation(e: Environment, typ: Type, ter: App, btd1: TypeDerivation, btd2: TypeDerivation) extends TypeDerivation
+  case class FixDerivation(e: Environment, typ: Type, ter: Fix, ftd: TypeDerivation) extends TypeDerivation
+  case class TAbsDerivation(e: Environment, typ: Type, ter: TAbs, btd: TypeDerivation) extends TypeDerivation
+  case class TAppDerivation(e: Environment, typ: Type, ter: TApp, btd: TypeDerivation) extends TypeDerivation
 
 
   def deriveType(env: Environment, t: Term): Option[TypeDerivation] = {
@@ -149,6 +149,10 @@ object Typing {
     }
   }
   
+  def deriveType(t: Term): Option[TypeDerivation] = {
+    deriveType(Nil(), t)
+  }
+
   // def typeOf(env: Environment, t: Term): Option[Type] = {
   //   deriveType(env, t).map(der => der.t)
   // }

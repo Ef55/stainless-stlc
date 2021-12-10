@@ -14,9 +14,11 @@ smt-sessions
 .vscode
 .metals
 
-# Scripts
+# Scripts & WIP
 *.sh
+wip/
 
 # Sbt files
 target
 project
+.bsp
