@@ -10,6 +10,8 @@ object Typing {
   type Environment = List[Type]
 
   def shift(env: Environment, d: BigInt, c: BigInt): Environment = {
+    require(d >= 0)
+    require(c >= 0)
     env.map(Transformations.Types.shift(_, d, c))
   }
 
@@ -127,8 +129,8 @@ object Typing {
         }
       }
       case tabs@TAbs(t) => {
-        deriveType(env, t) match{
-          case Some(btd) => Some(TAbsDerivation(shift(env, 1, 0), UniversalType(btd.t), tabs, btd))
+        deriveType(shift(env, 1, 0), t) match{
+          case Some(btd) => Some(TAbsDerivation(env, UniversalType(btd.t), tabs, btd))
           case None() => None()
         }
       }
