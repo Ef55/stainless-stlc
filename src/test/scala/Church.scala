@@ -23,26 +23,50 @@ class ChurchTests extends AnyFlatSpec {
   val boolType = UniversalType(ArrowType(VariableType(0), ArrowType(VariableType(0), VariableType(0))))
   val natType = UniversalType(ArrowType(ArrowType(VariableType(0), VariableType(0)), ArrowType(VariableType(0), VariableType(0))))
 
-  val unit = TAbs(Abs(VariableType(0), Var(0)))
-  val truw = TAbs(Abs(VariableType(0), Abs(VariableType(0), Var(1))))
-  val falz = TAbs(Abs(VariableType(0), Abs(VariableType(0), Var(0))))
-  val zero = TAbs(Abs(ArrowType(VariableType(0), VariableType(0)), Abs(VariableType(0), Var(0))))
+  val unit: Term = TAbs(Abs(VariableType(0), Var(0)))
+  val truw: Term = TAbs(Abs(VariableType(0), Abs(VariableType(0), Var(1))))
+  val falz: Term = TAbs(Abs(VariableType(0), Abs(VariableType(0), Var(0))))
+  val zero: Term = TAbs(Abs(ArrowType(VariableType(0), VariableType(0)), Abs(VariableType(0), Var(0))))
 
-  val succ = Abs(natType, TAbs(Abs(ArrowType(VariableType(0), VariableType(0)), Abs(VariableType(0), 
+  val succ: Term = Abs(natType, TAbs(Abs(ArrowType(VariableType(0), VariableType(0)), Abs(VariableType(0), 
     App(Var(1), App(App(TApp(Var(2), VariableType(0)), Var(1)), Var(0)))
   ))))
-  val isZero = Abs(natType, TAbs(
+  val isZero: Term = Abs(natType, TAbs(
     App(App(TApp(Var(0), 
       boolType.t), 
       Abs(boolType.t, TApp(falz, VariableType(0)))), 
       TApp(truw, VariableType(0)))
   ))
-  val add = Abs(natType, Abs(natType,
-    TAbs(Abs(ArrowType(VariableType(0), VariableType(0)), Abs(VariableType(0), 
-      App(App(TApp(Var(3), VariableType(0)), Var(1)), App(App(TApp(Var(2), VariableType(0)), Var(1)), Var(0)))
-    )))
+
+  val add: Term = Abs(natType, Abs(natType,
+    App(App(TApp(Var(1), natType), succ), Var(0))
+  ))
+  val mult: Term = Abs(natType, Abs(natType,
+    App(App(TApp(Var(1), natType), App(add, Var(0))), zero)
   ))
 
+  val pred: Term = ({ 
+    val natPairType = ArrowType(boolType, natType)
+    val mkPair = Abs(natType, Abs(natType, Abs(boolType, 
+      App(App(TApp(Var(0), natType), Var(2)), Var(1))
+    )))
+    val predStep = Abs(natPairType, 
+      App(App(mkPair, 
+        App(succ, App(Var(0), truw))), 
+        App(Var(0), truw)
+      )
+    )
+
+    Abs(natType, App( App(App(TApp(Var(0), natPairType), predStep), App(App(mkPair, zero), zero)) , falz))
+  })
+
+  val fact: Term = reduce(Fix(Abs(ArrowType(natType, natType), Abs(natType,
+    App(App(App(TApp(App(isZero, Var(0)), ArrowType(unitType, natType)), 
+      Abs(unitType, App(succ, zero))), 
+      Abs(unitType, App(App(mult, Var(1)), App(Var(2), App(pred, Var(1)))))
+    ), unit)
+  ))))
+ 
   def toChurch(b: Boolean): Term = {
     if (b) truw else falz
   }.ensuring(t => 
@@ -75,6 +99,13 @@ class ChurchTests extends AnyFlatSpec {
     assert( reduce(App(App(TApp(t, natType), succ), zero)) == toChurch(expected) )
   }
 
+  def natEquivalent(t: Term, s: Term): Unit = {
+    require(deriveType(t).get.t == natType)
+    require(deriveType(s).get.t == natType)
+
+    assert( reduce(App(App(TApp(t, natType), succ), zero)) == reduce(App(App(TApp(s, natType), succ), zero)) )
+  }
+
   "Constants" should "have expected type" in {
     def isValueWithType(t: Term, typ: Type): Unit = {
       assert(t.isValue)
@@ -88,7 +119,10 @@ class ChurchTests extends AnyFlatSpec {
     isValueWithType(zero, natType)
     isValueWithType(succ, ArrowType(natType, natType))
     isValueWithType(add, ArrowType(natType, ArrowType(natType, natType)))
+    isValueWithType(mult, ArrowType(natType, ArrowType(natType, natType)))
     isValueWithType(isZero, ArrowType(natType, boolType))
+    isValueWithType(pred, ArrowType(natType, natType))
+    isValueWithType(fact, ArrowType(natType, natType))
   }
 
   "Booleans" should "be distinguishable" in {
@@ -141,6 +175,30 @@ class ChurchTests extends AnyFlatSpec {
     test(0, 0, 0, 0)
   }
 
+  "Mult" should "return the expected natural" in {
+    def apply(n: Term, m: Term): Term = {
+      require(deriveType(n).get.t == natType)
+      require(deriveType(m).get.t == natType)
+
+      App(App(mult, n), m)
+    }
+
+    def test(n: Int, ns: Int*): Unit = {
+      val multiplication = ns.foldLeft(toChurch(n))((n, m) => apply(n, toChurch(m)))
+      val prod = ns.foldLeft(n)(_ * _)
+
+      natEquivalent(multiplication, prod)
+    }
+
+    test(0, 0)
+    test(0, 1)
+    test(1, 0)
+    test(2, 3)
+    test(1, 1, 1)
+    test(1, 2, 3)
+    test(0, 0, 0, 0)
+  }
+
   "IsZero" should "return the expected boolean" in {
     def apply(n: Term): Term = {
       require(deriveType(n).get.t == natType)
@@ -154,7 +212,7 @@ class ChurchTests extends AnyFlatSpec {
     booleanEquivalent(apply(toChurch(10)), false)
   }
 
-  it should "compose correctly with IsZero" in {
+  it should "compose correctly with Succ and Add" in {
     def suc(n: Term): Term = {
       require(deriveType(n).get.t == natType)
 
@@ -175,6 +233,51 @@ class ChurchTests extends AnyFlatSpec {
     booleanEquivalent(ad(toChurch(0), toChurch(1)), false)
     booleanEquivalent(ad(toChurch(1), toChurch(0)), false)
     booleanEquivalent(ad(toChurch(1), toChurch(2)), false)
+  }
+
+  "Pred" should "return the expected natural" in {
+    def apply(n: Term): Term = {
+      require(deriveType(n).get.t == natType)
+
+      App(pred, n)
+    }.ensuring(deriveType(_).get.t == natType)
+
+
+    natEquivalent(apply(zero), 0)
+    natEquivalent(apply(toChurch(1)), 0)
+    natEquivalent(apply(toChurch(10)), 9)
+  }
+
+  "Fact" should "return the expected natural" in {
+    def test(n: Int, fn: Int): Unit = {
+      natEquivalent( reduce(App(fact, toChurch(n))), fn )
+    }
+
+    test(0, 1)
+    test(1, 1)
+    test(3, 6)
+    // test(4, 24) // ~10s
+  }
+
+  "Gauss' story" should "be System F compatible" in {
+    def sum(ns: List[Int]): Term = {
+      def apply(n: Term, m: Term): Term = {
+        App(App(add, n), m)
+      }
+
+      ns.foldLeft(zero)((n, m) => apply(n, toChurch(m)))
+    }
+
+    def instance(n: Int): Unit = {
+      val s = sum( (1 to n).toList )
+      val ds = App(App(add, s), s)
+
+      val f = App(App(mult, toChurch(n)), App(succ, toChurch(n)))
+
+      natEquivalent(ds, f)
+    }
+
+    instance(3)
   }
 
 }
