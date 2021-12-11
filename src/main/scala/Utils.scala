@@ -37,6 +37,31 @@ object ListProperties {
     ListSpecs.reverseIndex(l1, l1.size - k - 1)
     ()
   }.ensuring((l1 ++ l2)(k) == l1(k))
+
+  @opaque @pure
+  def mapConcat[T, U](@induct l1: List[T], l2: List[T], f: T => U): Unit = {
+  }.ensuring(l1.map(f) ++ l2.map(f) == (l1 ++ l2).map(f)) 
+
+  @opaque @pure
+  def mapPrepend[T, U](elem: T, @induct l: List[T], f: T => U): Unit = {
+  }.ensuring(f(elem) :: l.map(f) == (elem :: l).map(f))
+
+  @opaque @pure
+  def mapIndexing[T, U](k: BigInt, l: List[T], f: T => U): Unit = {
+    require(k >= 0)
+    require(k < l.size)
+    l match{
+      case Nil() => ()
+      case Cons(h, t) =>
+        mapPrepend(h, t, f) 
+        if(k == 0){
+          ()
+        }
+        else{
+          mapIndexing(k - 1 , t, f)
+        }
+    }
+  }.ensuring(f(l(k)) == l.map(f)(k))
 }
 
 object OptionProperties {
