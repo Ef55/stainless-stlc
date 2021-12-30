@@ -8,8 +8,21 @@ object Reduction {
   import Transformations._
   import TransformationsProperties.{Terms => TermsProp, Types => TypesProp}
 
+  sealed trait ReductionRule
+  sealed trait AppRule extends ReductionRule
+  case object App1Congruence extends AppRule
+  case object App2Congruence extends AppRule
+  case object AbsAppReduction extends AppRule
+  sealed trait FixRule extends ReductionRule
+  case object FixCongruence extends FixRule
+  case object AbsFixReduction extends FixRule
+  sealed trait TAppRule extends ReductionRule
+  case object TAppCongruence extends TAppRule
+  case object TAbsTappReduction extends TAppRule
+
+
   // ↑⁻¹( [0 -> ↑¹(arg)]body )
-  def absSubsitution(body: Term, arg: Term): Term = {
+  def absSubstitution(body: Term, arg: Term): Term = {
     assert(!arg.hasFreeVariablesIn(0, 0))
     TermsProp.boundRangeShift(arg, 1, 0, 0)
     TermsProp.boundRangeSubstitutionLemma(body, 0, Terms.shift(arg, 1, 0))
@@ -36,37 +49,37 @@ object Reduction {
   }
 
   // [t -> t']
-  def reducesTo(t: Term, tp: Term): Boolean = {
+  def reducesTo(t: Term, tp: Term): Option[ReductionRule] = {
     t match {
-      case Var(_) => false
-      case Abs(_, _) => false
+      case Var(_) => None[ReductionRule]()
+      case Abs(_, _) => None[ReductionRule]()
       case App(t1, t2) => {
         (tp match {
-          case App(t1p, t2p) if reducesTo(t1, t1p) && t2 == t2p  => true
-          case App(t1p, t2p) if t1 == t1p && reducesTo(t2, t2p) => true
-          case _ => false
-        }) || (t1 match {
-          case Abs(_, body) => absSubsitution(body, t2) == tp
-          case _ => false
+          case App(t1p, t2p) if reducesTo(t1, t1p).isDefined && t2 == t2p  => Some[ReductionRule](App1Congruence)
+          case App(t1p, t2p) if t1 == t1p && reducesTo(t2, t2p).isDefined => Some[ReductionRule](App2Congruence)
+          case _ => None[ReductionRule]()
+        }) orElse (t1 match {
+          case Abs(_, body) if absSubstitution(body, t2) == tp => Some[ReductionRule](AbsAppReduction)
+          case _ => None[ReductionRule]()
         })
       }
       case Fix(f) => {
         (tp match {
-          case Fix(fp) => reducesTo(f, fp)
-          case _ => false
-        }) || (f match {
-          case Abs(_, body) => absSubsitution(body, t) == tp
-          case _ => false
+          case Fix(fp) if reducesTo(f, fp).isDefined => Some[ReductionRule](FixCongruence)
+          case _ => None[ReductionRule]()
+        }) orElse (f match {
+          case Abs(_, body) if absSubstitution(body, t) == tp => Some[ReductionRule](AbsFixReduction)
+          case _ => None[ReductionRule]()
         })
       }
-      case TAbs(body) => false
+      case TAbs(body) => None[ReductionRule]()
       case TApp(term, typ) => {
         (tp match {
-          case TApp(termp, typp) => reducesTo(term, termp) && typ == typp
-          case _ => false
-        }) || (term match {
-          case TAbs(body) => tabsSubstitution(body, typ) == tp
-          case _ => false
+          case TApp(termp, typp) if reducesTo(term, termp).isDefined && typ == typp => Some[ReductionRule](TAppCongruence)
+          case _ => None[ReductionRule]()
+        }) orElse (term match {
+          case TAbs(body) if tabsSubstitution(body, typ) == tp => Some[ReductionRule](TAbsTappReduction)
+          case _ => None[ReductionRule]()
         })
       }
     }
@@ -81,13 +94,13 @@ object Reduction {
         reduceAll(t1).map[Term](t1p => App(t1p, t2)) ++ 
           reduceAll(t2).map[Term](t2p => App(t1, t2p)) ++ 
           (t1 match {
-            case Abs(_, body) => Set[Term](absSubsitution(body, t2))
+            case Abs(_, body) => Set[Term](absSubstitution(body, t2))
             case _ => Set[Term]()
           })
       }
       case Fix(f) => {
         f match {
-          case Abs(_, body) => reduceAll(f).map[Term](Fix(_)) + absSubsitution(body, t)
+          case Abs(_, body) => reduceAll(f).map[Term](Fix(_)) + absSubstitution(body, t)
           case _ => reduceAll(f).map(Fix(_))
         }
       }
@@ -118,7 +131,7 @@ object Reduction {
         else {
           t1 match {
             case Abs(_, body) => {
-              Some(absSubsitution(body, t2))
+              Some(absSubstitution(body, t2))
             }
             case _ => None[Term]()
           }
@@ -131,7 +144,7 @@ object Reduction {
         else {
           f match {
             case Abs(_, body) => {
-              Some(absSubsitution(body, t))
+              Some(absSubstitution(body, t))
             }
             case _ => None[Term]()
           }
@@ -158,22 +171,72 @@ object ReductionProperties {
   import SystemF._
   import Reduction._
 
+  /// ReducesTo semantics & inversion
+
+  def appReducesToSoundness(app: App, tp: Term): Unit = {
+    require(reducesTo(app, tp).isDefined)
+  }.ensuring(reducesTo(app, tp).get.isInstanceOf[AppRule])
+
+  def app1CongruenceInversion(t: Term, tp: Term): Unit = {
+    require(reducesTo(t, tp).isDefined)
+    require(reducesTo(t, tp).get == App1Congruence)
+  }.ensuring(
+    t.isInstanceOf[App] && tp.isInstanceOf[App] &&
+    (t.asInstanceOf[App].t2 == tp.asInstanceOf[App].t2) &&
+    reducesTo(t.asInstanceOf[App].t1, tp.asInstanceOf[App].t1).isDefined
+  )
+
+  def app2CongruenceInversion(t: Term, tp: Term): Unit = {
+    require(reducesTo(t, tp).isDefined)
+    require(reducesTo(t, tp).get == App2Congruence)
+  }.ensuring(
+    t.isInstanceOf[App] && tp.isInstanceOf[App] &&
+    (t.asInstanceOf[App].t1 == tp.asInstanceOf[App].t1) &&
+    reducesTo(t.asInstanceOf[App].t2, tp.asInstanceOf[App].t2).isDefined
+  )
+
+  def absAppReductionInversion(t: Term, tp: Term): Unit = {
+    require(reducesTo(t, tp).isDefined)
+    require(reducesTo(t, tp).get == AbsAppReduction)
+  }.ensuring(
+    t.isInstanceOf[App] && t.asInstanceOf[App].t1.isInstanceOf[Abs]
+  )
+
+  def fixReducesToSoundness(fix: Fix, tp: Term): Unit = {
+    require(reducesTo(fix, tp).isDefined)
+  }.ensuring(reducesTo(fix, tp).get.isInstanceOf[FixRule])
+
+  def fixCongruenceInversion(t: Term, tp: Term): Unit = {
+    require(reducesTo(t, tp).isDefined)
+    require(reducesTo(t, tp).get == FixCongruence)
+  }.ensuring(
+    t.isInstanceOf[Fix] && tp.isInstanceOf[Fix] &&
+    reducesTo(t.asInstanceOf[Fix].t, tp.asInstanceOf[Fix].t).isDefined
+  )
+
+  def absFixReductionInversion(t: Term, tp: Term): Unit = {
+    require(reducesTo(t, tp).isDefined)
+    require(reducesTo(t, tp).get == AbsFixReduction)
+  }.ensuring(
+    t.isInstanceOf[Fix] && t.asInstanceOf[Fix].t.isInstanceOf[Abs]
+  )
+
   /// ReduceAll correctness
 
   @opaque @pure
   def reduceAllCompleteness(t: Term, tp: Term): Unit = {
-    require(reducesTo(t, tp))
+    require(reducesTo(t, tp).isDefined)
 
     t match {
       case Var(_) => assert(reduceAll(t).contains(tp))
       case Abs(_, _) => assert(reduceAll(t).contains(tp))
       case App(t1, t2) => {
         tp match {
-          case App(t1p, t2p) if reducesTo(t1, t1p) && t2 == t2p  => {
+          case App(t1p, t2p) if reducesTo(t1, t1p).isDefined && t2 == t2p  => {
             reduceAllCompleteness(t1, t1p)
             reduceAll(t1).mapPost1[Term](t1p => App(t1p, t2))(t1p)
           }
-          case App(t1p, t2p) if t1 == t1p && reducesTo(t2, t2p) => {
+          case App(t1p, t2p) if t1 == t1p && reducesTo(t2, t2p).isDefined => {
             reduceAllCompleteness(t2, t2p)
             reduceAll(t2).mapPost1[Term](t2p => App(t1, t2p))(t2p)
           }
@@ -182,17 +245,17 @@ object ReductionProperties {
       }
       case Fix(f) => {
         tp match {
-          case Fix(fp) if reducesTo(f, fp) => {
+          case Fix(fp) if reducesTo(f, fp).isDefined => {
             reduceAllCompleteness(f, fp)
             reduceAll(f).mapPost1[Term](Fix(_))(fp)
           }
           case _ => assert(reduceAll(t).contains(tp))
         }
       }
-      case TAbs(body) => assert(reducesTo(t, tp))
+      case TAbs(body) => assert(reducesTo(t, tp).isDefined)
       case TApp(term, typ) => {
         tp match {
-          case TApp(termp, typp) if reducesTo(term, termp) && typ == typp => {
+          case TApp(termp, typp) if reducesTo(term, termp).isDefined && typ == typp => {
             reduceAllCompleteness(term, termp)
             reduceAll(term).mapPost1[Term](TApp(_, typ))(termp)
           }
@@ -206,8 +269,8 @@ object ReductionProperties {
   def reduceAllSoundness(t: Term, tp: Term): Unit = {
     require(reduceAll(t).contains(tp))
     t match {
-      case Var(_) => assert(reducesTo(t, tp))
-      case Abs(_, _) => assert(reducesTo(t, tp))
+      case Var(_) => assert(reducesTo(t, tp).isDefined)
+      case Abs(_, _) => assert(reducesTo(t, tp).isDefined)
       case App(t1, t2) => {
         if(reduceAll(t1).map[Term](t1p => App(t1p, t2)).contains(tp)) {
           val App(t1p, t2p) = tp
@@ -220,7 +283,7 @@ object ReductionProperties {
           reduceAllSoundness(t2, t2p)
         }
         else {
-          assert(reducesTo(t, tp))
+          assert(reducesTo(t, tp).isDefined)
         }
       }
       case Fix(f) => {
@@ -230,10 +293,10 @@ object ReductionProperties {
           reduceAllSoundness(f, fp)
         }
         else {
-          assert(reducesTo(t, tp))
+          assert(reducesTo(t, tp).isDefined)
         }
       }
-      case TAbs(body) => assert(reducesTo(t, tp))
+      case TAbs(body) => assert(reducesTo(t, tp).isDefined)
       case TApp(term, typ) => {
         if(reduceAll(term).map[Term](TApp(_, typ)).contains(tp)) {
           val TApp(termp, typp) = tp
@@ -241,16 +304,16 @@ object ReductionProperties {
           reduceAllSoundness(term, termp)
         }
         else {
-          assert(reducesTo(t, tp))
+          assert(reducesTo(t, tp).isDefined)
         }
       }
     }
-  }.ensuring(reducesTo(t, tp))
+  }.ensuring(reducesTo(t, tp).isDefined)
 
   /// Call-by-value soudness
 
   @opaque @pure
-  def reduceCallByValueSoundness(t: Term): Unit = {
+  def reduceCallByValueSoundness(t: Term): ReductionRule = {
     require(reduceCallByValue(t).isDefined)
     val tp = reduceCallByValue(t).get
 
@@ -265,7 +328,7 @@ object ReductionProperties {
           reduceCallByValueSoundness(t2)
         }
         else {
-          assert(reducesTo(t, tp))
+          assert(reducesTo(t, tp).isDefined)
         }
       }
       case Fix(f) => {
@@ -273,7 +336,7 @@ object ReductionProperties {
           reduceCallByValueSoundness(f)
         }
         else {
-          assert(reducesTo(t, tp))
+          assert(reducesTo(t, tp).isDefined)
         }
       }
       case TAbs(_) => assert(false)
@@ -282,10 +345,15 @@ object ReductionProperties {
           reduceCallByValueSoundness(term)
         }
         else {
-          assert(reducesTo(t, tp))
+          assert(reducesTo(t, tp).isDefined)
         }
       }
     }
 
-  }.ensuring(reducesTo(t, reduceCallByValue(t).get))
+    assert(reducesTo(t, reduceCallByValue(t).get).isDefined)
+    reducesTo(t, reduceCallByValue(t).get).get
+  }.ensuring(res =>
+    reducesTo(t, reduceCallByValue(t).get).isDefined &&
+    ( res == reducesTo(t, reduceCallByValue(t).get).get )
+  )
 }

@@ -121,7 +121,7 @@ object SystemF {
 
   }
   case class Var(k: BigInt) extends Term { require(k >= 0) }
-  case class Abs(b: Type, t: Term) extends Term
+  case class Abs(argType: Type, body: Term) extends Term
   case class App(t1: Term, t2: Term) extends Term
   case class Fix(t: Term) extends Term
   case class TAbs(t: Term) extends Term
