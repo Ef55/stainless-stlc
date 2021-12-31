@@ -180,6 +180,8 @@ object ReductionProperties {
   def app1CongruenceInversion(t: Term, tp: Term): Unit = {
     require(reducesTo(t, tp).isDefined)
     require(reducesTo(t, tp).get == App1Congruence)
+
+    assert(t.isInstanceOf[App])
   }.ensuring(
     t.isInstanceOf[App] && tp.isInstanceOf[App] &&
     (t.asInstanceOf[App].t2 == tp.asInstanceOf[App].t2) &&
@@ -189,6 +191,8 @@ object ReductionProperties {
   def app2CongruenceInversion(t: Term, tp: Term): Unit = {
     require(reducesTo(t, tp).isDefined)
     require(reducesTo(t, tp).get == App2Congruence)
+
+    assert(t.isInstanceOf[App])
   }.ensuring(
     t.isInstanceOf[App] && tp.isInstanceOf[App] &&
     (t.asInstanceOf[App].t1 == tp.asInstanceOf[App].t1) &&
@@ -198,8 +202,17 @@ object ReductionProperties {
   def absAppReductionInversion(t: Term, tp: Term): Unit = {
     require(reducesTo(t, tp).isDefined)
     require(reducesTo(t, tp).get == AbsAppReduction)
+
+    assert(t.isInstanceOf[App])
+    val App(t1, _) = t
+    assert(t1.isInstanceOf[Abs])
   }.ensuring(
-    t.isInstanceOf[App] && t.asInstanceOf[App].t1.isInstanceOf[Abs]
+    t.isInstanceOf[App] && t.asInstanceOf[App].t1.isInstanceOf[Abs] &&
+    ( 
+      tp 
+      == 
+      absSubstitution(t.asInstanceOf[App].t1.asInstanceOf[Abs].body, t.asInstanceOf[App].t2) 
+    )
   )
 
   def fixReducesToSoundness(fix: Fix, tp: Term): Unit = {
@@ -209,6 +222,8 @@ object ReductionProperties {
   def fixCongruenceInversion(t: Term, tp: Term): Unit = {
     require(reducesTo(t, tp).isDefined)
     require(reducesTo(t, tp).get == FixCongruence)
+
+    assert(t.isInstanceOf[Fix])
   }.ensuring(
     t.isInstanceOf[Fix] && tp.isInstanceOf[Fix] &&
     reducesTo(t.asInstanceOf[Fix].t, tp.asInstanceOf[Fix].t).isDefined
@@ -217,8 +232,17 @@ object ReductionProperties {
   def absFixReductionInversion(t: Term, tp: Term): Unit = {
     require(reducesTo(t, tp).isDefined)
     require(reducesTo(t, tp).get == AbsFixReduction)
+
+    assert(t.isInstanceOf[Fix])
+    val Fix(f) = t
+    assert(f.isInstanceOf[Abs])
   }.ensuring(
-    t.isInstanceOf[Fix] && t.asInstanceOf[Fix].t.isInstanceOf[Abs]
+    t.isInstanceOf[Fix] && t.asInstanceOf[Fix].t.isInstanceOf[Abs] &&
+    ( 
+      tp 
+      == 
+      absSubstitution(t.asInstanceOf[Fix].t.asInstanceOf[Abs].body, t) 
+    )
   )
 
   /// ReduceAll correctness
