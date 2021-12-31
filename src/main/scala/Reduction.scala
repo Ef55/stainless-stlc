@@ -245,6 +245,40 @@ object ReductionProperties {
     )
   )
 
+  def tappReducesToSoundness(tapp: TApp, tp: Term): Unit = {
+    require(reducesTo(tapp, tp).isDefined)
+  }.ensuring(reducesTo(tapp, tp).get.isInstanceOf[TAppRule])
+
+  def tappCongruenceInversion(t: Term, tp: Term): Unit = {
+    require(reducesTo(t, tp).isDefined)
+    require(reducesTo(t, tp).get == TAppCongruence)
+
+    assert(t.isInstanceOf[TApp])
+  }.ensuring(
+    t.isInstanceOf[TApp] && tp.isInstanceOf[TApp] &&
+    ( t.asInstanceOf[TApp].typ == tp.asInstanceOf[TApp].typ ) &&
+    reducesTo(t.asInstanceOf[TApp].t, tp.asInstanceOf[TApp].t).isDefined
+  )
+
+  def tabsTappReductionInversion(t: Term, tp: Term): Unit = {
+    require(reducesTo(t, tp).isDefined)
+    require(reducesTo(t, tp).get == TAbsTappReduction)
+
+    assert(t.isInstanceOf[TApp])
+    val TApp(body, _) = t
+    assert(body.isInstanceOf[TAbs])
+  }.ensuring(
+    t.isInstanceOf[TApp] && t.asInstanceOf[TApp].t.isInstanceOf[TAbs] &&
+    ( 
+      tp 
+      == 
+      tabsSubstitution(
+        t.asInstanceOf[TApp].t.asInstanceOf[TAbs].t, 
+        t.asInstanceOf[TApp].typ
+      ) 
+    )
+  )
+
   /// ReduceAll correctness
 
   @opaque @pure
