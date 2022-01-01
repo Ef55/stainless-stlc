@@ -244,60 +244,131 @@ object TypingProperties {
     VarDerivation(Nil(), BasicType(""), Var(0)) : TypeDerivation
   }.ensuring(p(_))
 
-  @extern
+  
+
+  @opaque @pure
+  def environmentWeakening(td: TypeDerivation, envExt: Environment): TypeDerivation = {
+    require(td.isValid)
+    td match {
+      case VarDerivation(env, typ, Var(k)) => 
+        concatFirstIndexing(env, envExt, k)
+        VarDerivation(env ++ envExt, typ, Var(k))
+      case AbsDerivation(env, typ, Abs(argType, body), btd) => 
+        val resBtd = environmentWeakening(btd, envExt)
+        AbsDerivation(env ++ envExt, typ, Abs(argType, body), resBtd)
+      case AppDerivation(env, typ, App(t1, t2), bt1, bt2) => 
+        val resBt1 = environmentWeakening(bt1, envExt)
+        val resBt2 = environmentWeakening(bt2, envExt)
+        AppDerivation(env ++ envExt, typ, App(t1, t2), resBt1, resBt2)
+      case FixDerivation(env, typ, Fix(f), ftd) => 
+        val resFtd = environmentWeakening(ftd, envExt)
+        FixDerivation(env ++ envExt, typ, Fix(f), resFtd)
+      case TAbsDerivation(env, typ, TAbs(body), btd) => 
+        ListProperties.mapConcat(env, envExt, Transformations.Types.shift(_: Type, 1, 0))
+        val resBtd = environmentWeakening(btd,  shift(envExt, 1, 0))
+        TAbsDerivation(env ++ envExt, typ, TAbs(body), resBtd)
+      case TAppDerivation(env, typ, TApp(body, argType), btd) =>
+        val resBtd = environmentWeakening(btd, envExt)
+        TAppDerivation(env ++ envExt, typ, TApp(body, argType), resBtd)
+    }
+  }.ensuring(res => res.isValid && res.env == td.env ++ envExt && res.term == td.term && res.t == td.t)
+
+  @opaque @pure
+  def variableEnvironmentStrengthening(v: VarDerivation, env: Environment, envExt: Environment): VarDerivation = {
+    require(v.env == env ++ envExt)
+    require(v.isValid)
+    require(v.ter.k < env.length)
+    concatFirstIndexing(env, envExt, v.ter.k)
+    VarDerivation(env, v.typ, v.ter)
+  }.ensuring(res => res.isValid && res.env == env && res.typ == v.typ && res.ter == v.ter)
+
+  @opaque @pure
+  def variableEnvironmentUpdate(v: VarDerivation, env: Environment, oldEnv: Environment, newEnv: Environment): VarDerivation = {
+    require(v.env == env ++ oldEnv)
+    require(v.isValid)
+    require(v.ter.k < env.length)  
+    val v2 = variableEnvironmentStrengthening(v, env, oldEnv) 
+    environmentWeakening(v2, newEnv)
+    VarDerivation(env ++ newEnv, v.typ, v.ter)
+  }.ensuring(res => res.isValid && res.env == env ++ newEnv && res.typ == v.typ && res.ter == v.ter)
+
+  @opaque @pure
   def insertTypeInEnv(env1: Environment, typ: Type, env2: Environment, td: TypeDerivation): TypeDerivation = {
     require(td.isValid)
     require(env1 ++ env2 == td.env)
 
-    // t match{
-    //   case Var(k) => {
-    //     if (k < env1.size){
-    //       variableEnvironmentUpdate(Var(k), env1, env2, (typ :: env2))
-    //       check(deriveType(env1 ++ env2, t).get === deriveType(env1 ++ (typ :: env2), TermTr.shift(t, 1, env1.size)).get)
-    //     }
-    //     else{
-    //       insertionIndexing(env1, env2, typ, k)
-    //       check(deriveType(env1 ++ env2, t).get === deriveType(env1 ++ (typ :: env2), TermTr.shift(t, 1, env1.size)).get)
-    //     }
-    //   }
-    //   case Abs(targ, body) => {
-    //     absInversionLemma(env1 ++ env2, targ, body)
-    //     insertTypeInEnv(targ :: env1, typ, env2, body)
-    //     absInversionLemma(env1 ++ (typ :: env2), targ, TermTr.shift(body, 1, env1.size + 1))
-    //     check(deriveType(env1 ++ env2, t).get === deriveType(env1 ++ (typ :: env2), TermTr.shift(t, 1, env1.size)).get)
-    //   }
-    //   case App(t1, t2) => {
-    //     appInversionLemma(env1 ++ env2, t1, t2)
-    //     insertTypeInEnv(env1, typ, env2, t2)
-    //     insertTypeInEnv(env1, typ, env2, t1)
-    //     appInversionLemma(env1 ++ (typ :: env2), TermTr.shift(t1, 1, env1.size), TermTr.shift(t2, 1, env1.size))
-    //     check(deriveType(env1 ++ env2, t).get === deriveType(env1 ++ (typ :: env2), TermTr.shift(t, 1, env1.size)).get)
-    //   }
-    //   case Fix(f) => {
-    //     fixInversionLemma(env1 ++ env2, f)
-    //     insertTypeInEnv(env1, typ, env2, f)
-    //     fixInversionLemma(env1 ++ (typ :: env2), TermTr.shift(f, 1, env1.size))
-    //     check(deriveType(env1 ++ env2, t).get === deriveType(env1 ++ (typ :: env2), TermTr.shift(t, 1, env1.size)).get)
-    //   }
-    //   case TAbs(body) => {
-    //     tabsInversionLemma(env1 ++ env2, body)
-    //     ListProperties.mapPrepend(typ, env2, Transformations.Types.shift(_: Type, 1, 0))
-    //     ListProperties.mapConcat(env1, typ :: env2, Transformations.Types.shift(_: Type, 1, 0))
-    //     ListProperties.mapConcat(env1, env2, Transformations.Types.shift(_: Type, 1, 0))
-    //     insertTypeInEnv(shift(env1, 1, 0), TypeTr.shift(typ, 1, 0), shift(env2, 1, 0), body)
-    //     tabsInversionLemma(env1 ++ (typ :: env2), TermTr.shift(body, 1, env1.size))
-    //     check(deriveType(env1 ++ env2, t).get === deriveType(env1 ++ (typ :: env2), TermTr.shift(t, 1, env1.size)).get)
-    //   }
-    //   case TApp(body, typ2) => {
-    //     tappInversionLemma(env1 ++ env2, body, typ2)
-    //     insertTypeInEnv(env1, typ, env2, body)
-    //     tappInversionLemma(env1 ++ (typ :: env2), TermTr.shift(body, 1, env1.size), typ2)
-    //     check(deriveType(env1 ++ env2, t).get === deriveType(env1 ++ (typ :: env2), TermTr.shift(t, 1, env1.size)).get)
-    //   }
-    // }
-
-
-    mAgIcDeRiVaTiOn(_ => true)
+    td match {
+      case v@VarDerivation(env, typ, Var(k)) => {
+        if (k < env1.size){
+          variableEnvironmentUpdate(v, env1, env2, (typ :: env2))
+          val res = VarDerivation(env1 ++ (typ :: env2), typ, Var(k))
+          check(res.isValid &&
+          ( res.term == TermTr.shift(td.term, 1, env1.size) ) &&
+          ( res.env == env1 ++ (typ :: env2) ) &&
+          ( td.t == res.t ))
+          res
+        }
+        else{
+          insertionIndexing(env1, env2, typ, k)
+          val res = VarDerivation(env1 ++ (typ :: env2), typ, Var(k + 1))
+          check(res.isValid &&
+          ( res.term == TermTr.shift(td.term, 1, env1.size) ) &&
+          ( res.env == env1 ++ (typ :: env2) ) &&
+          ( td.t == res.t ))
+          res
+         }
+      }
+      case AbsDerivation(env, typ, Abs(argType, body), btd) => {
+        val resBtd = insertTypeInEnv(argType :: env1, typ, env2, btd)
+        val res = AbsDerivation(env1 ++ (typ :: env2), typ, Abs(argType, TermTr.shift(body, 1, env1.size + 1)), resBtd)
+        check(res.isValid &&
+          ( res.term == TermTr.shift(td.term, 1, env1.size) ) &&
+          ( res.env == env1 ++ (typ :: env2) ) &&
+          ( td.t == res.t ))
+        res
+      }
+      case AppDerivation(env, typ, App(t1, t2), td1, td2) => {
+        val resTd1 = insertTypeInEnv(env1, typ, env2, td1)
+        val resTd2 = insertTypeInEnv(env1, typ, env2, td2)
+        val res = AppDerivation(env1 ++ (typ :: env2), typ, App(TermTr.shift(t1, 1, env1.size), TermTr.shift(t2, 1, env1.size)), resTd1, resTd2)
+        check(res.isValid &&
+        ( res.term == TermTr.shift(td.term, 1, env1.size) ) &&
+        ( res.env == env1 ++ (typ :: env2) ) &&
+        ( td.t == res.t ))
+        res
+      }
+      case FixDerivation(env, typ, Fix(f), ftd) => {
+        val resFtd = insertTypeInEnv(env1, typ, env2, ftd)
+        val res = FixDerivation(env1 ++ (typ :: env2), typ, Fix(TermTr.shift(f, 1, env1.size)), resFtd)
+        check(res.isValid &&
+        ( res.term == TermTr.shift(td.term, 1, env1.size) ) &&
+        ( res.env == env1 ++ (typ :: env2) ) &&
+        ( td.t == res.t ))
+        res
+      }
+      case TAbsDerivation(env, typ, TAbs(body), btd) => {
+        ListProperties.mapPrepend(typ, env2, Transformations.Types.shift(_: Type, 1, 0))
+        ListProperties.mapConcat(env1, typ :: env2, Transformations.Types.shift(_: Type, 1, 0))
+        ListProperties.mapConcat(env1, env2, Transformations.Types.shift(_: Type, 1, 0))
+        val resBtd = insertTypeInEnv(shift(env1, 1, 0), TypeTr.shift(typ, 1, 0), shift(env2, 1, 0), btd)
+        val res = TAbsDerivation(env1 ++ (typ :: env2), typ, TAbs(TermTr.shift(body, 1, env1.size)), resBtd)
+        check(res.isValid &&
+        ( res.term == TermTr.shift(td.term, 1, env1.size) ) &&
+        ( res.env == env1 ++ (typ :: env2) ) &&
+        ( td.t == res.t ))
+        res
+      }
+      case TAppDerivation(env, typ, TApp(body, typeArg), btd) => {
+        val resBtd = insertTypeInEnv(env1, typ, env2, btd)
+        val res = TAppDerivation(env1 ++ (typ :: env2), typ, TApp(TermTr.shift(body, 1, env1.size), typeArg), resBtd)
+        check(res.isValid &&
+        ( res.term == TermTr.shift(td.term, 1, env1.size) ) &&
+        ( res.env == env1 ++ (typ :: env2) ) &&
+        ( td.t == res.t ))
+        res
+      }
+    }
+    
   }.ensuring(res =>
     res.isValid &&
     ( res.term == TermTr.shift(td.term, 1, env1.size) ) &&
@@ -448,7 +519,6 @@ object TypingProperties {
     require(c1 >= 0)
     require(s2 >= 0)
     require(c2 >= 0)
-    require(c2 )
 
     typ match {
       case BasicType(_) => {
