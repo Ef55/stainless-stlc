@@ -411,6 +411,34 @@ object TransformationsProperties {
     /// Types in terms 
 
     @opaque @pure
+    def boundRangeShift(t: Term, d: BigInt, c: BigInt, b: BigInt): Unit = {
+      require(c >= 0)
+      require(d >= 0)
+      require(b >= 0)
+      require(!t.hasFreeTypeVariablesIn(c, b))
+
+      t match {
+        case Var(k) => ()
+        case Abs(targ, body) => {
+          boundRangeShift(targ, d, c, b)
+          boundRangeShift(body, d, c, b)
+        }
+        case App(t1, t2) => {
+          boundRangeShift(t1, d, c, b)
+          boundRangeShift(t2, d, c, b)
+        }
+        case Fix(f) => boundRangeShift(f, d, c, b)
+        case TAbs(body) => {
+          boundRangeShift(body, d, c, b)
+        }
+        case TApp(term, typ) => {
+          boundRangeShift(term, d, c, b)
+          boundRangeShift(typ, d, c, b)
+        }
+      }
+    }.ensuring(!shift(t, d, c).hasFreeTypeVariablesIn(c, d+b))
+
+    @opaque @pure
     def boundRangeSubstitutionLemma(t: Term, j: BigInt, s: Type): Unit = {
       require(j >= 0)
       require(!s.hasFreeVariablesIn(0, j+1))
