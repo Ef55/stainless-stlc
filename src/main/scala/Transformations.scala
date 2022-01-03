@@ -114,8 +114,12 @@ object Transformations {
 
     def negativeShiftValidity(env: Environment, d: BigInt, c: BigInt): Boolean = {
       require(d < 0)
-      env.forall(Transformations.Types.negativeShiftValidity(_, d, c))
-    }.ensuring(_ ==> env.forall(Transformations.Types.negativeShiftValidity(_, d, c)))
+
+      env match {
+        case Nil() => true
+        case Cons(h, t) => negativeShiftValidity(h, d, c) && negativeShiftValidity(t, d, c)
+      }
+    }
 
     def shift(env: Environment, d: BigInt, c: BigInt): Environment = {
       require(d >= 0 || negativeShiftValidity(env, d, c))
@@ -331,7 +335,23 @@ object TransformationsProperties {
     )
 
     @opaque @pure
-    def shift0Identity(@induct t: Type, c: BigInt): Unit = {
+    def shift0Identity(t: Type, c: BigInt): Unit = {
+      require(c >= 0)
+      t match {
+        case VariableType(k) => {
+          assert(shift(t, 0, c) == t)
+        }
+        case BasicType(_) => {
+          assert(shift(t, 0, c) == t)
+        }
+        case UniversalType(body) => {
+          shift0Identity(body, c+1)
+        }
+        case ArrowType(t1, t2) => {
+          shift0Identity(t1, c)
+          shift0Identity(t2, c)
+        }
+      }
     }.ensuring(shift(t, 0, c) == t)
 
     @opaque @pure
@@ -375,7 +395,10 @@ object TransformationsProperties {
           boundRangeShiftComposition(t2, a, b, c, d)
         }
       }
-    }.ensuring(shift(shift(t, a, c), b, d) == shift(t, a + b, c))
+    }.ensuring(
+      (b >= 0 || negativeShiftValidity(shift(t, a, c), b, d)) &&
+      shift(shift(t, a, c), b, d) == shift(t, a + b, c)
+    )
 
     @opaque @pure
     def boundRangeShift(t: Type, d: BigInt, c: BigInt, b: BigInt): Unit = {
@@ -572,6 +595,7 @@ object TransformationsProperties {
 
     @opaque @pure
     def shift0Identity(env: Environment, c: BigInt): Unit = {
+      require(c >= 0)
       env match {
         case Nil() => assert(shift(env, 0, c) == env)
         case Cons(h, t) => {
@@ -581,7 +605,6 @@ object TransformationsProperties {
       }
     }.ensuring(shift(env, 0, c) == env)
 
-    // WIP
     @opaque @pure
     def boundRangeShiftComposition(env: Environment, a: BigInt, b: BigInt, c: BigInt, d: BigInt): Unit = {
       require(a >= 0)
@@ -590,9 +613,6 @@ object TransformationsProperties {
       require(d <= c + a)
       require(if(d < c) !hasFreeVariablesIn(env, d, c - d) else !hasFreeVariablesIn(env, c, d - c))
       require((b >= 0) || (-b <= a))
-
-      // Must prove this...
-      assert(b >= 0 || negativeShiftValidity(shift(env, a, c), b, d))
 
       env match {
         case Nil() => {
@@ -604,9 +624,11 @@ object TransformationsProperties {
         }
       }
 
-    }.ensuring(shift(shift(env, a, c), b, d) == shift(env, a + b, c))
+    }.ensuring(
+      (b >= 0 || negativeShiftValidity(shift(env, a, c), b, d)) &&
+      shift(shift(env, a, c), b, d) == shift(env, a + b, c)
+    )
 
-    // WIP
     @opaque @pure
     def boundRangeShift(env: Environment, d: BigInt, c: BigInt, b: BigInt): Unit = {
       require(c >= 0)
@@ -625,6 +647,24 @@ object TransformationsProperties {
       }
 
     }.ensuring(!hasFreeVariablesIn(shift(env, d, c), c, d+b))
+
+    @opaque @pure
+    def boundRangeShiftBackLemma(env: Environment, d: BigInt, c: BigInt): Unit = {
+      require(c >= 0)
+      require(d > 0)
+      require(!hasFreeVariablesIn(env, c, d))
+
+      env match {
+        case Nil() => {
+          assert(negativeShiftValidity(env, -d, c))
+        }
+        case Cons(h, t) => {
+          boundRangeShiftBackLemma(h, d, c)
+          boundRangeShiftBackLemma(t, d, c)
+        }
+      }
+    }.ensuring(negativeShiftValidity(env, -d, c))
+
 
   }
 

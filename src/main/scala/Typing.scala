@@ -745,7 +745,6 @@ object TypingProperties {
     ( res.t == typ )
   )
 
-  // WIP
   @opaque @pure
   def preservationUnderTAbsSubst(tabsTd: TAbsDerivation, arg: Type, typ: Type): TypeDerivation = {
     require(tabsTd.isValid)
@@ -758,10 +757,10 @@ object TypingProperties {
     TypeTrProp.boundRangeShift(arg, 1, 0, 0)
 
     // Environment
-    assert(td0.env == TypeTr.shift(tabsTd.env, 1, 0))
     TypeTrProp.boundRangeShift(tabsTd.env, 1, 0, 0)
     TypeTrProp.boundRangeSubstitutionIdentity(td0.env, 0, TypeTr.shift(arg, 1, 0))
-    assert(td0.env == td1.env)
+    TypeTrProp.boundRangeShiftComposition(tabsTd.env, 1, -1, 0, 0)
+    TypeTrProp.shift0Identity(tabsTd.env, 0)
 
     // Term
     TypeTrProp.boundRangeSubstitutionLemma(td0.term, 0, TypeTr.shift(arg, 1, 0))
@@ -771,28 +770,8 @@ object TypingProperties {
     TypeTrProp.boundRangeSubstitutionLemma(typ, 0, TypeTr.shift(arg, 1, 0))
     TypeTrProp.boundRangeShiftBackLemma(TypeTr.substitute(typ, 0, TypeTr.shift(arg, 1, 0)), 1, 0)
 
-    aSsUmE(TypeTr.negativeShiftValidity(td1.env, -1, 0))
-    val res = shiftTypesInEnv(td1, -1)
-
-    {
-      assert(td0.env == TypeTr.shift(tabsTd.env, 1, 0))
-      assert(td1.env == td0.env)
-
-      TypeTrProp.boundRangeShiftComposition(tabsTd.env, 1, -1, 0, 0)
-      TypeTrProp.shift0Identity(tabsTd.env, 0)
-      assert(tabsTd.env == TypeTr.shift(TypeTr.shift(tabsTd.env, 1, 0), -1, 0))
-      assert(tabsTd.env == TypeTr.shift(td1.env, -1, 0))
-
-      assert(res.env == TypeTr.shift(td1.env, -1, 0))
-    }
-    assert(res.term == TypeTr.shift(TypeTr.substitute(tabsTd.btd.term, 0, TypeTr.shift(arg, 1, 0)), -1, 0))
-
-    assert(res.isValid)
-    assert( res.term == tabsSubstitution(tabsTd.btd.term, arg) ) 
-    assert( res.env == tabsTd.env ) 
-    assert( res.t == typ )
-
-    res
+    TypeTrProp.boundRangeShiftBackLemma(td1.env, 1, 0)
+    shiftTypesInEnv(td1, -1)
   }.ensuring(res =>
     res.isValid &&
     ( res.term == tabsSubstitution(tabsTd.btd.term, arg) ) &&
