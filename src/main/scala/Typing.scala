@@ -657,8 +657,78 @@ object TypingProperties {
 
   // WIP
   @opaque @pure
+  def universalSubstitutionSubstitutionCommutativity(body: Type, arg: Type, j: BigInt, s: Type): Unit = {
+    require(j >= 0)
+    body match {
+      case VariableType(k) => {
+        if(k == 0) {
+          TypeTrProp.boundRangeShift(arg, 1, 0, 0)
+          TypeTrProp.boundRangeShiftComposition(arg, 1, -1, 0, 0)
+          TypeTrProp.shift0Identity(arg, 0)
+          assert(TypeTr.substitute(universalSubstitution(body, arg), j, s) == TypeTr.substitute(arg, j, s))
+
+          assert(j+1 != k)
+          TypeTrProp.boundRangeShift(TypeTr.substitute(arg, j, s), 1, 0, 0)
+          TypeTrProp.boundRangeShiftComposition(TypeTr.substitute(arg, j, s), 1, -1, 0, 0)
+          TypeTrProp.shift0Identity(TypeTr.substitute(arg, j, s), 0)
+          assert(universalSubstitution(TypeTr.substitute(body, j+1, TypeTr.shift(s, 1, 0)), TypeTr.substitute(arg, j, s)) == TypeTr.substitute(arg, j, s))
+        }
+        else if(k == j+1) {
+          assert(universalSubstitution(body, arg) == VariableType(j))
+          assert(TypeTr.substitute(universalSubstitution(body, arg), j, s) == s)
+
+          assert(j+1 != 0)
+          TypeTrProp.boundRangeShift(s, 1, 0, 0)
+          TypeTrProp.boundRangeShiftComposition(s, 1, -1, 0, 0)
+          TypeTrProp.shift0Identity(s, 0)
+          TypeTrProp.boundRangeSubstitutionIdentity(TypeTr.shift(s, 1, 0), 0, TypeTr.shift(TypeTr.substitute(arg, j, s), 1, 0))
+          assert(universalSubstitution(TypeTr.substitute(body, j+1, TypeTr.shift(s, 1, 0)), TypeTr.substitute(arg, j, s)) == s)
+        }
+        else {
+          assert(
+            TypeTr.substitute(universalSubstitution(body, arg), j, s)
+            ==
+            universalSubstitution(TypeTr.substitute(body, j+1, s), TypeTr.substitute(arg, j, s))
+          )
+        }
+      }
+      case BasicType(_) => {
+        assert(
+          TypeTr.substitute(universalSubstitution(body, arg), j, s)
+          ==
+          universalSubstitution(TypeTr.substitute(body, j+1, TypeTr.shift(s, 1, 0)), TypeTr.substitute(arg, j, s))
+        )
+      }
+      case ArrowType(t1, t2) => {
+        universalSubstitutionSubstitutionCommutativity(t1, arg, j, s)
+        universalSubstitutionSubstitutionCommutativity(t2, arg, j, s)
+      }
+      case UniversalType(t) => {
+        universalSubstitutionSubstitutionCommutativity(t, TypeTr.shift(arg, 1, 0), j+1, TypeTr.shift(s, 1, 0))
+        // Supposed to be IH...
+        // assert(
+        //   TypeTr.substitute(universalSubstitution(t, TypeTr.shift(arg, 1, 0)), j+1, TypeTr.shift(s, 1, 0))
+        //   ==
+        //   universalSubstitution(TypeTr.substitute(t, j+2, TypeTr.shift(TypeTr.shift(s, 1, 0), 1, 0)), TypeTr.substitute(TypeTr.shift(arg, 1, 0), j+1, TypeTr.shift(s, 1, 0)))
+        // )
+        aSsUmE(
+          TypeTr.substitute(universalSubstitution(body, arg), j, s)
+          ==
+          universalSubstitution(TypeTr.substitute(body, j+1, TypeTr.shift(s, 1, 0)), TypeTr.substitute(arg, j, s))
+        )
+      }
+    }
+
+  }.ensuring(
+    TypeTr.substitute(universalSubstitution(body, arg), j, s)
+    ==
+    universalSubstitution(TypeTr.substitute(body, j+1, TypeTr.shift(s, 1, 0)), TypeTr.substitute(arg, j, s))
+  )
+
+  @opaque @pure
   def preservationUnderTypeSubst(td: TypeDerivation, j: BigInt, styp: Type): TypeDerivation = {
     require(td.isValid)
+    require(j >= 0)
 
     val newEnv = TypeTr.substitute(td.env, j, styp)
     val newTyp = TypeTr.substitute(td.t, j, styp)
@@ -690,29 +760,14 @@ object TypingProperties {
         TAbsDerivation(newEnv, newTyp, TAbs(btdp.term), btdp)
       }
       case TAppDerivation(_, typ, TApp(_, argType), btd) => {
-        // val btdp = preservationUnderTypeSubst(btd, j, styp)
-        // val newArg = TypeTr.substitute(argType, j, styp)
-        // assert(btdp.t.isInstanceOf[UniversalType])
-        // val UniversalType(bodyType) = btd.t
-        // val UniversalType(newBodyType) = btdp.t
-        // assert(typ == universalSubstitution(bodyType, argType))
-        // assert(newTyp == universalSubstitution(newBodyType, newArg))
-        // val res = TAppDerivation(newEnv, newTyp, TApp(btdp.term, newArg), btdp)
-        
-        // assert(  res.isValid )
-        // assert( res.term == TypeTr.substitute(td.term, j, styp) ) 
-        // assert( res.env == substitute(td.env, j, styp) ) 
-        // assert( res.t == TypeTr.substitute(td.t, j, styp) )
-        // res
-        mAgIcDeRiVaTiOn(res =>
-          res.isValid &&
-          ( res.term == TypeTr.substitute(td.term, j, styp) ) &&
-          ( res.env == TypeTr.substitute(td.env, j, styp) ) &&
-          ( res.t == TypeTr.substitute(td.t, j, styp) )
-        )
+        val btdp = preservationUnderTypeSubst(btd, j, styp)
+        val argTypep = TypeTr.substitute(argType, j, styp)
+        assert(btdp.t.isInstanceOf[UniversalType])
+        val UniversalType(bodyType) = btd.t
+        universalSubstitutionSubstitutionCommutativity(bodyType, argType, j, styp)
+        TAppDerivation(newEnv, newTyp, TApp(btdp.term, argTypep), btdp)
       }
     }
-
   }.ensuring(res =>
     res.isValid &&
     ( res.term == TypeTr.substitute(td.term, j, styp) ) &&
