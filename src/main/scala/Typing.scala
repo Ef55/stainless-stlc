@@ -6,18 +6,7 @@ import stainless.proof._
 object Typing {
   import SystemF._
   import Reduction._
-
-  type Environment = List[Type]
-
-  def shift(env: Environment, d: BigInt, c: BigInt): Environment = {
-    require(d >= 0 || env.forall(Transformations.Types.negativeShiftValidity(_, d, c)))
-    require(c >= 0)
-    env.map(Transformations.Types.shift(_, d, c))
-  }
-
-  def substitute(env: Environment, d: BigInt, typ: Type): Environment = {
-    env.map(Transformations.Types.substitute(_, d, typ))
-  }
+  import Transformations._
 
   sealed trait TypeDerivation {
 
@@ -72,7 +61,7 @@ object Typing {
         }
         case TAbsDerivation(env, UniversalType(b), TAbs(body), btd) => {
           btd.isValid && // Premise is valid
-          btd.term == body && btd.env == shift(env, 1, 0) && // and has matching attributes
+          btd.term == body && btd.env == Types.shift(env, 1, 0) && // and has matching attributes
           btd.t == b // The types are related as expected
         }
         case TAbsDerivation(_ ,_, _, _) => false
@@ -133,7 +122,7 @@ object Typing {
         }
       }
       case tabs@TAbs(t) => {
-        deriveType(shift(env, 1, 0), t) match{
+        deriveType(Types.shift(env, 1, 0), t) match{
           case Some(btd) => Some(TAbsDerivation(env, UniversalType(btd.t), tabs, btd))
           case None() => None()
         }
@@ -194,7 +183,7 @@ object TypingProperties {
         deriveTypeValidity(env, f)
       }
       case TAbs(t) => {
-        deriveTypeValidity(shift(env, 1, 0), t)
+        deriveTypeValidity(TypeTr.shift(env, 1, 0), t)
       }
       case TApp(t, typ) => {
         deriveTypeValidity(env, t)
@@ -269,7 +258,7 @@ object TypingProperties {
       }
       case TAbsDerivation(env, typ, TAbs(body), btd) => {
         ListProperties.mapConcat(env, envExt, Transformations.Types.shift(_: Type, 1, 0))
-        val resBtd = environmentWeakening(btd,  shift(envExt, 1, 0))
+        val resBtd = environmentWeakening(btd,  TypeTr.shift(envExt, 1, 0))
         TAbsDerivation(env ++ envExt, typ, TAbs(body), resBtd)
       }
       case TAppDerivation(env, typ, TApp(body, argType), btd) => {
@@ -357,7 +346,7 @@ object TypingProperties {
         ListProperties.mapPrepend(typ, env2, Transformations.Types.shift(_: Type, 1, 0))
         ListProperties.mapConcat(env1, typ :: env2, Transformations.Types.shift(_: Type, 1, 0))
         ListProperties.mapConcat(env1, env2, Transformations.Types.shift(_: Type, 1, 0))
-        val resBtd = insertTypeInEnv(shift(env1, 1, 0), TypeTr.shift(typ, 1, 0), shift(env2, 1, 0), btd)
+        val resBtd = insertTypeInEnv(TypeTr.shift(env1, 1, 0), TypeTr.shift(typ, 1, 0), TypeTr.shift(env2, 1, 0), btd)
         val res = TAbsDerivation(env1 ++ (typ :: env2), typ, TAbs(TermTr.shift(body, 1, env1.size)), resBtd)
         assert(res.isValid)
         assert( res.term == TermTr.shift(td.term, 1, env1.size) )
@@ -455,18 +444,18 @@ object TypingProperties {
   @opaque @pure
   def shiftTypesInEnv(td: TypeDerivation, s: BigInt): TypeDerivation = {
     require(td.isValid)
-    require(s >= 0 || td.env.forall(TypeTr.negativeShiftValidity(_, s, 0)))
+    require(s >= 0 || TypeTr.negativeShiftValidity(td.env, s, 0))
     require(s >= 0 || TypeTr.negativeShiftValidity(td.term, s, 0))
     require(s >= 0 || TypeTr.negativeShiftValidity(td.t, s, 0))
 
     val p = (res: TypeDerivation) => {
       res.isValid &&
-      ( res.env == shift(td.env, s, 0) ) &&
+      ( res.env == TypeTr.shift(td.env, s, 0) ) &&
       ( res.term == TypeTr.shift(td.term, s, 0) ) &&
       ( res.t == TypeTr.shift(td.t, s, 0) )
     }
 
-    val newEnv = shift(td.env, s, 0)
+    val newEnv = TypeTr.shift(td.env, s, 0)
     val newTyp = TypeTr.shift(td.t, s, 0)
     val newTerm = TypeTr.shift(td.term, s, 0)
 
@@ -502,7 +491,7 @@ object TypingProperties {
     }
   }.ensuring(res =>
     res.isValid &&
-    ( res.env == shift(td.env, s, 0) ) &&
+    ( res.env == TypeTr.shift(td.env, s, 0) ) &&
     ( res.term == TypeTr.shift(td.term, s, 0) ) &&
     ( res.t == TypeTr.shift(td.t, s, 0) )
   )
@@ -652,8 +641,8 @@ object TypingProperties {
     require(k >= 0)
     env match {
       case Nil() => {
-        assert(shift(substitute(env, k, subs), s, 0) == Nil())
-        assert(substitute(shift(env, s, 0), k+s, TypeTr.shift(subs, s, 0)) == Nil())
+        assert(TypeTr.shift(TypeTr.substitute(env, k, subs), s, 0) == Nil())
+        assert(TypeTr.substitute(TypeTr.shift(env, s, 0), k+s, TypeTr.shift(subs, s, 0)) == Nil())
       }
       case Cons(h, t) => {
         shiftSubstitutionCommutativityType(h, s, 0, k, subs)
@@ -661,7 +650,9 @@ object TypingProperties {
       }
     }
   }.ensuring(
-    shift(substitute(env, k, subs), s, 0) == substitute(shift(env, s, 0), k+s, TypeTr.shift(subs, s, 0))
+    TypeTr.shift(TypeTr.substitute(env, k, subs), s, 0) 
+    == 
+    TypeTr.substitute(TypeTr.shift(env, s, 0), k+s, TypeTr.shift(subs, s, 0))
   )
 
   // WIP
@@ -669,7 +660,7 @@ object TypingProperties {
   def preservationUnderTypeSubst(td: TypeDerivation, j: BigInt, styp: Type): TypeDerivation = {
     require(td.isValid)
 
-    val newEnv = substitute(td.env, j, styp)
+    val newEnv = TypeTr.substitute(td.env, j, styp)
     val newTyp = TypeTr.substitute(td.t, j, styp)
 
     td match {
@@ -716,7 +707,7 @@ object TypingProperties {
         mAgIcDeRiVaTiOn(res =>
           res.isValid &&
           ( res.term == TypeTr.substitute(td.term, j, styp) ) &&
-          ( res.env == substitute(td.env, j, styp) ) &&
+          ( res.env == TypeTr.substitute(td.env, j, styp) ) &&
           ( res.t == TypeTr.substitute(td.t, j, styp) )
         )
       }
@@ -725,7 +716,7 @@ object TypingProperties {
   }.ensuring(res =>
     res.isValid &&
     ( res.term == TypeTr.substitute(td.term, j, styp) ) &&
-    ( res.env == substitute(td.env, j, styp) ) &&
+    ( res.env == TypeTr.substitute(td.env, j, styp) ) &&
     ( res.t == TypeTr.substitute(td.t, j, styp) )
   )
 
@@ -755,31 +746,45 @@ object TypingProperties {
   )
 
   // WIP
-  @extern
+  @opaque @pure
   def preservationUnderTAbsSubst(tabsTd: TAbsDerivation, arg: Type, typ: Type): TypeDerivation = {
     require(tabsTd.isValid)
     require(typ == universalSubstitution(tabsTd.btd.t, arg))
 
-    val td0 = shiftTypesInEnv(tabsTd.btd, 1)
+    val td0 = tabsTd.btd
     val td1 = preservationUnderTypeSubst(td0, 0, TypeTr.shift(arg, 1, 0))
 
     assert(!arg.hasFreeVariablesIn(0, 0))
     TypeTrProp.boundRangeShift(arg, 1, 0, 0)
 
-    // Environment shift
-    td0.env.map(TypeTrProp.boundRangeSubstitutionLemma(_: Type, 0, TypeTr.shift(arg, 1, 0)))
-    td1.env.map(TypeTrProp.boundRangeShiftBackLemma(_: Type, 1, 0))
+    // Environment
+    assert(td0.env == TypeTr.shift(tabsTd.env, 1, 0))
+    TypeTrProp.boundRangeShift(tabsTd.env, 1, 0, 0)
+    TypeTrProp.boundRangeSubstitutionIdentity(td0.env, 0, TypeTr.shift(arg, 1, 0))
+    assert(td0.env == td1.env)
 
-    // Term shift
+    // Term
     TypeTrProp.boundRangeSubstitutionLemma(td0.term, 0, TypeTr.shift(arg, 1, 0))
     TypeTrProp.boundRangeShiftBackLemma(td1.term, 1, 0)
 
-    // Type shift
+    // Type
     TypeTrProp.boundRangeSubstitutionLemma(typ, 0, TypeTr.shift(arg, 1, 0))
     TypeTrProp.boundRangeShiftBackLemma(TypeTr.substitute(typ, 0, TypeTr.shift(arg, 1, 0)), 1, 0)
 
+    aSsUmE(TypeTr.negativeShiftValidity(td1.env, -1, 0))
     val res = shiftTypesInEnv(td1, -1)
 
+    {
+      assert(td0.env == TypeTr.shift(tabsTd.env, 1, 0))
+      assert(td1.env == td0.env)
+
+      TypeTrProp.boundRangeShiftComposition(tabsTd.env, 1, -1, 0, 0)
+      TypeTrProp.shift0Identity(tabsTd.env, 0)
+      assert(tabsTd.env == TypeTr.shift(TypeTr.shift(tabsTd.env, 1, 0), -1, 0))
+      assert(tabsTd.env == TypeTr.shift(td1.env, -1, 0))
+
+      assert(res.env == TypeTr.shift(td1.env, -1, 0))
+    }
     assert(res.term == TypeTr.shift(TypeTr.substitute(tabsTd.btd.term, 0, TypeTr.shift(arg, 1, 0)), -1, 0))
 
     assert(res.isValid)

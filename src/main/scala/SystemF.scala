@@ -44,6 +44,13 @@ object SystemF {
   case class UniversalType(t: Type) extends Type
 
   type Environment = List[Type]
+  def hasFreeVariablesIn(env: Environment, c: BigInt, d: BigInt): Boolean = {
+    env.exists(_.hasFreeVariablesIn(c, d))
+  }.ensuring(res =>
+    ( !res ==> env.forall(!_.hasFreeVariablesIn(c, d)) ) &&
+    ( res ==> env.exists(_.hasFreeVariablesIn(c, d)) ) &&
+    ( (d == 0) ==> !res )
+  )
 
   sealed trait Term {
     def isValue: Boolean = {
