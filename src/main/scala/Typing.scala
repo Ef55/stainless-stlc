@@ -496,7 +496,7 @@ object TypingProperties {
     ( res.t == TypeTr.shift(td.t, s, 0) )
   )
 
-  // WIP
+  // Fragile
   @opaque @pure
   def preservationUnderSubst(td: TypeDerivation, j: BigInt, sd: TypeDerivation): TypeDerivation = {
     require(td.isValid)
@@ -507,57 +507,62 @@ object TypingProperties {
 
     val result = TermTr.substitute(td.term, j, sd.term)
 
-    val p = (deriv: TypeDerivation) => {
-      deriv.isValid && deriv === td && deriv.term == result
-    }
-
     td match {
       case VarDerivation(env, typ, Var(k)) => {
         if(j == k) {
           assert(result == sd.term)
-          assert(p(sd))
           sd
         }
         else {
           assert(result == td.term)
-          assert(p(td))
           td
         }
       }
       case AbsDerivation(env, typ, Abs(argType, body), btd) => {
         val d0 = insertTypeInEnv(Nil(), argType, td.env, sd)
         assert(btd.env == argType :: td.env)
-        val d1 = preservationUnderSubst(btd, j+1, d0)
-        val d = AbsDerivation(env, typ, Abs(argType, d1.term), d1)
-        assert(p(d))
-        d
+        val d1 = preservationUnderSubst(btd, j+1, d0) // Fragile: require 3/5
+        val res = AbsDerivation(env, typ, Abs(argType, d1.term), d1)
+        assert(  res.isValid )
+        assert( res.term == TermTr.substitute(td.term, j, sd.term) )
+        assert( td === res )
+        res
       }
       case AppDerivation(env, typ, App(t1, t2), td1, td2) => {
         val td1p = preservationUnderSubst(td1, j, sd)
         val td2p = preservationUnderSubst(td2, j, sd)
-        val d = AppDerivation(env, typ, App(td1p.term, td2p.term), td1p, td2p)
-        assert(p(d))
-        d
+        val res = AppDerivation(env, typ, App(td1p.term, td2p.term), td1p, td2p)
+        assert(  res.isValid )
+        assert( res.term == TermTr.substitute(td.term, j, sd.term) )
+        assert( td === res )
+        res
       }
       case FixDerivation(env, typ, Fix(f), ftd) => {
         val ftdp = preservationUnderSubst(ftd, j, sd)
-        val d = FixDerivation(env, typ, Fix(ftdp.term), ftdp)
-        assert(p(d))
-        d
+        val res = FixDerivation(env, typ, Fix(ftdp.term), ftdp)
+        assert(  res.isValid )
+        assert( res.term == TermTr.substitute(td.term, j, sd.term) )
+        assert( td === res )
+        res
       }
       case TAbsDerivation(env, typ, TAbs(body), btd) => {
-        /// Lacks a shift in environment
-        // val btdp = preservationUnderSubst(btd, j, sd)
-        // val d = TAbsDerivation(env, typ, TAbs(btdp.term), btdp)
-        // assert(p(d))
-        // d
-        mAgIcDeRiVaTiOn(p)
+        val sdp = shiftTypesInEnv(sd, 1)
+        TypeTrProp.shiftIndexing(sd.env, 1, 0, j)
+        assert(btd.env == TypeTr.shift(sd.env, 1, 0))
+        val btdp = preservationUnderSubst(btd, j, sdp)
+        val res = TAbsDerivation(env, typ, TAbs(btdp.term), btdp)
+        assert(  res.isValid )
+        assert( res.term == TermTr.substitute(td.term, j, sd.term) )
+        assert( td === res )
+        res
       }
       case TAppDerivation(env, typ, TApp(body, typeArg), btd) => {
         val btdp = preservationUnderSubst(btd, j, sd)
-        val d = TAppDerivation(env, typ, TApp(btdp.term, typeArg), btdp)
-        assert(p(d))
-        d
+        val res = TAppDerivation(env, typ, TApp(btdp.term, typeArg), btdp)
+        assert(  res.isValid )
+        assert( res.term == TermTr.substitute(td.term, j, sd.term) )
+        assert( td === res )
+        res
       }
     }
 

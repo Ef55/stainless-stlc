@@ -39,7 +39,7 @@ object Transformations {
         case Abs(typ, body) => Abs(typ, substitute(body, j+1, shift(s, 1, 0)))
         case App(t1, t2) => App(substitute(t1, j, s), substitute(t2, j, s))
         case Fix(f) => Fix(substitute(f, j, s))
-        case TAbs(body) => TAbs(substitute(body, j, s))
+        case TAbs(body) => TAbs(substitute(body, j, Types.shift(s, 1, 0)))
         case TApp(t, typ) => TApp(substitute(t, j, s), typ)
       }
     }
@@ -126,16 +126,16 @@ object Transformations {
       require(c >= 0)
 
       env match {
-        case Nil() => Nil()
+        case Nil() => Nil[Type]()
         case Cons(h, t) => {
           if(d < 0) {
             assert(negativeShiftValidity(env, d, c))
-            ListSpecs.applyForAll(env, 0, negativeShiftValidity(_: Type, d, c))
+            assert(negativeShiftValidity(h, d, c))
           }
           Cons(shift(h, d, c), shift(t, d, c))
         }
       }
-    }
+    }.ensuring(res => res.length == env.length)
 
     def substitute(env: Environment, d: BigInt, typ: Type): Environment = {
       env.map(Transformations.Types.substitute(_, d, typ))
@@ -150,6 +150,44 @@ object TransformationsProperties {
   object Terms {
     import SystemFProperties.Terms._
     import Transformations.Terms._
+
+    @opaque @pure
+    def boundRangeTypeShiftIdentity(t: Term, s: BigInt, c: BigInt, a: BigInt, b: BigInt): Unit = {
+      require(a >= 0)
+      require(b >= 0)
+      require(s >= 0 || Transformations.Types.negativeShiftValidity(t, s, c))
+      require(c >= 0)
+
+      t match {
+        case Var(_) => {
+          assert(
+            t.hasFreeVariablesIn(a, b) 
+            == 
+            Transformations.Types.shift(t, s, c).hasFreeVariablesIn(a, b)
+          )
+        }
+        case Abs(_, body) => {
+          boundRangeTypeShiftIdentity(body, s, c, a+1, b)
+        }
+        case App(t1, t2) => {
+          boundRangeTypeShiftIdentity(t1, s, c, a, b)
+          boundRangeTypeShiftIdentity(t2, s, c, a, b)
+        }
+        case Fix(f) => {
+          boundRangeTypeShiftIdentity(f, s, c, a, b)
+        }
+        case TAbs(body) => {
+          boundRangeTypeShiftIdentity(body, s, c+1, a, b)
+        }
+        case TApp(body, _) => {
+          boundRangeTypeShiftIdentity(body, s, c, a, b)
+        }
+      }
+    }.ensuring(
+      t.hasFreeVariablesIn(a, b) 
+      == 
+      Transformations.Types.shift(t, s, c).hasFreeVariablesIn(a, b)
+    )
 
     @opaque @pure
     def boundRangeShiftComposition(t: Term, a: BigInt, b: BigInt, c: BigInt, d: BigInt): Unit = {
@@ -272,7 +310,8 @@ object TransformationsProperties {
           boundRangeSubstitutionLemma(f, j, s)
         }
         case TAbs(body) => {
-          boundRangeSubstitutionLemma(body, j, s)
+          boundRangeTypeShiftIdentity(s, 1, 0, 0, j+1)
+          boundRangeSubstitutionLemma(body, j, Transformations.Types.shift(s, 1, 0))
         }
         case TApp(t, _) => {
           boundRangeSubstitutionLemma(t, j, s)
@@ -665,7 +704,27 @@ object TransformationsProperties {
       }
     }.ensuring(negativeShiftValidity(env, -d, c))
 
+    @opaque @pure
+    def shiftIndexing(env: Environment, d: BigInt, c: BigInt, j: BigInt): Unit = {
+      require(d >= 0 || negativeShiftValidity(env, d, c))
+      require(c >= 0)
+      require(0 <= j && j < env.length)
 
+      val Cons(h, t) = env
+
+      if(j == 0) {
+        if(d < 0) {
+          assert(negativeShiftValidity(env, d, c))
+          assert(negativeShiftValidity(h, d, c))
+        }
+      }
+      else {
+        shiftIndexing(t, d, c, j-1)
+      }
+    }.ensuring(
+      ( d >= 0 || negativeShiftValidity(env(j), d, c) ) &&
+      ( shift(env, d, c)(j) == shift(env(j), d, c) )
+    )
   }
 
 }
