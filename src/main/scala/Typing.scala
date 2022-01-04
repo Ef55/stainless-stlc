@@ -352,85 +352,58 @@ object TypingProperties {
   )
 
   // WIP
-  @extern
+  @opaque @pure
   def removeTypeInEnv(env1: Environment, remove: Type, env2: Environment, td: TypeDerivation): TypeDerivation = {
     require(td.isValid)
     require(td.env == env1 ++ (remove :: env2))
     require(!td.term.hasFreeVariablesIn(env1.size, 1))
 
-    // insertTypeInEnv with debug code
-    // val newEnv = env1 ++ (insert :: env2)
+    val newEnv = env1 ++ env2
 
-    // td match {
-    //   case v@VarDerivation(_, typ, Var(k)) => {
-    //     if (k < env1.size){
-    //       val res = variableEnvironmentUpdate(v, env1, env2, insert :: env2)
-    //       assert(res.isValid)
-    //       assert( res.term == TermTr.shift(td.term, 1, env1.size) )
-    //       assert( res.env == newEnv )
-    //       assert( td.t == res.t )
-    //       res
-    //     }
-    //     else{
-    //       insertionIndexing(env1, env2, insert, k)
-    //       val res = VarDerivation(newEnv, typ, Var(k + 1))
-    //       assert(res.isValid)
-    //       assert( res.term == TermTr.shift(td.term, 1, env1.size) )
-    //       assert( res.env == newEnv )
-    //       assert( td.t == res.t )
-    //       res
-    //      }
-    //   }
-    //   case AbsDerivation(_, typ, Abs(argType, body), btd) => {
-    //     val resBtd = insertTypeInEnv(argType :: env1, insert, env2, btd)
-    //     val res = AbsDerivation(newEnv, typ, Abs(argType, resBtd.term), resBtd)
-    //     assert(res.isValid)
-    //     assert( res.term == TermTr.shift(td.term, 1, env1.size) )
-    //     assert( res.env == newEnv )
-    //     assert( td.t == res.t )
-    //     res
-    //   }
-    //   case AppDerivation(_, typ, App(t1, t2), td1, td2) => {
-    //     val resTd1 = insertTypeInEnv(env1, insert, env2, td1)
-    //     val resTd2 = insertTypeInEnv(env1, insert, env2, td2)
-    //     val res = AppDerivation(newEnv, typ, App(resTd1.term, resTd2.term), resTd1, resTd2)
-    //     assert(res.isValid)
-    //     assert( res.term == TermTr.shift(td.term, 1, env1.size) )
-    //     assert( res.env == newEnv )
-    //     assert( td.t == res.t )
-    //     res
-    //   }
-    //   case FixDerivation(_, typ, Fix(f), ftd) => {
-    //     val resFtd = insertTypeInEnv(env1, insert, env2, ftd)
-    //     val res = FixDerivation(newEnv, typ, Fix(resFtd.term), resFtd)
-    //     assert(res.isValid)
-    //     assert( res.term == TermTr.shift(td.term, 1, env1.size) )
-    //     assert( res.env == newEnv )
-    //     assert( td.t == res.t )
-    //     res
-    //   }
-    //   case TAbsDerivation(_, typ, TAbs(body), btd) => {
-    //     assert(TypeTr.shift(insert :: env2, 1, 0) == (TypeTr.shift(insert, 1, 0) :: TypeTr.shift(env2, 1, 0)))
-    //     TypeTrProp.shiftConcat(env1, env2, 1, 0)
-    //     TypeTrProp.shiftConcat(env1, insert :: env2, 1, 0)
-    //     val resBtd = insertTypeInEnv(TypeTr.shift(env1, 1, 0), TypeTr.shift(insert, 1, 0), TypeTr.shift(env2, 1, 0), btd)
-    //     val res = TAbsDerivation(newEnv, typ, TAbs(resBtd.term), resBtd)
-    //     assert(res.isValid)
-    //     assert( res.term == TermTr.shift(td.term, 1, env1.size) )
-    //     assert( res.env == newEnv )
-    //     assert( td.t == res.t )
-    //     res
-    //   }
-    //   case TAppDerivation(_, typ, TApp(body, typeArg), btd) => {
-    //     val resBtd = insertTypeInEnv(env1, insert, env2, btd)
-    //     val res = TAppDerivation(newEnv, typ, TApp(TermTr.shift(body, 1, env1.size), typeArg), resBtd)
-    //     assert(res.isValid)
-    //     assert( res.term == TermTr.shift(td.term, 1, env1.size) )
-    //     assert( res.env == newEnv )
-    //     assert( td.t == res.t )
-    //     res
-    //   }
-    // }
+    TermTrProp.boundRangeShiftBackLemma(td.term, 1, env1.size)
+
+    td match {
+      case v@VarDerivation(_, typ, Var(k)) => {
+        if (k < env1.size){
+          val res = variableEnvironmentUpdate(v, env1, remove :: env2, env2)
+          res
+        }
+        else{
+          insertionIndexing(env1, env2, remove, k - 1)
+          val res = VarDerivation(newEnv, typ, Var(k - 1))
+          res
+         }
+      }
+      case AbsDerivation(_, typ, Abs(argType, body), btd) => {
+        val resBtd = removeTypeInEnv(argType :: env1, remove, env2, btd)
+        val res = AbsDerivation(newEnv, typ, Abs(argType, resBtd.term), resBtd)
+        res
+      }
+      case AppDerivation(_, typ, App(t1, t2), td1, td2) => {
+        val resTd1 = removeTypeInEnv(env1, remove, env2, td1)
+        val resTd2 = removeTypeInEnv(env1, remove, env2, td2)
+        val res = AppDerivation(newEnv, typ, App(resTd1.term, resTd2.term), resTd1, resTd2)
+        res
+      }
+      case FixDerivation(_, typ, Fix(f), ftd) => {
+        val resFtd = removeTypeInEnv(env1, remove, env2, ftd)
+        val res = FixDerivation(newEnv, typ, Fix(resFtd.term), resFtd)
+        res
+      }
+      case TAbsDerivation(_, typ, TAbs(body), btd) => {
+        //assert(TypeTr.shift(insert :: env2, 1, 0) == (TypeTr.shift(insert, 1, 0) :: TypeTr.shift(env2, 1, 0)))
+        TypeTrProp.shiftConcat(env1, env2, 1, 0)
+        TypeTrProp.shiftConcat(env1, remove :: env2, 1, 0)
+        val resBtd = removeTypeInEnv(TypeTr.shift(env1, 1, 0), TypeTr.shift(remove, 1, 0), TypeTr.shift(env2, 1, 0), btd)
+        val res = TAbsDerivation(newEnv, typ, TAbs(resBtd.term), resBtd)
+        res
+      }
+      case TAppDerivation(_, typ, TApp(body, typeArg), btd) => {
+        val resBtd = removeTypeInEnv(env1, remove, env2, btd)
+        val res = TAppDerivation(newEnv, typ, TApp(resBtd.term, typeArg), resBtd)
+        res
+      }
+    }
 
     // Previous demo
     // TermTrProp.boundRangeShiftBackLemma(t, 1, env1.size)
@@ -484,9 +457,7 @@ object TypingProperties {
     // OptionProperties.equalityImpliesDefined(
     //   typeOf(env1 ++ (typ :: env2), t), 
     //   typeOf(env1 ++ env2, TermTr.shift(t, -1, env1.size))
-    // )
-
-    mAgIcDeRiVaTiOn(_ => true)
+    // ) 
   }.ensuring(res =>
     res.isValid &&
     ( res.term == TermTr.shift(td.term, -1, env1.size) ) &&
