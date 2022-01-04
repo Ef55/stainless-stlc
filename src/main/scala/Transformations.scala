@@ -704,6 +704,8 @@ object TransformationsProperties {
       }
     }.ensuring(negativeShiftValidity(env, -d, c))
 
+    /// Environment shift is map-like
+
     @opaque @pure
     def shiftIndexing(env: Environment, d: BigInt, c: BigInt, j: BigInt): Unit = {
       require(d >= 0 || negativeShiftValidity(env, d, c))
@@ -724,6 +726,17 @@ object TransformationsProperties {
     }.ensuring(
       ( d >= 0 || negativeShiftValidity(env(j), d, c) ) &&
       ( shift(env, d, c)(j) == shift(env(j), d, c) )
+    )
+
+    @opaque @pure
+    def shiftConcat(@induct env1: Environment, env2: Environment, d: BigInt, c: BigInt): Unit = {
+      require(c >= 0)
+      require(d >= 0 || negativeShiftValidity(env1, d, c))
+      require(d >= 0 || negativeShiftValidity(env2, d, c))
+
+    }.ensuring(
+      (d >= 0 || negativeShiftValidity(env1 ++ env2, d, c)) && 
+      ( shift(env1 ++ env2, d, c) == (shift(env1, d, c) ++ shift(env2, d, c)) )
     )
   }
 
