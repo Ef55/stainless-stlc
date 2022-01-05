@@ -7,7 +7,9 @@ import Typing._
 import org.scalatest._
 import flatspec._
 
-class ChurchTests extends AnyFlatSpec {
+// Uses a simplification of Boehm-Berarducci 
+// to encode naturals, some operations, and tests their correctness.
+class BBNatTests extends AnyFlatSpec {
   def reduce(t: Term): Term = {
     require(deriveType(t).isDefined)
     var current: Term = t
@@ -85,6 +87,9 @@ class ChurchTests extends AnyFlatSpec {
     t.isValue
   )
 
+  // Since behavioral equivalence is (to my knowledge)
+  // undecidable, we try to compute some kind of normal
+  // form(s) of the terms and compare them
   def booleanEquivalent(t: Term, expected: Boolean): Unit = {
     require(deriveType(t).get.t == boolType)
 
@@ -259,6 +264,7 @@ class ChurchTests extends AnyFlatSpec {
     // test(4, 24) // ~10s
   }
 
+  // How did the little Gauss solve his punishment ?
   "Gauss' story" should "be System F compatible" in {
     def sum(ns: List[Int]): Term = {
       def apply(n: Term, m: Term): Term = {
