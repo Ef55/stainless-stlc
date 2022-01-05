@@ -351,7 +351,6 @@ object TypingProperties {
     ( td.t == res.t )
   )
 
-  // WIP
   @opaque @pure
   def removeTypeInEnv(env1: Environment, remove: Type, env2: Environment, td: TypeDerivation): TypeDerivation = {
     require(td.isValid)
@@ -404,60 +403,6 @@ object TypingProperties {
         res
       }
     }
-
-    // Previous demo
-    // TermTrProp.boundRangeShiftBackLemma(t, 1, env1.size)
-    // t match {
-    //   case Var(k) => {
-    //     if (k < env1.size) {
-    //       variableEnvironmentUpdate(Var(k), env1, typ :: env2, env2)
-    //       check(deriveType(env1 ++ (typ :: env2), t).get === deriveType(env1 ++ env2, TermTr.shift(t, -1, env1.size)).get)
-    //     }
-    //     else {
-    //       insertionIndexing(env1, env2, typ, k - 1)
-    //       check(deriveType(env1 ++ (typ :: env2), t).get === deriveType(env1 ++ env2, TermTr.shift(t, -1, env1.size)).get)
-    //     }
-    //   }
-    //   case Abs(targ, body) => {
-    //     absInversionLemma(env1 ++ (typ :: env2), targ, body)
-    //     removeTypeInEnv(targ :: env1, typ, env2, body)
-    //     absInversionLemma(env1 ++ env2, targ, TermTr.shift(body, -1, env1.size + 1))
-    //     check(deriveType(env1 ++ (typ :: env2), t).get === deriveType(env1 ++ env2, TermTr.shift(t, -1, env1.size)).get)
-    //   }
-    //   case App(t1, t2) => {
-    //     appInversionLemma(env1 ++ (typ :: env2), t1, t2)
-    //     removeTypeInEnv(env1, typ, env2, t2)
-    //     removeTypeInEnv(env1, typ, env2, t1)
-    //     appInversionLemma(env1 ++ env2, TermTr.shift(t1, -1, env1.size), TermTr.shift(t2, -1, env1.size))
-    //     assert(App(TermTr.shift(t1, -1, env1.size), TermTr.shift(t2, -1, env1.size)) == TermTr.shift(t, -1, env1.size))
-    //     check(deriveType(env1 ++ (typ :: env2), t).get === deriveType(env1 ++ env2, TermTr.shift(t, -1, env1.size)).get)
-    //   }
-    //   case Fix(f) => {
-    //     removeTypeInEnv(env1, typ, env2, f)
-    //     fixInversionLemma(env1 ++ env2, TermTr.shift(f, -1, env1.size))
-    //     check(deriveType(env1 ++ (typ :: env2), t).get === deriveType(env1 ++ env2, TermTr.shift(t, -1, env1.size)).get)
-    //   }
-    //   case TAbs(body) => {
-    //     tabsInversionLemma(env1 ++ (typ :: env2), body)
-    //     ListProperties.mapPrepend(typ, env2, Transformations.Types.shift(_: Type, 1, 0))
-    //     ListProperties.mapConcat(env1, typ :: env2, Transformations.Types.shift(_: Type, 1, 0))
-    //     ListProperties.mapConcat(env1, env2, Transformations.Types.shift(_: Type, 1, 0))
-    //     removeTypeInEnv(shift(env1, 1, 0), TypeTr.shift(typ, 1, 0), shift(env2, 1, 0), body)
-    //     tabsInversionLemma(env1 ++ env2, TermTr.shift(body, -1, env1.size))
-    //     check(deriveType(env1 ++ (typ :: env2), t).get === deriveType(env1 ++ env2, TermTr.shift(t, -1, env1.size)).get)
-    //   }
-    //   case TApp(body, typ2) => {
-    //     removeTypeInEnv(env1, typ, env2, body)
-    //     tappInversionLemma(env1 ++ env2, TermTr.shift(body, -1, env1.size), typ2)
-    //     check(deriveType(env1 ++ (typ :: env2), t).get === deriveType(env1 ++ env2, TermTr.shift(t, -1, env1.size)).get)
-    //   }
-    // }
-
-    // assert(deriveType(env1 ++ (typ :: env2), t).get === deriveType(env1 ++ env2, TermTr.shift(t, -1, env1.size)).get)
-    // OptionProperties.equalityImpliesDefined(
-    //   typeOf(env1 ++ (typ :: env2), t), 
-    //   typeOf(env1 ++ env2, TermTr.shift(t, -1, env1.size))
-    // ) 
   }.ensuring(res =>
     res.isValid &&
     ( res.term == TermTr.shift(td.term, -1, env1.size) ) &&
@@ -467,58 +412,116 @@ object TypingProperties {
 
   // WIP
   @opaque @pure
-  def shiftTypesInEnv(td: TypeDerivation, s: BigInt): TypeDerivation = {
+  def termAndEnvNegativeShiftValidityImplyTypeNegativeShiftValidity(td: TypeDerivation, s: BigInt, c: BigInt): Unit = {
     require(td.isValid)
-    require(s >= 0 || TypeTr.negativeShiftValidity(td.env, s, 0))
-    require(s >= 0 || TypeTr.negativeShiftValidity(td.term, s, 0))
-    require(s >= 0 || TypeTr.negativeShiftValidity(td.t, s, 0))
+    require(s < 0)
+    require(c >= 0)
+    require(TypeTr.negativeShiftValidity(td.env, s, c))
+    require(TypeTr.negativeShiftValidity(td.term, s, c))
+
+    td match {
+      case VarDerivation(_, _, Var(k)) => {
+        TypeTrProp.shiftIndexing(td.env, s, c, k)
+        assert(TypeTr.negativeShiftValidity(td.t, s, c))
+      }
+      case AbsDerivation(_, _, _, btd) => {
+        termAndEnvNegativeShiftValidityImplyTypeNegativeShiftValidity(btd, s, c)
+        assert(TypeTr.negativeShiftValidity(td.t, s, c))
+      }
+      case AppDerivation(_, _, _, td1, td2) => {
+        termAndEnvNegativeShiftValidityImplyTypeNegativeShiftValidity(td1, s, c)
+        termAndEnvNegativeShiftValidityImplyTypeNegativeShiftValidity(td2, s, c)
+        assert(TypeTr.negativeShiftValidity(td.t, s, c))
+      }
+      case FixDerivation(_, _, _, ftd) => {
+        termAndEnvNegativeShiftValidityImplyTypeNegativeShiftValidity(ftd, s, c)
+        assert(TypeTr.negativeShiftValidity(td.t, s, c))
+      }
+      case TAbsDerivation(_, _, _, btd) => {
+        TypeTrProp.negativeShiftableForwardShift(td.env, 1, s, 0, c)
+        termAndEnvNegativeShiftValidityImplyTypeNegativeShiftValidity(btd, s, c+1)
+        assert(TypeTr.negativeShiftValidity(td.t, s, c))
+      }
+      case TAppDerivation(_, _ , TApp(_, typArg), btd) => {
+        termAndEnvNegativeShiftValidityImplyTypeNegativeShiftValidity(btd, s, c)
+        assert(TypeTr.negativeShiftValidity(typArg, s, c))
+        
+        assert(TypeTr.negativeShiftValidity(td.t, s, c))
+      }
+    }
+  }.ensuring(TypeTr.negativeShiftValidity(td.t, s, c))
+
+  // WIP
+  @opaque @pure
+  def shiftTypesInEnv(td: TypeDerivation, s: BigInt, c: BigInt): TypeDerivation = {
+    require(td.isValid)
+    require(c >= 0)
+    require(s >= 0 || TypeTr.negativeShiftValidity(td.env, s, c))
+    require(s >= 0 || TypeTr.negativeShiftValidity(td.term, s, c))
+
+    if(s < 0) {
+      termAndEnvNegativeShiftValidityImplyTypeNegativeShiftValidity(td, s, c)
+    }
+    assert(s >= 0 || TypeTr.negativeShiftValidity(td.t, s, c))
 
     val p = (res: TypeDerivation) => {
       res.isValid &&
-      ( res.env == TypeTr.shift(td.env, s, 0) ) &&
-      ( res.term == TypeTr.shift(td.term, s, 0) ) &&
-      ( res.t == TypeTr.shift(td.t, s, 0) )
+      ( res.env == TypeTr.shift(td.env, s, c) ) &&
+      ( res.term == TypeTr.shift(td.term, s, c) ) &&
+      ( res.t == TypeTr.shift(td.t, s, c) )
     }
 
-    val newEnv = TypeTr.shift(td.env, s, 0)
-    val newTyp = TypeTr.shift(td.t, s, 0)
-    val newTerm = TypeTr.shift(td.term, s, 0)
+    val newEnv = TypeTr.shift(td.env, s, c)
+    val newTyp = TypeTr.shift(td.t, s, c)
+    val newTerm = TypeTr.shift(td.term, s, c)
 
     td match {
       case VarDerivation(env, typ, Var(k)) => {
         assert(env(k) == typ)
         assert(newTerm.isInstanceOf[Var])
-        ListProperties.mapIndexing(k, env, TypeTr.shift(_: Type, s, 0))
+        TypeTrProp.shiftIndexing(env, s, c, k)
         VarDerivation(newEnv, newTyp, newTerm.asInstanceOf[Var])
       }
       case AbsDerivation(env, typ, Abs(argType, body), btd) => {
         mAgIcDeRiVaTiOn(p)
       }
-      case AppDerivation(_, _, _, td1, td2) => {
-        assert(s >= 0 || TypeTr.negativeShiftValidity(td1.t, s, 0))
-        assert(s >= 0 || TypeTr.negativeShiftValidity(td2.t, s, 0))
-        val td1p = shiftTypesInEnv(td1, s)
-        val td2p = shiftTypesInEnv(td2, s)
+      case AppDerivation(_, typ, _, td1, td2) => {
+        val td1p = shiftTypesInEnv(td1, s, c)
+        val td2p = shiftTypesInEnv(td2, s, c)
         AppDerivation(newEnv, newTyp, App(td1p.term, td2p.term), td1p, td2p)
       }
       case FixDerivation(_, _, _, ftd) => {
-        val ftdp = shiftTypesInEnv(ftd, s)
+        val ftdp = shiftTypesInEnv(ftd, s, c)
         FixDerivation(newEnv, newTyp, Fix(ftdp.term), ftdp)
       }
       case TAbsDerivation(_, _, _, btd) => {
-        val btdp = shiftTypesInEnv(btd, s)
-        TAbsDerivation(newEnv, newTyp, TAbs(btdp.term), btdp)
+        if(s < 0) {
+          TypeTrProp.negativeShiftableForwardShift(td.env, 1, s, 0, c)
+          TypeTrProp.negativeShiftableForwardShift(td.term, 1, s, 0, c)
+        }
+        val btdp = shiftTypesInEnv(btd, s, c+1)
+        val res = TAbsDerivation(newEnv, newTyp, TAbs(btdp.term), btdp)
+        assert(res.isValid)
+        assert( res.env == TypeTr.shift(td.env, s, c) )
+        assert( res.term == TypeTr.shift(td.term, s, c) )
+        assert( res.t == TypeTr.shift(td.t, s, c) )
+        res
       }
       case TAppDerivation(_, _, TApp(_, typeArg), btd) => {
-        val btdp = shiftTypesInEnv(btd, s)
-        TAppDerivation(newEnv, newTyp, TApp(btdp.term, TypeTr.shift(typeArg, s, 0)), btdp)
+        val btdp = shiftTypesInEnv(btd, s, c)
+        val res = TAppDerivation(newEnv, newTyp, TApp(btdp.term, TypeTr.shift(typeArg, s, c)), btdp)
+        assert(res.isValid)
+        assert( res.env == TypeTr.shift(td.env, s, c) )
+        assert( res.term == TypeTr.shift(td.term, s, c) )
+        assert( res.t == TypeTr.shift(td.t, s, c) )
+        res
       }
     }
   }.ensuring(res =>
     res.isValid &&
-    ( res.env == TypeTr.shift(td.env, s, 0) ) &&
-    ( res.term == TypeTr.shift(td.term, s, 0) ) &&
-    ( res.t == TypeTr.shift(td.t, s, 0) )
+    ( res.env == TypeTr.shift(td.env, s, c) ) &&
+    ( res.term == TypeTr.shift(td.term, s, c) ) &&
+    ( res.t == TypeTr.shift(td.t, s, c) )
   )
 
   // Fragile
@@ -571,7 +574,7 @@ object TypingProperties {
         res
       }
       case TAbsDerivation(env, typ, TAbs(body), btd) => {
-        val sdp = shiftTypesInEnv(sd, 1)
+        val sdp = shiftTypesInEnv(sd, 1, 0)
         TypeTrProp.shiftIndexing(sd.env, 1, 0, j)
         assert(btd.env == TypeTr.shift(sd.env, 1, 0))
         val btdp = preservationUnderSubst(btd, j, sdp)
@@ -684,6 +687,23 @@ object TypingProperties {
     == 
     TypeTr.substitute(TypeTr.shift(env, s, 0), k+s, TypeTr.shift(subs, s, 0))
   )
+
+  // WIP
+  // @extern
+  // def universalSubstitutionShiftCommutativity(body: Type, arg: Type, d: BigInt, c: BigInt): Unit = {
+  //   require(c >= 0)
+  //   require(d >= 0 || TypeTr.negativeShiftValidity(body, d, c))
+  //   require(d >= 0 || TypeTr.negativeShiftValidity(arg, d, c))
+    
+  // }.ensuring(
+  //   ( d >= 0 || TypeTr.negativeShiftValidity(universalSubstitution(body, arg), d, c) ) &&
+  //   (
+  //     TypeTr.shift(universalSubstitution(body, arg), d, c)
+  //     ==
+  //     universalSubstitution(TypeTr.shift(body, d, c), TypeTr.shift(arg, d, c))
+  //     // There is possibly a missing +1/shift missing somewhere
+  //   )
+  // )
 
   // WIP
   @opaque @pure
@@ -856,7 +876,7 @@ object TypingProperties {
     TypeTrProp.boundRangeShiftBackLemma(TypeTr.substitute(typ, 0, TypeTr.shift(arg, 1, 0)), 1, 0)
 
     TypeTrProp.boundRangeShiftBackLemma(td1.env, 1, 0)
-    shiftTypesInEnv(td1, -1)
+    shiftTypesInEnv(td1, -1, 0)
   }.ensuring(res =>
     res.isValid &&
     ( res.term == tabsSubstitution(tabsTd.btd.term, arg) ) &&
