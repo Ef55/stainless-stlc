@@ -754,123 +754,85 @@ object TransformationsProperties {
   )
 
   @opaque @pure
-  def shiftSubstitutionCommutativityTypeNeg(typ: Type, c: BigInt, k: BigInt, subs: Type): Unit = {
+  def shiftSubstitutionCommutativityTypeNeg(typ: Type, s: BigInt, c: BigInt, k: BigInt, subs: Type): Unit = {
     require(c >= 0 && c <= k)
-    require(!typ.hasFreeVariablesIn(c, 1))
+    require(s > 0)
+    require(!typ.hasFreeVariablesIn(c, s))
 
-    boundRangeShiftBackLemma(typ, 1, c)
-    assert(negativeShiftValidity(typ, -1, c))
-    boundRangeShift(subs, 1, c, 0)
-    assert(!shift(subs, 1, c).hasFreeVariablesIn(c, 1))
-    boundRangeTypeSubstitutionLemma1(typ, k + 1, shift(subs, 1, c), 1, 1, c, c)
-    assert(!substitute(typ, k + 1, shift(subs, 1, c)).hasFreeVariablesIn(c, 1))
-    boundRangeShiftBackLemma(substitute(typ, k + 1, shift(subs, 1, c)), 1, c)
-    assert(negativeShiftValidity(substitute(typ, k + 1, shift(subs, 1, c)), -1, c))
+    boundRangeShiftBackLemma(typ, s, c)
+    boundRangeShift(subs, s, c, 0)
+    boundRangeTypeSubstitutionLemma1(typ, k + s, shift(subs, s, c), s, s, c, c)
+    boundRangeShiftBackLemma(substitute(typ, k + s, shift(subs, s, c)), s, c)
 
 
     typ match {
-      case BasicType(_) => {
-        assert(
-    shift(substitute(typ, k + 1, shift(subs, 1, c)), -1, c) 
-    == 
-    substitute(shift(typ, -1, c), k, subs)
-  )
-      }
+      case BasicType(_) => {}
       case ArrowType(t1, t2) => {
-        shiftSubstitutionCommutativityTypeNeg(t1, c, k, subs)
-        shiftSubstitutionCommutativityTypeNeg(t2, c, k, subs)
-        assert(
-    shift(substitute(typ, k + 1, shift(subs, 1, c)), -1, c) 
-    == 
-    substitute(shift(typ, -1, c), k, subs)
-  )
+        shiftSubstitutionCommutativityTypeNeg(t1, s, c, k, subs)
+        shiftSubstitutionCommutativityTypeNeg(t2, s, c, k, subs)
       }
       case VariableType(v) => {
-        boundRangeShiftComposition(subs, 1, -1, c, c)
-        if (v < c){
-          assert(shift(typ, -1, c) == VariableType(v))
-          if(k == v){
-            assert(substitute(shift(typ, -1, c), k, subs) == subs)
-            assert(shift(substitute(typ, k + 1, shift(subs, 1, c)), -1, c) == shift(shift(subs, 1, c), -1, c))
-            assert(
-              shift(substitute(typ, k + 1, shift(subs, 1, c)), -1, c) 
-              == 
-              substitute(shift(typ, -1, c), k, subs)
-            )
-          }
-          else{
-            assert(substitute(shift(typ, -1, c), k, subs) == VariableType(v))
-            assert(shift(substitute(typ, k + 1, shift(subs, 1, c)), -1, c) == VariableType(v))
-            assert(
-              shift(substitute(typ, k + 1, shift(subs, 1, c)), -1, c) 
-              == 
-              substitute(shift(typ, -1, c), k, subs)
-            )
-          }
-        }
-        else{
-          assert(shift(typ, -1, c) == VariableType(v - 1))
-          if(k == v - 1){
-            assert(substitute(shift(typ, -1, c), k, subs) == subs)
-            boundRangeShiftComposition(subs, 1, -1, c, c)
-            shift0Identity(subs, c)
-            assert(subs == shift(shift(subs, 1, c), -1, c))
-            assert(shift(substitute(typ, k + 1, shift(subs, 1, c)), -1, c) == shift(shift(subs, 1, c), -1, c))
-            assert(
-              shift(substitute(typ, k + 1, shift(subs, 1, c)), -1, c) 
-              == 
-              substitute(shift(typ, -1, c), k, subs)
-            )            
-          }
-          else{
-            assert(shift(substitute(typ, k + 1, shift(subs, 1, c)), -1, c) == VariableType(v - 1))
-            assert(substitute(shift(typ, -1, c), k, subs) == VariableType(v - 1))
-            assert(
-              shift(substitute(typ, k + 1, shift(subs, 1, c)), -1, c) 
-              == 
-              substitute(shift(typ, -1, c), k, subs)
-            )
-          }
-        }
+        boundRangeShiftComposition(subs, s, -s, c, c)
+        if (v >= c && k == v - s){
+            boundRangeShiftComposition(subs, s, -s, c, c)
+            shift0Identity(subs, c)          
 
-        assert(
-          shift(substitute(typ, k + 1, shift(subs, 1, c)), -1, c) 
-          == 
-          substitute(shift(typ, -1, c), k, subs)
-        )
-
+        }
       }
       case UniversalType(t) => {
-        shiftSubstitutionCommutativityTypeNeg(t, c + 1, k + 1, shift(subs, 1, 0))
-        shiftCommutativity(subs, c, 0, 1, 1)
-        assert(shift(shift(subs, 1, c), 1, 0) == shift(shift(subs, 1, 0), 1, c + 1))
-        assert(
-          shift(substitute(t, k + 2, shift(shift(subs, 1, c), 1, 0)), -1, c + 1)
-          == 
-          substitute(shift(t, -1, c + 1), k + 1, shift(subs, 1, 0))
-        )
-        assert(
-          UniversalType(shift(substitute(t, k + 2, shift(shift(subs, 1, c), 1, 0)), -1, c + 1))
-          == 
-          UniversalType(substitute(shift(t, -1, c + 1), k + 1, shift(subs, 1, 0)))
-        )
-        assert(
-          shift(substitute(UniversalType(t), k + 1, shift(subs, 1, c)), -1, c) 
-          == 
-          substitute(shift(UniversalType(t), -1, c), k, subs)
-        )
-        assert(
-          shift(substitute(typ, k + 1, shift(subs, 1, c)), -1, c) 
-          == 
-          substitute(shift(typ, -1, c), k, subs)
-        )
+        shiftSubstitutionCommutativityTypeNeg(t, s, c + 1, k + 1, shift(subs, 1, 0))
+        shiftCommutativity(subs, c, 0, 1, s)
       }
     }
   }.ensuring(
-    shift(substitute(typ, k + 1, shift(subs, 1, c)), -1, c) 
+    shift(substitute(typ, k + s, shift(subs, s, c)), -s, c) 
     == 
-    substitute(shift(typ, -1, c), k, subs)
+    substitute(shift(typ, -s, c), k, subs)
   )
+
+//     def shiftSubstitutionCommutativityTypeNeg2(typ: Type, s: BigInt, c: BigInt, k: BigInt, subs: Type): Unit = {
+//     require(c >= 0 && c <= k - s)
+//     require(s > 0)
+//     require(k >= s)
+//     require(!typ.hasFreeVariablesIn(c, s))
+//     require(!subs.hasFreeVariablesIn(c, s))
+
+//     boundRangeShiftBackLemma(typ, s, c)
+//     boundRangeShiftBackLemma(subs, s, c)
+//     shiftSubstitutionCommutativityTypeNeg(typ, s, c, k - s, shift(subs, -s, c))
+//     boundRangeTypeSubstitutionLemma1(typ, k, subs, s, s, c, c)
+    
+// //    boundRangeShift(subs, s, c, 0)
+//     boundRangeShiftBackLemma(substitute(typ, k, subs), s, c)
+//     boundRangeShiftComposition(subs, s, -s, c, c)
+//     shift0Identity(subs, c)
+//     assert(shift(shift(subs, -s, c), s, c) == subs)
+
+
+//     // typ match {
+//     //   case BasicType(_) => {}
+//     //   case ArrowType(t1, t2) => {
+//     //     shiftSubstitutionCommutativityTypeNeg2(t1, s, c, k, subs)
+//     //     shiftSubstitutionCommutativityTypeNeg2(t2, s, c, k, subs)
+//     //   }
+//     //   case VariableType(v) => {
+//     //     boundRangeShiftComposition(subs, s, -s, c, c)
+//     //     if (v >= c && k == v - s){
+//     //         boundRangeShiftComposition(subs, s, -s, c, c)
+//     //         shift0Identity(subs, c)          
+
+//     //     }
+//     //   }
+//     //   case UniversalType(t) => {
+//     //     shiftSubstitutionCommutativityTypeNeg2(t, s, c + 1, k + 1, shift(subs, 1, 0))
+//     //     shiftCommutativity(subs, c, 0, 1, s)
+//     //   }
+//     // }
+//   }.ensuring(
+//     shift(substitute(typ, k, subs), -s, c) 
+//     == 
+//     substitute(shift(typ, -s, c), k - s, shift(subs, -s, c))
+//   )
 
 
 
