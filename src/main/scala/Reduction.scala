@@ -58,7 +58,7 @@ object Reduction {
       case Var(_) => None[ReductionRule]()
       case Abs(argTyp, body) =>{
         tp match {
-          case Abs(argTypp, bodyp) if argTyp == argTypp && reducesTo(body, bodyp).isDefined => Some[ReductionRule](TAbsCongruence)
+          case Abs(argTypp, bodyp) if argTyp == argTypp && reducesTo(body, bodyp).isDefined => Some[ReductionRule](AbsCongruence)
           case _ => None[ReductionRule]()
         }
       }
@@ -291,6 +291,31 @@ object ReductionProperties {
         t.asInstanceOf[TApp].typ
       ) 
     )
+  )
+
+  def absReducesToSoundness(abs: Abs, tp: Term): Unit = {
+    require(reducesTo(abs, tp).isDefined)
+  }.ensuring(reducesTo(abs, tp).get.isInstanceOf[AbsRule])
+
+  def absCongruenceInversion(t: Term, tp: Term): Unit = {
+    require(reducesTo(t, tp).isDefined)
+    require(reducesTo(t, tp).get == AbsCongruence)
+  }.ensuring(
+    t.isInstanceOf[Abs] && tp.isInstanceOf[Abs] &&
+    ( t.asInstanceOf[Abs].argType == tp.asInstanceOf[Abs].argType ) &&
+    reducesTo(t.asInstanceOf[Abs].body, tp.asInstanceOf[Abs].body).isDefined
+  )
+
+  def tabsReducesToSoundness(tabs: TAbs, tp: Term): Unit = {
+    require(reducesTo(tabs, tp).isDefined)
+  }.ensuring(reducesTo(tabs, tp).get.isInstanceOf[TAbsRule])
+
+  def tabsCongruenceInversion(t: Term, tp: Term): Unit = {
+    require(reducesTo(t, tp).isDefined)
+    require(reducesTo(t, tp).get == TAbsCongruence)
+  }.ensuring(
+    t.isInstanceOf[TAbs] && tp.isInstanceOf[TAbs] &&
+    reducesTo(t.asInstanceOf[TAbs].t, tp.asInstanceOf[TAbs].t).isDefined
   )
 
   /// ReduceAll correctness

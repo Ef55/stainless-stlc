@@ -610,7 +610,7 @@ object TypingProperties {
         assert(TypeTr.substitute(TypeTr.shift(env, s, 0), k+s, TypeTr.shift(subs, s, 0)) == Nil())
       }
       case Cons(h, t) => {
-        shiftSubstitutionCommutativityType(h, s, 0, k, subs)
+        TypeTrProp.shiftSubstitutionCommutativityType(h, s, 0, k, subs)
         shiftSubstitutionCommutativity(t, s, k, subs)
       }
     }
@@ -830,6 +830,25 @@ object TypingProperties {
     val Some(rule) = reducesTo(td.term, reduced)
 
     td match {
+      case AbsDerivation(env, typ, t@Abs(argType, body), btd) => {
+        absReducesToSoundness(t, reduced)
+        assert(rule == AbsCongruence)
+        absCongruenceInversion(t, reduced)
+        val tp = reduced.asInstanceOf[Abs]
+        val btdp = reductionPreservationTheorem(btd, tp.body)
+        val tdp = AbsDerivation(env, typ, tp, btdp)
+        assert(btdp.isValid)
+        assert(btdp.term == tp.body)
+        assert(btd.env == argType :: td.env)
+        assert(btdp.env == btd.env)
+        assert(typ.isInstanceOf[ArrowType])
+        val ArrowType(t1, t2) = typ
+        assert(t1 == argType)
+        assert(t2 == btdp.t)
+        assert(tp == Abs(argType, btdp.term))
+        assert(tdp.isValid)
+        tdp
+      }
       case AppDerivation(env, typ, t@App(t1, t2), td1, td2) => {
 
         assert(td.term == t)
@@ -904,6 +923,14 @@ object TypingProperties {
             preservationUnderTAbsSubst(btd.asInstanceOf[TAbsDerivation], typeArg, typ)
           }
         }
+      }
+      case TAbsDerivation(env, typ, t@TAbs(body), btd) => {
+        tabsReducesToSoundness(t, reduced)
+        assert(rule == TAbsCongruence)
+        tabsCongruenceInversion(t, reduced)
+        val tp = reduced.asInstanceOf[TAbs]
+        val btdp = reductionPreservationTheorem(btd, tp.t)
+        TAbsDerivation(env, typ, tp, btdp)
       }
     }
 
