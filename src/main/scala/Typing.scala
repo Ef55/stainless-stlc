@@ -257,7 +257,7 @@ object TypingProperties {
         FixDerivation(env ++ envExt, typ, Fix(f), resFtd)
       }
       case TAbsDerivation(env, typ, TAbs(body), btd) => {
-        ListProperties.mapConcat(env, envExt, Transformations.Types.shift(_: Type, 1, 0))
+        TypeTrProp.shiftConcat(env, envExt, 1, 0)
         val resBtd = environmentWeakening(btd,  TypeTr.shift(envExt, 1, 0))
         TAbsDerivation(env ++ envExt, typ, TAbs(body), resBtd)
       }

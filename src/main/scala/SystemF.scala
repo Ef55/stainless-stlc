@@ -45,6 +45,8 @@ object SystemF {
 
   type Environment = List[Type]
   def hasFreeVariablesIn(env: Environment, c: BigInt, d: BigInt): Boolean = {
+    require(c >= 0)
+    require(d >= 0)
     env.exists(_.hasFreeVariablesIn(c, d))
   }.ensuring(res =>
     ( !res ==> env.forall(!_.hasFreeVariablesIn(c, d)) ) &&
