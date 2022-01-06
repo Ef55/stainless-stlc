@@ -625,16 +625,17 @@ object TransformationsProperties {
       negativeShiftValidity(t, d, cp)
     )
   @opaque @pure
-  def shiftCommutativity(subs: Type, c: BigInt, d: BigInt, b: BigInt) : Unit ={
+  def shiftCommutativity(subs: Type, c: BigInt, d: BigInt, a: BigInt, b: BigInt) : Unit ={
     require(c >= 0)
     require(d >= 0)
     require(b >= 0)
+    require(a >= 0)
     require(d <= c)
     subs match{
       case BasicType(_) => ()
       case ArrowType(t1, t2) => 
-        shiftCommutativity(t1, c, d, b)
-        shiftCommutativity(t2, c, d, b)
+        shiftCommutativity(t1, c, d, a, b)
+        shiftCommutativity(t2, c, d, a, b)
       case VariableType(v) =>
         if(v < c){
           assert(shift(VariableType(v), b, c) == VariableType(v))
@@ -684,14 +685,74 @@ object TransformationsProperties {
         assert(shift(shift(VariableType(v), 1, c), 1, d) == shift(shift(VariableType(v), 1, d), 1, c + 1))
         assert(shift(shift(subs, 1, c), 1, d) == shift(shift(subs, 1, d), 1, c + 1))
       case UniversalType(t) =>
-        shiftCommutativity(t, c + 1, d + 1, b) 
-        assert(shift(shift(t, b, c + 1), b, d + 1) == shift(shift(t, b, d + 1), b, c + b + 1))
-        assert(UniversalType(shift(shift(t, b, c + 1), b, d + 1)) == UniversalType(shift(shift(t, b, d + 1), b, c + b + 1)))
-        assert(shift(shift(UniversalType(t), b, c), b, d) == shift(shift(UniversalType(t), b, d), b, c + b))
-        assert(shift(shift(subs, b, c), b, d) == shift(shift(subs, b, d), b, c + b))
+        shiftCommutativity(t, c + 1, d + 1, a, b) 
+        assert(shift(shift(t, b, c + 1), a, d + 1) == shift(shift(t, a, d + 1), b, c + a + 1))
+        assert(UniversalType(shift(shift(t, b, c + 1), a, d + 1)) == UniversalType(shift(shift(t, a, d + 1), b, c + a + 1)))
+        assert(shift(shift(UniversalType(t), b, c), a, d) == shift(shift(UniversalType(t), a, d), b, c + a))
+        assert(shift(shift(subs, b, c), a, d) == shift(shift(subs, a, d), b, c + a))
     }
-  }.ensuring(shift(shift(subs, b, c), b, d) == shift(shift(subs, b, d), b, c + b))
+  }.ensuring(shift(shift(subs, b, c), a, d) == shift(shift(subs, a, d), b, c + a))
   
+  @opaque @pure
+  def shiftSubstitutionCommutativityType(typ: Type, s: BigInt, c: BigInt, k: BigInt, subs: Type): Unit = {
+    require(s >= 0)
+    require(c >= 0 && c <= k)
+
+    typ match {
+      case BasicType(_) => {
+        assert(shift(substitute(typ, k, subs), s, c) == typ)
+        assert(substitute(shift(typ, s, c), k+s, shift(subs, s, c)) == typ)
+      }
+      case ArrowType(t1, t2) => {
+        shiftSubstitutionCommutativityType(t1, s, c, k, subs)
+        shiftSubstitutionCommutativityType(t2, s, c, k, subs)
+      }
+      case VariableType(v) => {
+        if(v == k) {
+          assert(shift(substitute(typ, k, subs), s, c) == shift(subs, s, c))
+          assert(substitute(shift(typ, s, c), k+s, shift(subs, s, c)) == shift(subs, s, c))
+        }
+        else {
+          assert(shift(substitute(typ, k, subs), s, c) == shift(typ, s, c))
+          assert(substitute(shift(typ, s, c), k+s, shift(subs, s, c)) == shift(typ, s, c))
+        }
+      }
+      case UniversalType(t) => {
+        shiftCommutativity(subs, c, 0, 1, s)
+        assert(
+          shift(shift(subs, s, c), 1, 0)
+          ==
+          shift(shift(subs, 1, 0), s, c+1)
+        )
+        shiftSubstitutionCommutativityType(t, s, c+1, k+1, shift(subs, 1, 0))
+        assert(
+          shift(substitute(t, k+1, shift(subs, 1, 0)), s, c+1)
+          ==
+          substitute(shift(t, s, c+1), k+1+s, shift(shift(subs, 1, 0), s, c+1))
+        )
+        assert(
+          UniversalType(shift(substitute(t, k+1, shift(subs, 1, 0)), s, c+1))
+          ==
+          UniversalType(substitute(shift(t, s, c+1), k+1+s, shift(shift(subs, 1, 0), s, c+1)) )
+        )
+        assert(
+          UniversalType(shift(substitute(t, k+1, shift(subs, 1, 0)), s, c+1)  ) 
+          == 
+          UniversalType(substitute(shift(t, s, c + 1), k + s + 1, shift(shift(subs, s, c), 1, 0)))
+        )
+        assert(
+          shift(substitute(UniversalType(t), k, subs), s, c) 
+          == 
+          substitute(shift(UniversalType(t), s, c), k+s, shift(subs, s, c))
+        )
+      }
+    }
+  }.ensuring(
+    shift(substitute(typ, k, subs), s, c) 
+    == 
+    substitute(shift(typ, s, c), k+s, shift(subs, s, c))
+  )
+
   @opaque @pure
   def shiftSubstitutionCommutativityTypeNeg(typ: Type, c: BigInt, k: BigInt, subs: Type): Unit = {
     require(c >= 0 && c <= k)
@@ -781,7 +842,7 @@ object TransformationsProperties {
       }
       case UniversalType(t) => {
         shiftSubstitutionCommutativityTypeNeg(t, c + 1, k + 1, shift(subs, 1, 0))
-        shiftCommutativity(subs, c, 0, 1)
+        shiftCommutativity(subs, c, 0, 1, 1)
         assert(shift(shift(subs, 1, c), 1, 0) == shift(shift(subs, 1, 0), 1, c + 1))
         assert(
           shift(substitute(t, k + 2, shift(shift(subs, 1, c), 1, 0)), -1, c + 1)
