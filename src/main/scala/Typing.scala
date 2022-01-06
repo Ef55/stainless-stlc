@@ -226,12 +226,12 @@ object TypingProperties {
 
   /// Preservation
   @extern
-  def aSsUmE(b: Boolean): Unit = {}.ensuring(b)
+  def aSsUmE(b: Boolean): Unit = {}//.ensuring(b)
 
   @extern
   def mAgIcDeRiVaTiOn(p: TypeDerivation => Boolean): TypeDerivation = {
     VarDerivation(Nil(), BasicType(""), Var(0)) : TypeDerivation
-  }.ensuring(p(_))
+  }//.ensuring(p(_))
 
   
 
@@ -438,7 +438,9 @@ object TypingProperties {
         assert(TypeTr.negativeShiftValidity(td.t, s, c))
       }
       case TAbsDerivation(_, _, _, btd) => {
-        TypeTrProp.negativeShiftableForwardShift(td.env, 1, s, 0, c)
+        TypeTrProp.boundRangeNegativeShiftableCorrespondance(td.env, -s, c)
+        TypeTrProp.boundRangeShiftCutoff(td.env, 1, 0, c, -s)
+        TypeTrProp.boundRangeNegativeShiftableCorrespondance(TypeTr.shift(td.env, 1, 0), -s, c+1)
         termAndEnvNegativeShiftValidityImplyTypeNegativeShiftValidity(btd, s, c+1)
         assert(TypeTr.negativeShiftValidity(td.t, s, c))
       }
@@ -496,8 +498,9 @@ object TypingProperties {
       }
       case TAbsDerivation(_, _, _, btd) => {
         if(s < 0) {
-          TypeTrProp.negativeShiftableForwardShift(td.env, 1, s, 0, c)
-          TypeTrProp.negativeShiftableForwardShift(td.term, 1, s, 0, c)
+          TypeTrProp.boundRangeNegativeShiftableCorrespondance(td.env, -s, c)
+          TypeTrProp.boundRangeShiftCutoff(td.env, 1, 0, c, -s)
+          TypeTrProp.boundRangeNegativeShiftableCorrespondance(TypeTr.shift(td.env, 1, 0), -s, c+1)
         }
         val btdp = shiftTypesInEnv(btd, s, c+1)
         val res = TAbsDerivation(newEnv, newTyp, TAbs(btdp.term), btdp)

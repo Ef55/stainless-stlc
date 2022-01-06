@@ -9,7 +9,7 @@ object Transformations {
     def negativeShiftValidity(t: Term, d: BigInt, c: BigInt): Boolean = {
       require(d < 0)
       t match {
-        case Var(k)         => (k < c) || (k+d >= 0)
+        case Var(k)         => (k < c) || (k+d >= c)
         case Abs(_, body)   => negativeShiftValidity(body, d, c+1)
         case App(t1, t2)    => negativeShiftValidity(t1, d, c) && negativeShiftValidity(t2, d, c)
         case Fix(f)         => negativeShiftValidity(f, d, c)
@@ -51,7 +51,7 @@ object Transformations {
       t match {
         case BasicType(_) => true
         case ArrowType(t1, t2) =>  negativeShiftValidity(t1, d, c) && negativeShiftValidity(t2, d, c)
-        case VariableType(k) => (k < c) || (k+d >= 0)
+        case VariableType(k) => (k < c) || (k+d >= c)
         case UniversalType(body) => negativeShiftValidity(body, d, c+1)
       }
     }
@@ -348,6 +348,28 @@ object TransformationsProperties {
     import Transformations.Types._
 
     @opaque @pure
+    def boundRangeNegativeShiftableCorrespondance(t: Type, s: BigInt, c: BigInt): Unit = {
+      require(s > 0)
+      require(c >= 0)
+
+      t match {
+        case VariableType(_) => ()
+        case BasicType(_) => ()
+        case ArrowType(t1, t2) => {
+          boundRangeNegativeShiftableCorrespondance(t1, s, c)
+          boundRangeNegativeShiftableCorrespondance(t2, s, c)
+        }
+        case UniversalType(b) => {
+          boundRangeNegativeShiftableCorrespondance(b, s, c+1)
+        }
+      }
+    }.ensuring(
+      !t.hasFreeVariablesIn(c, s)
+      ==
+      negativeShiftValidity(t, -s, c)
+    )
+
+    @opaque @pure
     def boundRangeSubstitutionIdentity(t: Type, j: BigInt, typ: Type): Unit = {
       require(j >= 0)
       require(!t.hasFreeVariablesIn(j, 1))
@@ -462,14 +484,14 @@ object TransformationsProperties {
 
     }.ensuring(!shift(t, d, c).hasFreeVariablesIn(c, d+b))
 
-        @opaque @pure
+    @opaque @pure
     def boundRangeShiftCutoff(t: Type, d: BigInt, c: BigInt, a: BigInt, b: BigInt): Unit = {
       require(c >= 0)
       require(d >= 0)
       require(b >= 0)
       require(a >= 0)
       require(!t.hasFreeVariablesIn(a, b))
-      require(c < a)
+      require(c <= a)
 
       t match {
         case BasicType(_) => ()
@@ -548,83 +570,6 @@ object TransformationsProperties {
       }
     }.ensuring(negativeShiftValidity(t, -d, c))
 
-    @opaque @pure
-    def negativeShiftableForwardShift(t: Type, sf: BigInt, sb: BigInt, cf: BigInt, cb: BigInt): Unit = {
-      require(sf >= 0)
-      require(sb < 0)
-      require(cf >= 0 && cb >= 0)
-      require(negativeShiftValidity(t, sb, cb))
-
-      t match {
-        case VariableType(_) => {
-          assert(negativeShiftValidity(shift(t, sf, cf), sb, cb+sf))
-        }
-        case BasicType(_) => {
-          assert(negativeShiftValidity(shift(t, sf, cf), sb, cb+sf))
-        }
-        case ArrowType(t1, t2) => {
-          negativeShiftableForwardShift(t1, sf, sb, cf, cb)
-          negativeShiftableForwardShift(t2, sf, sb, cf, cb)
-        }
-        case UniversalType(body) => {
-          negativeShiftableForwardShift(body, sf, sb, cf+1, cb+1)
-        }
-      }
-    }.ensuring(
-      negativeShiftValidity(shift(t, sf, cf), sb, cb+sf)
-    )
-
-    @opaque @pure
-    def negativeShiftableForwardShiftStableCutoff(t: Type, sf: BigInt, sb: BigInt, c: BigInt): Unit = {
-      require(sf >= 0)
-      require(sb < 0)
-      require(c >= 0)
-      require(negativeShiftValidity(t, sb, c))
-
-      t match {
-        case VariableType(_) => {
-          assert(negativeShiftValidity(shift(t, sf, c), sb, c))
-        }
-        case BasicType(_) => {
-          assert(negativeShiftValidity(shift(t, sf, c), sb, c))
-        }
-        case ArrowType(t1, t2) => {
-          negativeShiftableForwardShiftStableCutoff(t1, sf, sb, c)
-          negativeShiftableForwardShiftStableCutoff(t2, sf, sb, c)
-        }
-        case UniversalType(body) => {
-          negativeShiftableForwardShiftStableCutoff(body, sf, sb, c+1)
-        }
-      }
-    }.ensuring(
-      negativeShiftValidity(shift(t, sf, c), sb, c)
-    )
-
-    @opaque @pure
-    def negativeShiftableCutoffTransitivity(t: Type, d: BigInt, c: BigInt, cp: BigInt): Unit = {
-      require(d < 0 && c >= 0)
-      require(negativeShiftValidity(t, d, c))
-      require(cp >= c)
-
-      t match {
-        case VariableType(_) => {
-          assert(negativeShiftValidity(t, d, cp))
-        }
-        case BasicType(_) => {
-          assert(negativeShiftValidity(t, d, cp))
-        }
-        case ArrowType(t1, t2) => {
-          negativeShiftableCutoffTransitivity(t1, d, c, cp)
-          negativeShiftableCutoffTransitivity(t2, d, c, cp)
-        }
-        case UniversalType(body) => {
-          negativeShiftableCutoffTransitivity(body, d, c+1, cp+1)
-        }
-      }
-    }.ensuring(
-      negativeShiftValidity(t, d, cp)
-    )
-      
     @opaque @pure
     def shiftCommutativity(subs: Type, c: BigInt, d: BigInt, a: BigInt, b: BigInt) : Unit ={
       require(c >= 0)
@@ -1017,6 +962,38 @@ object TransformationsProperties {
     /// Types in terms 
 
     @opaque @pure
+    def boundRangeNegativeShiftableCorrespondance(t: Term, s: BigInt, c: BigInt): Unit = {
+      require(s > 0)
+      require(c >= 0)
+
+      t match {
+        case Var(_) => ()
+        case Abs(argTyp, body) => {
+          boundRangeNegativeShiftableCorrespondance(argTyp, s, c)
+          boundRangeNegativeShiftableCorrespondance(body, s, c)
+        }
+        case App(t1, t2) => {
+          boundRangeNegativeShiftableCorrespondance(t1, s, c)
+          boundRangeNegativeShiftableCorrespondance(t2, s, c)
+        }
+        case Fix(f) => {
+          boundRangeNegativeShiftableCorrespondance(f, s, c)
+        }
+        case TAbs(body) => {
+          boundRangeNegativeShiftableCorrespondance(body, s, c+1)
+        }
+        case TApp(body, typArg) => {
+          boundRangeNegativeShiftableCorrespondance(body, s, c)
+          boundRangeNegativeShiftableCorrespondance(typArg, s, c)
+        }
+      }
+    }.ensuring(
+      !t.hasFreeTypeVariablesIn(c, s)
+      ==
+      negativeShiftValidity(t, -s, c)
+    )
+
+    @opaque @pure
     def boundRangeShift(t: Term, d: BigInt, c: BigInt, b: BigInt): Unit = {
       require(c >= 0)
       require(d >= 0)
@@ -1100,63 +1077,25 @@ object TransformationsProperties {
       }
     }.ensuring(negativeShiftValidity(t, -d, c))
 
-    @opaque @pure
-    def negativeShiftableForwardShift(t: Term, sf: BigInt, sb: BigInt, cf: BigInt, cb: BigInt): Unit = {
-      require(sf >= 0)
-      require(sb < 0)
-      require(cf >= 0 && cb >= 0)
-      require(negativeShiftValidity(t, sb, cb))
-
-      t match {
-        case Var(k) => assert(negativeShiftValidity(shift(t, sf, cf), sb, cb+sf))
-        case Abs(targ, body) => {
-          negativeShiftableForwardShift(targ, sf, sb, cf, cb)
-          negativeShiftableForwardShift(body, sf, sb, cf, cb)
-        }
-        case App(t1, t2) => {
-          negativeShiftableForwardShift(t1, sf, sb, cf, cb)
-          negativeShiftableForwardShift(t2, sf, sb, cf, cb)
-        }
-        case Fix(f) => negativeShiftableForwardShift(f, sf, sb, cf, cb)
-        case TAbs(body) => negativeShiftableForwardShift(body, sf, sb, cf+1, cb+1)
-        case TApp(term, typ) => {
-          negativeShiftableForwardShift(term, sf, sb, cf, cb)
-          negativeShiftableForwardShift(typ, sf, sb, cf, cb)
-        }
-      }
-    }.ensuring(
-      negativeShiftValidity(shift(t, sf, cf), sb, cb+sf)
-    )
-
-    @opaque @pure
-    def negativeShiftableForwardShiftStableCutoff(t: Term, sf: BigInt, sb: BigInt, c: BigInt): Unit = {
-      require(sf >= 0)
-      require(sb < 0)
-      require(c >= 0)
-      require(negativeShiftValidity(t, sb, c))
-
-      t match {
-        case Var(k) => assert(negativeShiftValidity(shift(t, sf, c), sb, c))
-        case Abs(targ, body) => {
-          negativeShiftableForwardShiftStableCutoff(targ, sf, sb, c)
-          negativeShiftableForwardShiftStableCutoff(body, sf, sb, c)
-        }
-        case App(t1, t2) => {
-          negativeShiftableForwardShiftStableCutoff(t1, sf, sb, c)
-          negativeShiftableForwardShiftStableCutoff(t2, sf, sb, c)
-        }
-        case Fix(f) => negativeShiftableForwardShiftStableCutoff(f, sf, sb, c)
-        case TAbs(body) => negativeShiftableForwardShiftStableCutoff(body, sf, sb, c+1)
-        case TApp(term, typ) => {
-          negativeShiftableForwardShiftStableCutoff(term, sf, sb, c)
-          negativeShiftableForwardShiftStableCutoff(typ, sf, sb, c)
-        }
-      }
-    }.ensuring(
-      negativeShiftValidity(shift(t, sf, c), sb, c)
-    )
-
     /// Types in environments
+
+    @opaque @pure
+    def boundRangeNegativeShiftableCorrespondance(env: Environment, s: BigInt, c: BigInt): Unit = {
+      require(s > 0)
+      require(c >= 0)
+
+      env match {
+        case Nil() => ()
+        case Cons(h, t) => {
+          boundRangeNegativeShiftableCorrespondance(h, s, c)
+          boundRangeNegativeShiftableCorrespondance(t, s, c)
+        }
+      }
+    }.ensuring(
+      !hasFreeVariablesIn(env, c, s)
+      ==
+      negativeShiftValidity(env, -s, c)
+    )
 
     @opaque @pure
     def boundRangeSubstitutionIdentity(env: Environment, j: BigInt, typ: Type): Unit = {
@@ -1233,6 +1172,26 @@ object TransformationsProperties {
     }.ensuring(!hasFreeVariablesIn(shift(env, d, c), c, d+b))
 
     @opaque @pure
+    def boundRangeShiftCutoff(env: Environment, d: BigInt, c: BigInt, a: BigInt, b: BigInt): Unit = {
+      require(c >= 0)
+      require(d >= 0)
+      require(b >= 0)
+      require(a >= 0)
+      require(!hasFreeVariablesIn(env, a, b))
+      require(c <= a)
+
+      
+      env match {
+        case Nil() => ()
+        case Cons(h, t) => {
+          boundRangeShiftCutoff(h, d, c, a, b)
+          boundRangeShiftCutoff(t, d, c, a, b)
+        }
+      }
+    }.ensuring(!hasFreeVariablesIn(shift(env, d, c), a + d, b))
+
+
+    @opaque @pure
     def boundRangeShiftBackLemma(env: Environment, d: BigInt, c: BigInt): Unit = {
       require(c >= 0)
       require(d > 0)
@@ -1248,56 +1207,6 @@ object TransformationsProperties {
         }
       }
     }.ensuring(negativeShiftValidity(env, -d, c))
-
-    @opaque @pure
-    def negativeShiftableForwardShift(env: Environment, sf: BigInt, sb: BigInt, cf: BigInt, cb: BigInt): Unit = {
-      require(sf >= 0)
-      require(sb < 0)
-      require(cf >= 0 && cb >= 0)
-      require(negativeShiftValidity(env, sb, cb))
-
-      env match {
-        case Nil() => {
-          assert(negativeShiftValidity(shift(env, sf, cf), sb, cb+sf))
-        }
-        case Cons(h, t) => {
-          negativeShiftableForwardShift(h, sf, sb, cf, cb)
-          negativeShiftableForwardShift(t, sf, sb, cf, cb)
-        }
-      }
-    }.ensuring(
-      negativeShiftValidity(shift(env, sf, cf), sb, cb+sf)
-    )
-
-    @extern
-    def negativeShiftableForwardShiftStableCutoff(env: Environment, sf: BigInt, sb: BigInt, c: BigInt): Unit = {
-      require(sf >= 0)
-      require(sb < 0)
-      require(c >= 0)
-      require(negativeShiftValidity(env, sb, c))
-
-    }.ensuring(
-      negativeShiftValidity(shift(env, sf, c), sb, c)
-    )
-
-    @opaque @pure
-    def negativeShiftableCutoffTransitivity(env: Environment, d: BigInt, c: BigInt, cp: BigInt): Unit = {
-      require(d < 0 && c >= 0)
-      require(negativeShiftValidity(env, d, c))
-      require(cp >= c)
-
-      env match {
-        case Nil() => {
-          assert(negativeShiftValidity(env, d, cp))
-        }
-        case Cons(h, t) => {
-          negativeShiftableCutoffTransitivity(h, d, c, cp)
-          negativeShiftableCutoffTransitivity(t, d, c, cp)
-        }
-      }
-    }.ensuring(
-      negativeShiftValidity(env, d, cp)
-    )
 
     /// Environment shift is map-like
 
