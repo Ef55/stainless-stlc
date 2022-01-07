@@ -640,6 +640,92 @@ object TransformationsProperties {
     }.ensuring(shift(shift(subs, b, c), a, d) == shift(shift(subs, a, d), b, c + a))
     
     @opaque @pure
+    def shiftCommutativity2(subs: Type, d1: BigInt, c1: BigInt, d2: BigInt, c2: BigInt) : Unit ={
+      require(c1 >= 0)
+      require(c2 >= 0)
+      require(d1 < 0)
+      require(d2 >= 0)
+      require(c2 <= c1)
+      require(negativeShiftValidity(subs, d1, c1) || negativeShiftValidity(shift(subs, d2, c2), d1, c1+d2))
+
+      subs match {
+        case BasicType(_) => ()
+        case ArrowType(t1, t2) => {
+          shiftCommutativity2(t1, d1, c1, d2, c2)
+          shiftCommutativity2(t2, d1, c1, d2, c2)
+        }
+        case VariableType(v) => {
+          ()
+        }
+        case UniversalType(t) => {
+          shiftCommutativity2(t, d1, c1+1, d2, c2+1) 
+        }
+      }
+    }.ensuring(
+      negativeShiftValidity(subs, d1, c1) &&
+      negativeShiftValidity(shift(subs, d2, c2), d1, c1+d2) &&
+      shift(shift(subs, d1, c1), d2, c2) == shift(shift(subs, d2, c2), d1, c1+d2)
+    )
+    
+    @opaque @pure
+    def shiftCommutativity3(subs: Type, d1: BigInt, c1: BigInt, d2: BigInt, c2: BigInt) : Unit ={
+      require(c1 >= 0)
+      require(c2 >= 0)
+      require(d1 < 0)
+      require(d2 >= 0)
+      require(c2 >= c1)
+      require(negativeShiftValidity(subs, d1, c1) || negativeShiftValidity(shift(subs, d2, c2-d1), d1, c1))
+
+      subs match {
+        case BasicType(_) => ()
+        case ArrowType(t1, t2) => {
+          shiftCommutativity3(t1, d1, c1, d2, c2)
+          shiftCommutativity3(t2, d1, c1, d2, c2)
+        }
+        case VariableType(v) => {
+          ()
+        }
+        case UniversalType(t) => {
+          shiftCommutativity3(t, d1, c1+1, d2, c2+1) 
+        }
+      }
+    }.ensuring(
+      negativeShiftValidity(subs, d1, c1) &&
+      negativeShiftValidity(shift(subs, d2, c2-d1), d1, c1) &&
+      shift(shift(subs, d1, c1), d2, c2) == shift(shift(subs, d2, c2-d1), d1, c1)
+    )
+
+    @opaque @pure
+    def shiftCommutativity4(subs: Type, d1: BigInt, c1: BigInt, d2: BigInt, c2: BigInt) : Unit ={
+      require(c1 >= 0)
+      require(c2 >= 0)
+      require(d1 < 0)
+      require(d2 < 0)
+      require(c1 >= c2)
+      require(c2 <= c1+d2)
+      require(negativeShiftValidity(subs, d1, c1))
+      require(negativeShiftValidity(subs, d2, c2))
+      require(negativeShiftValidity(shift(subs, d1, c1), d2, c2))
+
+      subs match {
+        case BasicType(_) => ()
+        case ArrowType(t1, t2) => {
+          shiftCommutativity4(t1, d1, c1, d2, c2)
+          shiftCommutativity4(t2, d1, c1, d2, c2)
+        }
+        case VariableType(v) => {
+          ()
+        }
+        case UniversalType(t) => {
+          shiftCommutativity4(t, d1, c1+1, d2, c2+1) 
+        }
+      }
+    }.ensuring(
+      negativeShiftValidity(shift(subs, d2, c2), d1, c1+d2) &&
+      shift(shift(subs, d1, c1), d2, c2) == shift(shift(subs, d2, c2), d1, c1+d2)
+    )
+
+    @opaque @pure
     def shiftSubstitutionCommutativityType(typ: Type, s: BigInt, c: BigInt, k: BigInt, subs: Type): Unit = {
       require(s >= 0)
       require(c >= 0 && c <= k)
@@ -734,6 +820,38 @@ object TransformationsProperties {
       shift(substitute(typ, k + s, shift(subs, s, c)), -s, c) 
       == 
       substitute(shift(typ, -s, c), k, subs)
+    )
+
+    @opaque @pure
+    def shiftSubstitutionCommutativityTypeNeg2(typ: Type, s: BigInt, c: BigInt, k: BigInt, subs: Type): Unit = {
+      require(c >= 0 && c > k)
+      require(s > 0)
+      require(!typ.hasFreeVariablesIn(c, s))
+      require(!subs.hasFreeVariablesIn(c, s))
+
+      boundRangeNegativeShiftableCorrespondance(typ, s, c)
+      boundRangeNegativeShiftableCorrespondance(subs, s, c)
+
+      typ match {
+        case BasicType(_) => {}
+        case ArrowType(t1, t2) => {
+          shiftSubstitutionCommutativityTypeNeg2(t1, s, c, k, subs)
+          shiftSubstitutionCommutativityTypeNeg2(t2, s, c, k, subs)
+        }
+        case VariableType(v) => {}
+        case UniversalType(t) => {
+          boundRangeShiftCutoff(subs, 1, 0, c, s)
+          shiftSubstitutionCommutativityTypeNeg2(t, s, c + 1, k + 1, shift(subs, 1, 0))
+          shiftCommutativity2(subs, -s, c, 1, 0)
+        }
+      }
+    }.ensuring(
+      negativeShiftValidity(substitute(typ, k, subs), -s, c) &&
+      (
+        shift(substitute(typ, k, subs), -s, c) 
+        == 
+        substitute(shift(typ, -s, c), k, shift(subs, -s, c))
+      )
     )
 
 //     def shiftSubstitutionCommutativityTypeNeg2(typ: Type, s: BigInt, c: BigInt, k: BigInt, subs: Type): Unit = {

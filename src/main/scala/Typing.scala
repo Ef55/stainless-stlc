@@ -445,9 +445,51 @@ object TypingProperties {
         assert(TypeTr.negativeShiftValidity(td.t, s, c))
       }
       case TAppDerivation(_, _ , TApp(_, typArg), btd) => {
-        termAndEnvNegativeShiftValidityImplyTypeNegativeShiftValidity(btd, s, c)
         assert(TypeTr.negativeShiftValidity(typArg, s, c))
+
+        termAndEnvNegativeShiftValidityImplyTypeNegativeShiftValidity(btd, s, c)
+        assert(btd.t.isInstanceOf[UniversalType])
+        val UniversalType(bodyTyp) = btd.t
+        assert(TypeTr.negativeShiftValidity(btd.t, s, c))
+        assert(TypeTr.negativeShiftValidity(bodyTyp, s, c+1))
         
+        TypeTrProp.boundRangeNegativeShiftableCorrespondance(bodyTyp, -s, c+1)
+        TypeTrProp.boundRangeNegativeShiftableCorrespondance(typArg, -s, c)
+        
+        TypeTrProp.boundRangeShiftCutoff(typArg, 1, 0, c, -s)
+        assert(!TypeTr.shift(typArg, 1, 0).hasFreeVariablesIn(c + 1, -s))
+        TypeTrProp.boundRangeNegativeShiftableCorrespondance(TypeTr.shift(typArg, 1, 0), -s, c+1)
+        assert(TypeTr.negativeShiftValidity(TypeTr.shift(typArg, 1, 0), s, c+1))
+
+        TypeTrProp.shiftCommutativity2(typArg, s, c, 1, 0)
+        TypeTrProp.shiftSubstitutionCommutativityTypeNeg2(bodyTyp, -s, c+1, 0, TypeTr.shift(typArg, 1, 0))
+
+        {
+          TypeTrProp.boundRangeShift(typArg, 1, 0, 0)
+          TypeTrProp.boundRangeSubstitutionLemma(bodyTyp, 0, TypeTr.shift(typArg, 1, 0))
+          assert(!TypeTr.substitute(bodyTyp, 0, TypeTr.shift(typArg, 1, 0)).hasFreeVariable(0))
+          TypeTrProp.boundRangeNegativeShiftableCorrespondance(TypeTr.substitute(bodyTyp, 0, TypeTr.shift(typArg, 1, 0)), 1, 0)
+          assert(TypeTr.negativeShiftValidity(TypeTr.substitute(bodyTyp, 0, TypeTr.shift(typArg, 1, 0)), -1, 0))
+        }
+        {
+          TypeTrProp.boundRangeShift(TypeTr.shift(typArg, s, c), 1, 0, 0)
+          TypeTrProp.boundRangeNegativeShiftableCorrespondance(TypeTr.shift(TypeTr.shift(typArg, s, c), 1, 0), 1, 0)
+          assert(TypeTr.negativeShiftValidity(TypeTr.shift(TypeTr.shift(typArg, s, c), 1, 0), -1, 0))
+          TypeTrProp.shiftCommutativity2(typArg, s, c, 1, 0)
+
+          assert(TypeTr.negativeShiftValidity(TypeTr.shift(TypeTr.shift(typArg, 1, 0), s, c+1), -1, 0))
+          TypeTrProp.boundRangeSubstitutionLemma(
+            TypeTr.shift(bodyTyp, s, c+1), 
+            0, 
+            TypeTr.shift(TypeTr.shift(typArg, 1, 0), s, c+1)
+          )
+          TypeTrProp.boundRangeNegativeShiftableCorrespondance(TypeTr.shift(TypeTr.substitute(bodyTyp, 0, TypeTr.shift(typArg, 1, 0)), s, c+1), 1, 0)
+          assert(TypeTr.negativeShiftValidity(TypeTr.shift(TypeTr.substitute(bodyTyp, 0, TypeTr.shift(typArg, 1, 0)), s, c+1), -1, 0))
+        }
+        TypeTrProp.shiftCommutativity4(TypeTr.substitute(bodyTyp, 0, TypeTr.shift(typArg, 1, 0)), s, c+1, -1, 0)
+
+        assert(td.t == universalSubstitution(bodyTyp, typArg))
+
         assert(TypeTr.negativeShiftValidity(td.t, s, c))
       }
     }
