@@ -226,12 +226,12 @@ object TypingProperties {
 
   /// Preservation
   @extern
-  def aSsUmE(b: Boolean): Unit = {}//.ensuring(b)
+  def aSsUmE(b: Boolean): Unit = {}.ensuring(b)
 
   @extern
   def mAgIcDeRiVaTiOn(p: TypeDerivation => Boolean): TypeDerivation = {
     VarDerivation(Nil(), BasicType(""), Var(0)) : TypeDerivation
-  }//.ensuring(p(_))
+  }.ensuring(p(_))
 
   
 
@@ -412,6 +412,106 @@ object TypingProperties {
 
   // WIP
   @opaque @pure
+  def universalSubstitutionShiftCommutativity(body: Type, arg: Type, d: BigInt, c: BigInt): Unit = {
+    require(c >= 0)
+    require(d >= 0 || TypeTr.negativeShiftValidity(body, d, c+1))
+    require(d >= 0 || TypeTr.negativeShiftValidity(arg, d, c))
+
+    TypeTrProp.boundRangeShift(TypeTr.shift(arg, d, c), 1, 0, 0)
+    TypeTrProp.boundRangeSubstitutionLemma(TypeTr.shift(body, d, c+1), 0, TypeTr.shift(TypeTr.shift(arg, d, c), 1, 0))
+    TypeTrProp.boundRangeShiftBackLemma(TypeTr.substitute(TypeTr.shift(body, d, c+1), 0, TypeTr.shift(TypeTr.shift(arg, d, c), 1, 0)), 1, 0)
+
+    assert(
+      universalSubstitution(TypeTr.shift(body, d, c+1), TypeTr.shift(arg, d, c))
+      ==
+      TypeTr.shift(TypeTr.substitute(
+        TypeTr.shift(body, d, c+1), 
+        0, 
+        TypeTr.shift(TypeTr.shift(arg, d, c), 1, 0)
+      ), -1, 0)
+    )
+
+    if(d >= 0) {
+      assert(
+        TypeTr.shift(universalSubstitution(body, arg), d, c)
+        ==
+        universalSubstitution(TypeTr.shift(body, d, c+1), TypeTr.shift(arg, d, c))
+      )
+    }
+    else {
+      assert(d < 0)
+      TypeTrProp.boundRangeNegativeShiftableCorrespondance(body, -d, c+1)
+      TypeTrProp.boundRangeNegativeShiftableCorrespondance(arg, -d, c)
+
+      TypeTrProp.shiftCommutativity2(arg, d, c, 1, 0)
+      assert(TypeTr.shift(TypeTr.shift(arg, d, c), 1, 0) == TypeTr.shift(TypeTr.shift(arg, 1, 0), d, c+1))
+      assert(
+        universalSubstitution(TypeTr.shift(body, d, c+1), TypeTr.shift(arg, d, c))
+        ==
+        TypeTr.shift(TypeTr.substitute(
+          TypeTr.shift(body, d, c+1), 
+          0, 
+          TypeTr.shift(TypeTr.shift(arg, 1, 0), d, c+1)
+        ), -1, 0)
+      )
+
+      TypeTrProp.boundRangeShiftCutoff(arg, 1, 0, c, -d)
+      TypeTrProp.shiftSubstitutionCommutativityTypeNeg2(body, -d, c+1, 0, TypeTr.shift(arg, 1, 0))
+      assert(
+        TypeTr.substitute(
+          TypeTr.shift(body, d, c+1), 
+          0, 
+          TypeTr.shift(TypeTr.shift(arg, 1, 0), d, c+1)
+        )
+        ==
+        TypeTr.shift(
+          TypeTr.substitute(body, 0, TypeTr.shift(arg, 1, 0)), 
+          d, c+1
+        )
+      )
+      assert(
+        universalSubstitution(TypeTr.shift(body, d, c+1), TypeTr.shift(arg, d, c))
+        ==
+        TypeTr.shift(TypeTr.shift(
+          TypeTr.substitute(body, 0, TypeTr.shift(arg, 1, 0)), 
+          d, c+1
+        ), -1, 0)
+      )
+
+      TypeTrProp.boundRangeShift(arg, 1, 0, 0)
+      TypeTrProp.boundRangeSubstitutionLemma(body, 0, TypeTr.shift(arg, 1, 0))
+      assert(!TypeTr.substitute(body, 0, TypeTr.shift(arg, 1, 0)).hasFreeVariablesIn(0, 1))
+      TypeTrProp.boundRangeNegativeShiftableCorrespondance(TypeTr.substitute(body, 0, TypeTr.shift(arg, 1, 0)), 1, 0)
+      TypeTrProp.shiftCommutativity4(TypeTr.substitute(body, 0, TypeTr.shift(arg, 1, 0)), d, c+1, -1, 0)
+      assert(
+        universalSubstitution(TypeTr.shift(body, d, c+1), TypeTr.shift(arg, d, c))
+        ==
+        TypeTr.shift(TypeTr.shift(
+          TypeTr.substitute(body, 0, TypeTr.shift(arg, 1, 0)), 
+          -1, 0
+        ), d, c)
+      )
+      assert(
+        TypeTr.shift(universalSubstitution(body, arg), d, c)
+        ==
+        TypeTr.shift(TypeTr.shift(
+          TypeTr.substitute(body, 0, TypeTr.shift(arg, 1, 0)), 
+          -1, 0
+        ), d, c)
+      )
+      assert(TypeTr.negativeShiftValidity(universalSubstitution(body, arg), d, c))
+    }
+  }.ensuring(
+    ( d >= 0 || TypeTr.negativeShiftValidity(universalSubstitution(body, arg), d, c) ) &&
+    (
+      TypeTr.shift(universalSubstitution(body, arg), d, c)
+      ==
+      universalSubstitution(TypeTr.shift(body, d, c+1), TypeTr.shift(arg, d, c))
+      // There is possibly a missing +1/shift missing somewhere
+    )
+  )
+
+  @opaque @pure
   def termAndEnvNegativeShiftValidityImplyTypeNegativeShiftValidity(td: TypeDerivation, s: BigInt, c: BigInt): Unit = {
     require(td.isValid)
     require(s < 0)
@@ -495,7 +595,6 @@ object TypingProperties {
     }
   }.ensuring(TypeTr.negativeShiftValidity(td.t, s, c))
 
-  // WIP
   @opaque @pure
   def shiftTypesInEnv(td: TypeDerivation, s: BigInt, c: BigInt): TypeDerivation = {
     require(td.isValid)
@@ -508,13 +607,6 @@ object TypingProperties {
     }
     assert(s >= 0 || TypeTr.negativeShiftValidity(td.t, s, c))
 
-    val p = (res: TypeDerivation) => {
-      res.isValid &&
-      ( res.env == TypeTr.shift(td.env, s, c) ) &&
-      ( res.term == TypeTr.shift(td.term, s, c) ) &&
-      ( res.t == TypeTr.shift(td.t, s, c) )
-    }
-
     val newEnv = TypeTr.shift(td.env, s, c)
     val newTyp = TypeTr.shift(td.t, s, c)
     val newTerm = TypeTr.shift(td.term, s, c)
@@ -526,8 +618,10 @@ object TypingProperties {
         TypeTrProp.shiftIndexing(env, s, c, k)
         VarDerivation(newEnv, newTyp, newTerm.asInstanceOf[Var])
       }
-      case AbsDerivation(env, typ, Abs(argType, body), btd) => {
-        mAgIcDeRiVaTiOn(p)
+      case AbsDerivation(env, typ, Abs(argTyp, body), btd) => {
+        val btdp = shiftTypesInEnv(btd, s, c)
+        TypeTrProp.shiftPrepend(argTyp, td.env, s, c)
+        AbsDerivation(newEnv, newTyp, Abs(TypeTr.shift(argTyp, s, c), btdp.term), btdp)
       }
       case AppDerivation(_, typ, _, td1, td2) => {
         val td1p = shiftTypesInEnv(td1, s, c)
@@ -545,24 +639,34 @@ object TypingProperties {
           TypeTrProp.boundRangeNegativeShiftableCorrespondance(TypeTr.shift(td.env, 1, 0), -s, c+1)
         }
         val btdp = shiftTypesInEnv(btd, s, c+1)
-        val res = TAbsDerivation(newEnv, newTyp, TAbs(btdp.term), btdp)
-        assert(res.isValid)
-        assert( res.env == TypeTr.shift(td.env, s, c) )
-        assert( res.term == TypeTr.shift(td.term, s, c) )
-        assert( res.t == TypeTr.shift(td.t, s, c) )
-        res
+        if(s < 0) {
+          TypeTrProp.shiftCommutativity2(td.env, s, c, 1, 0)
+        }
+        else {
+          TypeTrProp.shiftCommutativity(td.env, c, 0, 1, s)
+        }
+        TAbsDerivation(newEnv, newTyp, TAbs(btdp.term), btdp)
       }
-      case TAppDerivation(_, _, TApp(_, typeArg), btd) => {
+      case TAppDerivation(_, typ, TApp(_, typeArg), btd) => {
         val btdp = shiftTypesInEnv(btd, s, c)
+        
+        assert(btd.t.isInstanceOf[UniversalType])
+        val UniversalType(bodyTyp) = btd.t
+
+        if (s < 0) {
+          assert(TypeTr.negativeShiftValidity(btd.t, s, c))
+          assert(TypeTr.negativeShiftValidity(bodyTyp, s, c+1))
+        }
+        assert(s >= 0 || TypeTr.negativeShiftValidity(bodyTyp, s, c+1))
+
+        universalSubstitutionShiftCommutativity(bodyTyp, typeArg, s, c)
+
         val res = TAppDerivation(newEnv, newTyp, TApp(btdp.term, TypeTr.shift(typeArg, s, c)), btdp)
-        assert(res.isValid)
-        assert( res.env == TypeTr.shift(td.env, s, c) )
-        assert( res.term == TypeTr.shift(td.term, s, c) )
-        assert( res.t == TypeTr.shift(td.t, s, c) )
         res
       }
     }
   }.ensuring(res =>
+    ( s >= 0 || TypeTr.negativeShiftValidity(td.t, s, c) ) &&
     res.isValid &&
     ( res.env == TypeTr.shift(td.env, s, c) ) &&
     ( res.term == TypeTr.shift(td.term, s, c) ) &&
@@ -666,23 +770,6 @@ object TypingProperties {
   )
 
   // WIP
-  // @extern
-  // def universalSubstitutionShiftCommutativity(body: Type, arg: Type, d: BigInt, c: BigInt): Unit = {
-  //   require(c >= 0)
-  //   require(d >= 0 || TypeTr.negativeShiftValidity(body, d, c))
-  //   require(d >= 0 || TypeTr.negativeShiftValidity(arg, d, c))
-    
-  // }.ensuring(
-  //   ( d >= 0 || TypeTr.negativeShiftValidity(universalSubstitution(body, arg), d, c) ) &&
-  //   (
-  //     TypeTr.shift(universalSubstitution(body, arg), d, c)
-  //     ==
-  //     universalSubstitution(TypeTr.shift(body, d, c), TypeTr.shift(arg, d, c))
-  //     // There is possibly a missing +1/shift missing somewhere
-  //   )
-  // )
-
-  // WIP
   @opaque @pure
   def universalSubstitutionSubstitutionCommutativity(body: Type, arg: Type, j: BigInt, s: Type): Unit = {
     require(j >= 0)
@@ -738,11 +825,11 @@ object TypingProperties {
         //   ==
         //   universalSubstitution(TypeTr.substitute(t, j+2, TypeTr.shift(TypeTr.shift(s, 1, 0), 1, 0)), TypeTr.substitute(TypeTr.shift(arg, 1, 0), j+1, TypeTr.shift(s, 1, 0)))
         // )
-        aSsUmE(
-          TypeTr.substitute(universalSubstitution(body, arg), j, s)
-          ==
-          universalSubstitution(TypeTr.substitute(body, j+1, TypeTr.shift(s, 1, 0)), TypeTr.substitute(arg, j, s))
-        )
+        // aSsUmE(
+        //   TypeTr.substitute(universalSubstitution(body, arg), j, s)
+        //   ==
+        //   universalSubstitution(TypeTr.substitute(body, j+1, TypeTr.shift(s, 1, 0)), TypeTr.substitute(arg, j, s))
+        // )
       }
     }
 

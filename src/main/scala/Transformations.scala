@@ -1326,6 +1326,47 @@ object TransformationsProperties {
       }
     }.ensuring(negativeShiftValidity(env, -d, c))
 
+
+    @opaque @pure
+    def shiftCommutativity(env: Environment, c: BigInt, d: BigInt, a: BigInt, b: BigInt) : Unit ={
+      require(c >= 0)
+      require(d >= 0)
+      require(b >= 0)
+      require(a >= 0)
+      require(d <= c)
+      
+      env match {
+        case Nil() => ()
+        case Cons(h, t) => {
+          shiftCommutativity(h, c, d, a, b)
+          shiftCommutativity(t, c, d, a, b)
+        }
+      }
+    }.ensuring(shift(shift(env, b, c), a, d) == shift(shift(env, a, d), b, c + a))
+    
+
+    @opaque @pure
+    def shiftCommutativity2(env: Environment, d1: BigInt, c1: BigInt, d2: BigInt, c2: BigInt) : Unit ={
+      require(c1 >= 0)
+      require(c2 >= 0)
+      require(d1 < 0)
+      require(d2 >= 0)
+      require(c2 <= c1)
+      require(negativeShiftValidity(env, d1, c1) || negativeShiftValidity(shift(env, d2, c2), d1, c1+d2))
+
+      env match {
+        case Nil() => ()
+        case Cons(h, t) => {
+          shiftCommutativity2(h, d1, c1, d2, c2)
+          shiftCommutativity2(t, d1, c1, d2, c2)
+        }
+      }
+    }.ensuring(
+      negativeShiftValidity(env, d1, c1) &&
+      negativeShiftValidity(shift(env, d2, c2), d1, c1+d2) &&
+      shift(shift(env, d1, c1), d2, c2) == shift(shift(env, d2, c2), d1, c1+d2)
+    )
+
     /// Environment shift is map-like
 
     @opaque @pure
@@ -1348,6 +1389,16 @@ object TransformationsProperties {
     }.ensuring(
       ( d >= 0 || negativeShiftValidity(env(j), d, c) ) &&
       ( shift(env, d, c)(j) == shift(env(j), d, c) )
+    )
+
+    @opaque @pure
+    def shiftPrepend(h: Type, @induct t: Environment, d: BigInt, c: BigInt): Unit = {
+      require(d >= 0 || negativeShiftValidity(h, d, c))
+      require(d >= 0 || negativeShiftValidity(t, d, c))
+    }.ensuring(
+      shift(h, d, c) :: shift(t, d, c)
+      ==
+      shift(h :: t, d, c)
     )
 
     @opaque @pure
