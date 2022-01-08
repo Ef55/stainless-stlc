@@ -817,9 +817,18 @@ object TransformationsProperties {
         }
       }
     }.ensuring(
-      shift(substitute(typ, k, subs), s, c) 
-      == 
-      substitute(shift(typ, s, c), k, shift(subs, s, c))
+      ( 
+        s >= 0 || (
+          negativeShiftValidity(substitute(typ, k, subs), s, c) &&
+          negativeShiftValidity(typ, s, c) &&
+          negativeShiftValidity(subs, s, c) 
+        ) 
+      ) &&
+      (
+        shift(substitute(typ, k, subs), s, c) 
+        == 
+        substitute(shift(typ, s, c), k, shift(subs, s, c))
+      )
     )
 
     @opaque @pure
