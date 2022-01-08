@@ -225,15 +225,6 @@ object TypingProperties {
 
 
   /// Preservation
-  @extern
-  def aSsUmE(b: Boolean): Unit = {}.ensuring(b)
-
-  @extern
-  def mAgIcDeRiVaTiOn(p: TypeDerivation => Boolean): TypeDerivation = {
-    VarDerivation(Nil(), BasicType(""), Var(0)) : TypeDerivation
-  }.ensuring(p(_))
-
-  
 
   @opaque @pure
   def environmentWeakening(td: TypeDerivation, envExt: Environment): TypeDerivation = {
@@ -410,7 +401,6 @@ object TypingProperties {
     ( td.t == res.t)
   )
 
-  // WIP
   @opaque @pure
   def universalSubstitutionShiftCommutativity(body: Type, arg: Type, d: BigInt, c: BigInt): Unit = {
     require(c >= 0)
@@ -724,7 +714,6 @@ object TypingProperties {
     ( res.t == TypeTr.shift(td.t, s, c) )
   )
 
-  // Fragile
   @opaque @pure
   def preservationUnderSubst(td: TypeDerivation, j: BigInt, sd: TypeDerivation): TypeDerivation = {
     require(td.isValid)
@@ -820,69 +809,67 @@ object TypingProperties {
     TypeTr.substitute(TypeTr.shift(env, s, 0), k+s, TypeTr.shift(subs, s, 0))
   )
 
-  // WIP
   @opaque @pure
   def universalSubstitutionSubstitutionCommutativity(body: Type, arg: Type, j: BigInt, s: Type): Unit = {
     require(j >= 0)
-    body match {
-      case VariableType(k) => {
-        if(k == 0) {
-          TypeTrProp.boundRangeShift(arg, 1, 0, 0)
-          TypeTrProp.boundRangeShiftComposition(arg, 1, -1, 0, 0)
-          TypeTrProp.shift0Identity(arg, 0)
-          assert(TypeTr.substitute(universalSubstitution(body, arg), j, s) == TypeTr.substitute(arg, j, s))
+    
+    TypeTrProp.boundRangeShift(arg, 1, 0, 0)
+    TypeTrProp.boundRangeSubstitutionLemma(body, 0, TypeTr.shift(arg, 1, 0))
+    TypeTrProp.boundRangeShiftBackLemma(TypeTr.substitute(body, 0, TypeTr.shift(arg, 1, 0)), 1, 0)
 
-          assert(j+1 != k)
-          TypeTrProp.boundRangeShift(TypeTr.substitute(arg, j, s), 1, 0, 0)
-          TypeTrProp.boundRangeShiftComposition(TypeTr.substitute(arg, j, s), 1, -1, 0, 0)
-          TypeTrProp.shift0Identity(TypeTr.substitute(arg, j, s), 0)
-          assert(universalSubstitution(TypeTr.substitute(body, j+1, TypeTr.shift(s, 1, 0)), TypeTr.substitute(arg, j, s)) == TypeTr.substitute(arg, j, s))
-        }
-        else if(k == j+1) {
-          assert(universalSubstitution(body, arg) == VariableType(j))
-          assert(TypeTr.substitute(universalSubstitution(body, arg), j, s) == s)
+    assert(
+      TypeTr.substitute(universalSubstitution(body, arg), j, s)
+      ==
+      TypeTr.substitute(
+        TypeTr.shift(TypeTr.substitute(body, 0, TypeTr.shift(arg, 1, 0)), -1, 0),
+        j,
+        s
+      )
+    )
 
-          assert(j+1 != 0)
-          TypeTrProp.boundRangeShift(s, 1, 0, 0)
-          TypeTrProp.boundRangeShiftComposition(s, 1, -1, 0, 0)
-          TypeTrProp.shift0Identity(s, 0)
-          TypeTrProp.boundRangeSubstitutionIdentity(TypeTr.shift(s, 1, 0), 0, TypeTr.shift(TypeTr.substitute(arg, j, s), 1, 0))
-          assert(universalSubstitution(TypeTr.substitute(body, j+1, TypeTr.shift(s, 1, 0)), TypeTr.substitute(arg, j, s)) == s)
-        }
-        else {
-          assert(
-            TypeTr.substitute(universalSubstitution(body, arg), j, s)
-            ==
-            universalSubstitution(TypeTr.substitute(body, j+1, s), TypeTr.substitute(arg, j, s))
-          )
-        }
-      }
-      case BasicType(_) => {
-        assert(
-          TypeTr.substitute(universalSubstitution(body, arg), j, s)
-          ==
-          universalSubstitution(TypeTr.substitute(body, j+1, TypeTr.shift(s, 1, 0)), TypeTr.substitute(arg, j, s))
-        )
-      }
-      case ArrowType(t1, t2) => {
-        universalSubstitutionSubstitutionCommutativity(t1, arg, j, s)
-        universalSubstitutionSubstitutionCommutativity(t2, arg, j, s)
-      }
-      case UniversalType(t) => {
-        universalSubstitutionSubstitutionCommutativity(t, TypeTr.shift(arg, 1, 0), j+1, TypeTr.shift(s, 1, 0))
-        // Supposed to be IH...
-        // assert(
-        //   TypeTr.substitute(universalSubstitution(t, TypeTr.shift(arg, 1, 0)), j+1, TypeTr.shift(s, 1, 0))
-        //   ==
-        //   universalSubstitution(TypeTr.substitute(t, j+2, TypeTr.shift(TypeTr.shift(s, 1, 0), 1, 0)), TypeTr.substitute(TypeTr.shift(arg, 1, 0), j+1, TypeTr.shift(s, 1, 0)))
-        // )
-        // aSsUmE(
-        //   TypeTr.substitute(universalSubstitution(body, arg), j, s)
-        //   ==
-        //   universalSubstitution(TypeTr.substitute(body, j+1, TypeTr.shift(s, 1, 0)), TypeTr.substitute(arg, j, s))
-        // )
-      }
-    }
+    TypeTrProp.shiftSubstitutionCommutativityTypeNeg(TypeTr.substitute(body, 0, TypeTr.shift(arg, 1, 0)), 1, 0, j, s)
+    assert(
+      TypeTr.substitute(universalSubstitution(body, arg), j, s)
+      ==
+      TypeTr.shift(
+        TypeTr.substitute(
+          TypeTr.substitute(body, 0, TypeTr.shift(arg, 1, 0)), 
+          j+1, 
+          TypeTr.shift(s, 1, 0)),
+        -1,
+        0
+      )
+    )
+
+    assert(0 != j+1)
+    TypeTrProp.boundRangeShift(s, 1, 0, 0)
+    TypeTrProp.substitutionCommutativity(body, 0, TypeTr.shift(arg, 1, 0), j+1, TypeTr.shift(s, 1, 0))
+    assert(
+      TypeTr.substitute(universalSubstitution(body, arg), j, s)
+      ==
+      TypeTr.shift(
+        TypeTr.substitute(
+          TypeTr.substitute(body, j+1, TypeTr.shift(s, 1, 0)), 
+          0, 
+          TypeTr.substitute(TypeTr.shift(arg, 1, 0), j+1, TypeTr.shift(s, 1, 0))),
+        -1,
+        0
+      )
+    )
+
+    TypeTrProp.shiftSubstitutionCommutativityType(arg, 1, 0, j, s)
+    assert(
+      TypeTr.substitute(universalSubstitution(body, arg), j, s)
+      ==
+      TypeTr.shift(
+        TypeTr.substitute(
+          TypeTr.substitute(body, j+1, TypeTr.shift(s, 1, 0)), 
+          0, 
+          TypeTr.shift(TypeTr.substitute(arg, j, s), 1, 0)),
+        -1,
+        0
+      )
+    )
 
   }.ensuring(
     TypeTr.substitute(universalSubstitution(body, arg), j, s)
