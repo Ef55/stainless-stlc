@@ -122,7 +122,7 @@ object SystemFParser extends Parsers {
   lazy val typs: Syntax[Seq[Type]] = rep1sep(atomicTyp, arrow)
 
   lazy val typ: Syntax[Type] = recursive(
-    (universal ~>~ typ).map(UniversalType(_): Type) |
+    (universal ~>~ bodySeparator ~>~ typ).map(UniversalType(_): Type) |
     typs.map(ls => ls.reduceRight((t1, t2) => ArrowType(t1, t2)))
   )
 
