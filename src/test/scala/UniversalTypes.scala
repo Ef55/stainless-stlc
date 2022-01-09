@@ -8,10 +8,10 @@ import Typing._
 import org.scalatest._
 import flatspec._
 
-// Tests to help ensure the implemented System-f
+// Tests to help ensure the implemented System F
 // behaves (seemingly) correctly, so that we don't
 // lose time trying to prove things which might not
-// hold if the system is incorrect
+// hold if the calculus is implemented incorrectly
 class UniversalTypeTests extends AnyFlatSpec {
   
   val intType = BasicType("Int")
