@@ -8,22 +8,11 @@ object Transformations {
   import SystemF._
 
   object Terms {
-    def negativeShiftValidity(t: Term, d: BigInt, c: BigInt): Boolean = {
-      require(d < 0)
-      t match {
-        case Var(k)         => (k < c) || (k+d >= c)
-        case Abs(_, body)   => negativeShiftValidity(body, d, c+1)
-        case App(t1, t2)    => negativeShiftValidity(t1, d, c) && negativeShiftValidity(t2, d, c)
-        case Fix(f)         => negativeShiftValidity(f, d, c)
-        case TAbs(body)     => negativeShiftValidity(body, d, c)
-        case TApp(t, _)     => negativeShiftValidity(t, d, c)
-      }
-    }
 
     // ↑ᵈ_c(t)
     def shift(t: Term, d: BigInt, c: BigInt): Term = {
-      require(d >= 0 || negativeShiftValidity(t, d, c))
       require(c >= 0)
+      require(if(d < 0){!t.hasFreeVariablesIn(c, -d)} else{true})
       t match {
         case Var(k)    => if (k < c) Var(k) else Var(k + d)
         case Abs(typ, body) => Abs(typ, shift(body, d, c+1))
@@ -48,19 +37,10 @@ object Transformations {
   }
 
   object Types {
-    def negativeShiftValidity(t: Type, d: BigInt, c: BigInt): Boolean = {
-      require(d < 0)
-      t match {
-        case BasicType(_) => true
-        case ArrowType(t1, t2) =>  negativeShiftValidity(t1, d, c) && negativeShiftValidity(t2, d, c)
-        case VariableType(k) => (k < c) || (k+d >= c)
-        case UniversalType(body) => negativeShiftValidity(body, d, c+1)
-      }
-    }
 
     def shift(t: Type, d: BigInt, c: BigInt): Type = {
-      require(d >= 0 || negativeShiftValidity(t, d, c))
       require(c >= 0)
+      require(if(d < 0){!t.hasFreeVariablesIn(c, -d)} else true)
       t match {
         case BasicType(_) => t
         case ArrowType(t1, t2) => ArrowType(shift(t1, d, c), shift(t2, d, c))
@@ -78,21 +58,10 @@ object Transformations {
       }
     }
 
-    def negativeShiftValidity(t: Term, d: BigInt, c: BigInt): Boolean = {
-      require(d < 0)
-      t match {
-        case Var(k) => true
-        case Abs(typ, body) => negativeShiftValidity(typ, d, c) && negativeShiftValidity(body, d, c)
-        case App(t1, t2) => negativeShiftValidity(t1, d, c) && negativeShiftValidity(t2, d, c)
-        case Fix(f) => negativeShiftValidity(f, d, c)
-        case TAbs(body) => negativeShiftValidity(body, d, c+1)
-        case TApp(t, typ) => negativeShiftValidity(t, d, c) && negativeShiftValidity(typ, d, c)
-      }
-    }
-
     def shift(t: Term, d: BigInt, c: BigInt): Term = {
-      require(d >= 0 || negativeShiftValidity(t, d, c))
       require(c >= 0)
+      require(if(d < 0) {!t.hasFreeTypeVariablesIn(c, -d)} else{true})
+      
       t match {
         case Var(k) => t
         case Abs(typ, body) => Abs(shift(typ, d, c), shift(body, d, c))
@@ -114,26 +83,13 @@ object Transformations {
       }
     }
 
-    def negativeShiftValidity(env: Environment, d: BigInt, c: BigInt): Boolean = {
-      require(d < 0)
-
-      env match {
-        case Nil() => true
-        case Cons(h, t) => negativeShiftValidity(h, d, c) && negativeShiftValidity(t, d, c)
-      }
-    }
-
     def shift(env: Environment, d: BigInt, c: BigInt): Environment = {
-      require(d >= 0 || negativeShiftValidity(env, d, c))
       require(c >= 0)
-
+      require(if(d < 0) !hasFreeVariablesIn(env, c, -d) else true)
+      
       env match {
         case Nil() => Nil[Type]()
         case Cons(h, t) => {
-          if(d < 0) {
-            assert(negativeShiftValidity(env, d, c))
-            assert(negativeShiftValidity(h, d, c))
-          }
           Cons(shift(h, d, c), shift(t, d, c))
         }
       }
@@ -157,8 +113,8 @@ object TransformationsProperties {
     def boundRangeTypeShiftIdentity(t: Term, s: BigInt, c: BigInt, a: BigInt, b: BigInt): Unit = {
       require(a >= 0)
       require(b >= 0)
-      require(s >= 0 || Transformations.Types.negativeShiftValidity(t, s, c))
       require(c >= 0)
+      require(if(s < 0){!t.hasFreeTypeVariablesIn(c, -s)} else{true})
 
       t match {
         case Var(_) => {
@@ -214,8 +170,7 @@ object TransformationsProperties {
 
       assert(!shift(t, a, c).hasFreeVariablesIn(d, a))
       if(b < 0){
-        boundRangeDecrease(shift(t, a, c), d, a, -b)
-        boundRangeShiftBackLemma(shift(t, a, c), -b, d)        
+        boundRangeDecrease(shift(t, a, c), d, a, -b)       
       }
       else{
         ()
@@ -297,11 +252,11 @@ object TransformationsProperties {
 
       t match {
         case Var(k) => {
-          boundRangeSinglize(s, 0, j+1, j)
+          boundRangeIncreaseCutoff(s, 0, j, j+1)
         }
         case Abs(_, body) => {
           boundRangeShift(s, 1, 0, j+1)
-          boundRangeSinglize(shift(s, 1, 0), 0, j+2, j+1)
+          boundRangeIncreaseCutoff(shift(s, 1, 0), 0, j + 1, j+2)
           boundRangeSubstitutionLemma(body, j+1, shift(s, 1, 0))
         }
         case App(t1, t2) => {
@@ -319,57 +274,13 @@ object TransformationsProperties {
           boundRangeSubstitutionLemma(t, j, s)
         }
       }
-    }.ensuring(!substitute(t, j, s).hasFreeVariable(j))
-
-    @opaque @pure
-    def boundRangeShiftBackLemma(t: Term, d: BigInt, c: BigInt): Unit = {
-      require(c >= 0)
-      require(d > 0)
-      require(!t.hasFreeVariablesIn(c, d))
-
-      t match {
-        case Var(k) => assert(negativeShiftValidity(t, -d, c))
-        case Abs(_, body) => {
-          boundRangeShiftBackLemma(body, d, c+1)
-          assert(negativeShiftValidity(t, -d, c))
-        }
-        case App(t1, t2) => {
-          boundRangeShiftBackLemma(t1, d, c)
-          boundRangeShiftBackLemma(t2, d, c)
-          assert(negativeShiftValidity(t, -d, c))
-        }
-        case Fix(f) => boundRangeShiftBackLemma(f, d, c)
-        case TAbs(body)     => boundRangeShiftBackLemma(body, d, c)
-        case TApp(t, _)     => boundRangeShiftBackLemma(t, d, c)
-      }
-    }.ensuring(negativeShiftValidity(t, -d, c))
+    }.ensuring(!substitute(t, j, s).hasFreeVariablesIn(j, 1))
   }
 
   object Types {
     import SystemFProperties.Types._
     import Transformations.Types._
 
-    @opaque @pure
-    def boundRangeNegativeShiftableCorrespondance(t: Type, s: BigInt, c: BigInt): Unit = {
-      require(s > 0)
-      require(c >= 0)
-
-      t match {
-        case VariableType(_) => ()
-        case BasicType(_) => ()
-        case ArrowType(t1, t2) => {
-          boundRangeNegativeShiftableCorrespondance(t1, s, c)
-          boundRangeNegativeShiftableCorrespondance(t2, s, c)
-        }
-        case UniversalType(b) => {
-          boundRangeNegativeShiftableCorrespondance(b, s, c+1)
-        }
-      }
-    }.ensuring(
-      !t.hasFreeVariablesIn(c, s)
-      ==
-      negativeShiftValidity(t, -s, c)
-    )
 
     @opaque @pure
     def boundRangeSubstitutionIdentity(t: Type, j: BigInt, typ: Type): Unit = {
@@ -440,8 +351,7 @@ object TransformationsProperties {
 
       assert(!shift(t, a, c).hasFreeVariablesIn(d, a))
       if(b < 0){
-        boundRangeDecrease(shift(t, a, c), d, a, -b)
-        boundRangeShiftBackLemma(shift(t, a, c), -b, d)        
+        boundRangeDecrease(shift(t, a, c), d, a, -b)      
       }
       else{
         ()
@@ -459,7 +369,7 @@ object TransformationsProperties {
         }
       }
     }.ensuring(
-      (b >= 0 || negativeShiftValidity(shift(t, a, c), b, d)) &&
+      (if(b < 0){!shift(t, a, c).hasFreeVariablesIn(d, -b)} else true) &&
       shift(shift(t, a, c), b, d) == shift(t, a + b, c)
     )
 
@@ -537,11 +447,11 @@ object TransformationsProperties {
       t match {
         case BasicType(_) => 
         case VariableType(v) => {
-          boundRangeSinglize(s, 0, j+1, j)
+          boundRangeIncreaseCutoff(s, 0, j, j+1)
         }
         case UniversalType(body) => {
           boundRangeShift(s, 1, 0, j+1)
-          boundRangeSinglize(shift(s, 1, 0), 0, j+2, j+1)
+          boundRangeIncreaseCutoff(shift(s, 1, 0), 0, j + 1, j+2)
           boundRangeSubstitutionLemma(body, j+1, shift(s, 1, 0))
         }
         case ArrowType(t1, t2) => {
@@ -549,28 +459,8 @@ object TransformationsProperties {
           boundRangeSubstitutionLemma(t2, j, s)
         }
       }
-    }.ensuring(!substitute(t, j, s).hasFreeVariable(j))
+    }.ensuring(!substitute(t, j, s).hasFreeVariablesIn(j, 1))
 
-    @opaque @pure
-    def boundRangeShiftBackLemma(t: Type, d: BigInt, c: BigInt): Unit = {
-      require(c >= 0)
-      require(d > 0)
-      require(!t.hasFreeVariablesIn(c, d))
-
-      t match {
-        case BasicType(_) => 
-        case VariableType(_) => assert(negativeShiftValidity(t, -d, c))
-        case UniversalType(body) => {
-          boundRangeShiftBackLemma(body, d, c+1)
-          assert(negativeShiftValidity(t, -d, c))
-        }
-        case ArrowType(t1, t2) => {
-          boundRangeShiftBackLemma(t1, d, c)
-          boundRangeShiftBackLemma(t2, d, c)
-          assert(negativeShiftValidity(t, -d, c))
-        }
-      }
-    }.ensuring(negativeShiftValidity(t, -d, c))
 
     @opaque @pure
     def shiftCommutativity(subs: Type, c: BigInt, d: BigInt, a: BigInt, b: BigInt) : Unit ={
@@ -584,60 +474,9 @@ object TransformationsProperties {
         case ArrowType(t1, t2) => 
           shiftCommutativity(t1, c, d, a, b)
           shiftCommutativity(t2, c, d, a, b)
-        case VariableType(v) =>
-          if(v < c){
-            assert(shift(VariableType(v), b, c) == VariableType(v))
-            if(v < d){
-              assert(shift(shift(VariableType(v), b, c), b, d) == VariableType(v))
-              assert(shift(VariableType(v), b, d) == VariableType(v))
-              assert(shift(shift(VariableType(v), b, d), b, c + 1) == VariableType(v))
-            }
-            else{
-              assert(shift(shift(VariableType(v), b, c), b, d) == VariableType(v + b))
-              assert(shift(VariableType(v), b, d) == VariableType(v + b))
-              assert(shift(shift(VariableType(v), b, d), b, c + b) == VariableType(v + b))
-            }
-          }
-          else{
-            assert(shift(VariableType(v), b, c) == VariableType(v + b))
-            if(v + b < d){
-              assert(shift(shift(VariableType(v), b, c), b, d) == VariableType(v + b))
-              assert(shift(VariableType(v), b, d) == VariableType(v))
-              assert(shift(shift(VariableType(v), b, d), 1, c + b) == shift(VariableType(v), b, c + b))
-              if(v < c + b){ //TODO: V == [C - C + B[
-                assert(shift(VariableType(v), 1, c + b) == VariableType(v))
-              }
-              else{
-                assert(shift(VariableType(v), 1, c + b) == VariableType(v + b))
-              }
-              
-            }
-            else{ // v + b >= d <=> v >= d - b
-              assert(shift(shift(VariableType(v), b, c), b, d) == VariableType(v + b + b))
-              if(v >= d){
-                assert(shift(VariableType(v), b, d) == VariableType(v + b))
-                assert(shift(shift(VariableType(v), b, d), b, c + b) == VariableType(v + b + b))
-              }
-              else{ // TODO: V == D - 1
-                assert(shift(VariableType(v), b, d) == VariableType(v))
-                if(v < c + b){ //TODO V == C
-                  assert(shift(shift(VariableType(v), b, d), b, c + b) == VariableType(v))
-                }
-                else{
-                  assert(shift(shift(VariableType(v), b, d), b, c + b) == VariableType(v + b))
-                }
-                
-              }
-            }
-          }
-          assert(shift(shift(VariableType(v), 1, c), 1, d) == shift(shift(VariableType(v), 1, d), 1, c + 1))
-          assert(shift(shift(subs, 1, c), 1, d) == shift(shift(subs, 1, d), 1, c + 1))
+        case VariableType(v) => ()
         case UniversalType(t) =>
-          shiftCommutativity(t, c + 1, d + 1, a, b) 
-          assert(shift(shift(t, b, c + 1), a, d + 1) == shift(shift(t, a, d + 1), b, c + a + 1))
-          assert(UniversalType(shift(shift(t, b, c + 1), a, d + 1)) == UniversalType(shift(shift(t, a, d + 1), b, c + a + 1)))
-          assert(shift(shift(UniversalType(t), b, c), a, d) == shift(shift(UniversalType(t), a, d), b, c + a))
-          assert(shift(shift(subs, b, c), a, d) == shift(shift(subs, a, d), b, c + a))
+          shiftCommutativity(t, c + 1, d + 1, a, b)
       }
     }.ensuring(shift(shift(subs, b, c), a, d) == shift(shift(subs, a, d), b, c + a))
     
@@ -648,7 +487,7 @@ object TransformationsProperties {
       require(d1 < 0)
       require(d2 >= 0)
       require(c2 <= c1)
-      require(negativeShiftValidity(subs, d1, c1) || negativeShiftValidity(shift(subs, d2, c2), d1, c1+d2))
+      require(!subs.hasFreeVariablesIn(c1, -d1) || !shift(subs, d2, c2).hasFreeVariablesIn(c1 + d2, -d1))
 
       subs match {
         case BasicType(_) => ()
@@ -664,8 +503,8 @@ object TransformationsProperties {
         }
       }
     }.ensuring(
-      negativeShiftValidity(subs, d1, c1) &&
-      negativeShiftValidity(shift(subs, d2, c2), d1, c1+d2) &&
+      !subs.hasFreeVariablesIn(c1, -d1) &&
+      !shift(subs, d2, c2).hasFreeVariablesIn(c1 + d2, -d1) &&
       shift(shift(subs, d1, c1), d2, c2) == shift(shift(subs, d2, c2), d1, c1+d2)
     )
     
@@ -676,7 +515,7 @@ object TransformationsProperties {
       require(d1 < 0)
       require(d2 >= 0)
       require(c2 >= c1)
-      require(negativeShiftValidity(subs, d1, c1) || negativeShiftValidity(shift(subs, d2, c2-d1), d1, c1))
+      require(!subs.hasFreeVariablesIn(c1, -d1) || !shift(subs, d2, c2-d1).hasFreeVariablesIn(c1, -d1))
 
       subs match {
         case BasicType(_) => ()
@@ -692,8 +531,8 @@ object TransformationsProperties {
         }
       }
     }.ensuring(
-      negativeShiftValidity(subs, d1, c1) &&
-      negativeShiftValidity(shift(subs, d2, c2-d1), d1, c1) &&
+      !subs.hasFreeVariablesIn(c1, -d1) &&
+      !shift(subs, d2, c2-d1).hasFreeVariablesIn(c1, -d1) &&
       shift(shift(subs, d1, c1), d2, c2) == shift(shift(subs, d2, c2-d1), d1, c1)
     )
 
@@ -705,9 +544,9 @@ object TransformationsProperties {
       require(d2 < 0)
       require(c1 >= c2)
       require(c2 <= c1+d2)
-      require(negativeShiftValidity(subs, d1, c1))
-      require(negativeShiftValidity(subs, d2, c2))
-      require(negativeShiftValidity(shift(subs, d1, c1), d2, c2))
+      require(!subs.hasFreeVariablesIn(c1, -d1))
+      require(!subs.hasFreeVariablesIn(c2, -d2))
+      require(!shift(subs, d1, c1).hasFreeVariablesIn(c2, -d2))
 
       subs match {
         case BasicType(_) => ()
@@ -723,7 +562,7 @@ object TransformationsProperties {
         }
       }
     }.ensuring(
-      negativeShiftValidity(shift(subs, d2, c2), d1, c1+d2) &&
+      !shift(subs, d2, c2).hasFreeVariablesIn(c1+d2, -d1) &&
       shift(shift(subs, d1, c1), d2, c2) == shift(shift(subs, d2, c2), d1, c1+d2)
     )
 
@@ -733,52 +572,15 @@ object TransformationsProperties {
       require(c >= 0 && c <= k)
 
       typ match {
-        case BasicType(_) => {
-          assert(shift(substitute(typ, k, subs), s, c) == typ)
-          assert(substitute(shift(typ, s, c), k+s, shift(subs, s, c)) == typ)
-        }
+        case BasicType(_) => ()
         case ArrowType(t1, t2) => {
           shiftSubstitutionCommutativityType(t1, s, c, k, subs)
           shiftSubstitutionCommutativityType(t2, s, c, k, subs)
         }
-        case VariableType(v) => {
-          if(v == k) {
-            assert(shift(substitute(typ, k, subs), s, c) == shift(subs, s, c))
-            assert(substitute(shift(typ, s, c), k+s, shift(subs, s, c)) == shift(subs, s, c))
-          }
-          else {
-            assert(shift(substitute(typ, k, subs), s, c) == shift(typ, s, c))
-            assert(substitute(shift(typ, s, c), k+s, shift(subs, s, c)) == shift(typ, s, c))
-          }
-        }
+        case VariableType(v) => ()
         case UniversalType(t) => {
           shiftCommutativity(subs, c, 0, 1, s)
-          assert(
-            shift(shift(subs, s, c), 1, 0)
-            ==
-            shift(shift(subs, 1, 0), s, c+1)
-          )
           shiftSubstitutionCommutativityType(t, s, c+1, k+1, shift(subs, 1, 0))
-          assert(
-            shift(substitute(t, k+1, shift(subs, 1, 0)), s, c+1)
-            ==
-            substitute(shift(t, s, c+1), k+1+s, shift(shift(subs, 1, 0), s, c+1))
-          )
-          assert(
-            UniversalType(shift(substitute(t, k+1, shift(subs, 1, 0)), s, c+1))
-            ==
-            UniversalType(substitute(shift(t, s, c+1), k+1+s, shift(shift(subs, 1, 0), s, c+1)) )
-          )
-          assert(
-            UniversalType(shift(substitute(t, k+1, shift(subs, 1, 0)), s, c+1)  ) 
-            == 
-            UniversalType(substitute(shift(t, s, c + 1), k + s + 1, shift(shift(subs, s, c), 1, 0)))
-          )
-          assert(
-            shift(substitute(UniversalType(t), k, subs), s, c) 
-            == 
-            substitute(shift(UniversalType(t), s, c), k+s, shift(subs, s, c))
-          )
         }
       }
     }.ensuring(
@@ -794,10 +596,7 @@ object TransformationsProperties {
       require(if (s < 0) {!subs.hasFreeVariablesIn(c, -s) && !typ.hasFreeVariablesIn(c, -s)} else {true})
 
       if(s < 0){
-        boundRangeNegativeShiftableCorrespondance(typ, -s, c)
-        boundRangeNegativeShiftableCorrespondance(subs, -s, c)
         boundRangeTypeSubstitutionLemma1(typ, k, subs, -s, -s, c, c)
-        boundRangeNegativeShiftableCorrespondance(substitute(typ, k, subs), -s, c)
       }
 
       typ match {
@@ -819,13 +618,9 @@ object TransformationsProperties {
         }
       }
     }.ensuring(
-      ( 
-        s >= 0 || (
-          negativeShiftValidity(substitute(typ, k, subs), s, c) &&
-          negativeShiftValidity(typ, s, c) &&
-          negativeShiftValidity(subs, s, c) 
-        ) 
-      ) &&
+        (if(s < 0){ (
+          !substitute(typ, k, subs).hasFreeVariablesIn(c, -s) 
+        )} else true) &&
       (
         shift(substitute(typ, k, subs), s, c) 
         == 
@@ -839,10 +634,8 @@ object TransformationsProperties {
       require(s > 0)
       require(!typ.hasFreeVariablesIn(c, s))
 
-      boundRangeShiftBackLemma(typ, s, c)
       boundRangeShift(subs, s, c, 0)
       boundRangeTypeSubstitutionLemma1(typ, k + s, shift(subs, s, c), s, s, c, c)
-      boundRangeShiftBackLemma(substitute(typ, k + s, shift(subs, s, c)), s, c)
 
 
       typ match {
@@ -865,8 +658,7 @@ object TransformationsProperties {
         }
       }
     }.ensuring(
-      negativeShiftValidity(substitute(typ, k + s, shift(subs, s, c)), -s, c) &&
-      negativeShiftValidity(typ, -s, c) &&
+      !substitute(typ, k + s, shift(subs, s, c)).hasFreeVariablesIn(c, s) &&
       (
         shift(substitute(typ, k + s, shift(subs, s, c)), -s, c) 
         == 
@@ -954,11 +746,6 @@ object TransformationsProperties {
           }
           boundRangeTypeSubstitutionLemma2(body, j + 1, shift(s, 1, 0), a, b, c + 1, d + 1)
 
-          assert(!substitute(body, j + 1, shift(s, 1, 0)).hasFreeVariablesIn(c + 1, a))
-          assert(!UniversalType(substitute(body, j + 1, shift(s, 1, 0))).hasFreeVariablesIn(c, a))
-          assert(!substitute(UniversalType(body), j, s).hasFreeVariablesIn(c, a))
-          assert(!substitute(t, j, s).hasFreeVariablesIn(c, a))
-
       }
     }.ensuring(!substitute(t, j, s).hasFreeVariablesIn(c, a))
 
@@ -998,10 +785,6 @@ object TransformationsProperties {
             assert(!shift(s, 1, 0).hasFreeVariablesIn(1, a))
           }
           boundRangeTypeSubstitutionLemma3(body, j + 1, shift(s, 1, 0), a, b, c + 1, d + 1)
-          assert(!substitute(body, j + 1, shift(s, 1, 0)).hasFreeVariablesIn(c + 1, b - (c - d)))
-          assert(!UniversalType(substitute(body, j + 1, shift(s, 1, 0))).hasFreeVariablesIn(c, b - (c - d)))
-          assert(!substitute(UniversalType(body), j, s).hasFreeVariablesIn(c, b - (c - d)))
-          assert(!substitute(t, j, s).hasFreeVariablesIn(c, b - (c - d)))
 
       }
     }.ensuring(!substitute(t, j, s).hasFreeVariablesIn(c, b - (c - d)))
@@ -1042,10 +825,6 @@ object TransformationsProperties {
             assert(!shift(s, 1, 0).hasFreeVariablesIn(1, a))
           }
           boundRangeTypeSubstitutionLemma4(body, j + 1, shift(s, 1, 0), a, b, c + 1, d + 1)
-          assert(!substitute(body, j + 1, shift(s, 1, 0)).hasFreeVariablesIn(d + 1, a - (d - c)))
-          assert(!UniversalType(substitute(body, j + 1, shift(s, 1, 0))).hasFreeVariablesIn(d, a - (d - c)))
-          assert(!substitute(UniversalType(body), j, s).hasFreeVariablesIn(d, a - (d - c)))
-          assert(!substitute(t, j, s).hasFreeVariablesIn(d, a - (d - c)))
 
       }
     }.ensuring(!substitute(t, j, s).hasFreeVariablesIn(d, a - (d - c)))
@@ -1054,47 +833,21 @@ object TransformationsProperties {
     def substitutionCommutativity(t: Type, j: BigInt, s: Type, k: BigInt, u: Type): Unit = {
       require(j >= 0 && k >= 0)
       require(j != k)
-      require(!u.hasFreeVariable(j))
+      require(!u.hasFreeVariablesIn(j, 1))
 
       t match {
         case VariableType(i) => {
           if(i == k) {
             boundRangeSubstitutionIdentity(u, j, substitute(s, k, u))
           }
-          else {
-            assert(
-              substitute(substitute(t, j, s), k, u)
-              ==
-              substitute(substitute(t, k, u), j, substitute(s, k, u))
-            )
-          }
         }
-        case BasicType(_) => {
-          assert(
-            substitute(substitute(t, j, s), k, u)
-            ==
-            substitute(substitute(t, k, u), j, substitute(s, k, u))
-          )
-        }
+        case BasicType(_) => ()
         case ArrowType(t1, t2) => {
           substitutionCommutativity(t1, j, s, k, u)
           substitutionCommutativity(t2, j, s, k, u)
         }
         case UniversalType(b) => {
-
-          assert(
-            substitute(substitute(UniversalType(b), j, s), k, u)
-            ==
-            UniversalType( substitute(substitute(b, j+1, shift(s, 1, 0)), k+1, shift(u, 1, 0)) )
-          )
-
           shiftSubstitutionCommutativityType(s, 1, 0, k, u)
-          assert(
-            substitute(substitute(UniversalType(b), k, u), j, substitute(s, k, u))
-            ==
-            UniversalType( substitute(substitute(b, k+1, shift(u, 1, 0)), j+1, substitute(shift(s, 1, 0), k+1, shift(u, 1, 0)) ) )
-          )
-
           boundRangeShiftCutoff(u, 1, 0, j, 1)
           substitutionCommutativity(b, j+1, shift(s, 1, 0), k+1, shift(u, 1, 0))
         }
@@ -1106,38 +859,6 @@ object TransformationsProperties {
     )
 
     /// Types in terms 
-
-    @opaque @pure
-    def boundRangeNegativeShiftableCorrespondance(t: Term, s: BigInt, c: BigInt): Unit = {
-      require(s > 0)
-      require(c >= 0)
-
-      t match {
-        case Var(_) => ()
-        case Abs(argTyp, body) => {
-          boundRangeNegativeShiftableCorrespondance(argTyp, s, c)
-          boundRangeNegativeShiftableCorrespondance(body, s, c)
-        }
-        case App(t1, t2) => {
-          boundRangeNegativeShiftableCorrespondance(t1, s, c)
-          boundRangeNegativeShiftableCorrespondance(t2, s, c)
-        }
-        case Fix(f) => {
-          boundRangeNegativeShiftableCorrespondance(f, s, c)
-        }
-        case TAbs(body) => {
-          boundRangeNegativeShiftableCorrespondance(body, s, c+1)
-        }
-        case TApp(body, typArg) => {
-          boundRangeNegativeShiftableCorrespondance(body, s, c)
-          boundRangeNegativeShiftableCorrespondance(typArg, s, c)
-        }
-      }
-    }.ensuring(
-      !t.hasFreeTypeVariablesIn(c, s)
-      ==
-      negativeShiftValidity(t, -s, c)
-    )
 
     @opaque @pure
     def boundRangeShift(t: Term, d: BigInt, c: BigInt, b: BigInt): Unit = {
@@ -1173,16 +894,14 @@ object TransformationsProperties {
       require(!s.hasFreeVariablesIn(0, j+1))
 
       t match {
-        case Var(k) => assert(!substitute(t, j, s).hasFreeTypeVariable(j))
+        case Var(k) => ()
         case Abs(targ, body) => {
           boundRangeSubstitutionLemma(targ, j, s)
           boundRangeSubstitutionLemma(body, j, s)
-          assert(!substitute(t, j, s).hasFreeTypeVariable(j))
         }
         case App(t1, t2) => {
           boundRangeSubstitutionLemma(t1, j, s)
           boundRangeSubstitutionLemma(t2, j, s)
-          assert(!substitute(t, j, s).hasFreeTypeVariable(j))
         }
         case Fix(f) => boundRangeSubstitutionLemma(f, j, s)
         case TAbs(body) => {
@@ -1194,54 +913,10 @@ object TransformationsProperties {
           boundRangeSubstitutionLemma(typ, j, s)
         }
       }
-    }.ensuring(!substitute(t, j, s).hasFreeTypeVariable(j))
+    }.ensuring(!substitute(t, j, s).hasFreeTypeVariablesIn(j, 1))
 
-    @opaque @pure
-    def boundRangeShiftBackLemma(t: Term, d: BigInt, c: BigInt): Unit = {
-      require(c >= 0)
-      require(d > 0)
-      require(!t.hasFreeTypeVariablesIn(c, d))
+  //   /// Types in environments
 
-      t match {
-        case Var(k) => assert(negativeShiftValidity(t, -d, c))
-        case Abs(targ, body) => {
-          boundRangeShiftBackLemma(targ, d, c)
-          boundRangeShiftBackLemma(body, d, c)
-          assert(negativeShiftValidity(t, -d, c))
-        }
-        case App(t1, t2) => {
-          boundRangeShiftBackLemma(t1, d, c)
-          boundRangeShiftBackLemma(t2, d, c)
-          assert(negativeShiftValidity(t, -d, c))
-        }
-        case Fix(f) => boundRangeShiftBackLemma(f, d, c)
-        case TAbs(body) => boundRangeShiftBackLemma(body, d, c+1)
-        case TApp(term, typ) => {
-          boundRangeShiftBackLemma(term, d, c)
-          boundRangeShiftBackLemma(typ, d, c)
-        }
-      }
-    }.ensuring(negativeShiftValidity(t, -d, c))
-
-    /// Types in environments
-
-    @opaque @pure
-    def boundRangeNegativeShiftableCorrespondance(env: Environment, s: BigInt, c: BigInt): Unit = {
-      require(s > 0)
-      require(c >= 0)
-
-      env match {
-        case Nil() => ()
-        case Cons(h, t) => {
-          boundRangeNegativeShiftableCorrespondance(h, s, c)
-          boundRangeNegativeShiftableCorrespondance(t, s, c)
-        }
-      }
-    }.ensuring(
-      !hasFreeVariablesIn(env, c, s)
-      ==
-      negativeShiftValidity(env, -s, c)
-    )
 
     @opaque @pure
     def boundRangeSubstitutionIdentity(env: Environment, j: BigInt, typ: Type): Unit = {
@@ -1294,7 +969,7 @@ object TransformationsProperties {
       }
 
     }.ensuring(
-      (b >= 0 || negativeShiftValidity(shift(env, a, c), b, d)) &&
+      (if (b < 0) !hasFreeVariablesIn(shift(env, a, c), d, -b) else true) &&
       shift(shift(env, a, c), b, d) == shift(env, a + b, c)
     )
 
@@ -1338,24 +1013,6 @@ object TransformationsProperties {
 
 
     @opaque @pure
-    def boundRangeShiftBackLemma(env: Environment, d: BigInt, c: BigInt): Unit = {
-      require(c >= 0)
-      require(d > 0)
-      require(!hasFreeVariablesIn(env, c, d))
-
-      env match {
-        case Nil() => {
-          assert(negativeShiftValidity(env, -d, c))
-        }
-        case Cons(h, t) => {
-          boundRangeShiftBackLemma(h, d, c)
-          boundRangeShiftBackLemma(t, d, c)
-        }
-      }
-    }.ensuring(negativeShiftValidity(env, -d, c))
-
-
-    @opaque @pure
     def shiftCommutativity(env: Environment, c: BigInt, d: BigInt, a: BigInt, b: BigInt) : Unit ={
       require(c >= 0)
       require(d >= 0)
@@ -1380,7 +1037,7 @@ object TransformationsProperties {
       require(d1 < 0)
       require(d2 >= 0)
       require(c2 <= c1)
-      require(negativeShiftValidity(env, d1, c1) || negativeShiftValidity(shift(env, d2, c2), d1, c1+d2))
+      require(!hasFreeVariablesIn(env, c1, -d1) || !hasFreeVariablesIn(shift(env, d2, c2), c1+d2, -d1))
 
       env match {
         case Nil() => ()
@@ -1390,8 +1047,8 @@ object TransformationsProperties {
         }
       }
     }.ensuring(
-      negativeShiftValidity(env, d1, c1) &&
-      negativeShiftValidity(shift(env, d2, c2), d1, c1+d2) &&
+      !hasFreeVariablesIn(env, c1, -d1) &&
+      !hasFreeVariablesIn(shift(env, d2, c2), c1+d2, -d1) &&
       shift(shift(env, d1, c1), d2, c2) == shift(shift(env, d2, c2), d1, c1+d2)
     )
 
@@ -1399,31 +1056,27 @@ object TransformationsProperties {
 
     @opaque @pure
     def shiftIndexing(env: Environment, d: BigInt, c: BigInt, j: BigInt): Unit = {
-      require(d >= 0 || negativeShiftValidity(env, d, c))
       require(c >= 0)
+      require(if(d < 0) !hasFreeVariablesIn(env, c, -d) else true)
       require(0 <= j && j < env.length)
 
       val Cons(h, t) = env
 
       if(j == 0) {
-        if(d < 0) {
-          assert(negativeShiftValidity(env, d, c))
-          assert(negativeShiftValidity(h, d, c))
-        }
       }
       else {
         shiftIndexing(t, d, c, j-1)
       }
     }.ensuring(
-      ( d >= 0 || negativeShiftValidity(env(j), d, c) ) &&
+      (if (d < 0) !env(j).hasFreeVariablesIn(c, -d) else true) &&
       ( shift(env, d, c)(j) == shift(env(j), d, c) )
     )
 
     @opaque @pure
     def shiftPrepend(h: Type, @induct t: Environment, d: BigInt, c: BigInt): Unit = {
-      require(d >= 0 || negativeShiftValidity(h, d, c))
-      require(d >= 0 || negativeShiftValidity(t, d, c))
       require(c >= 0)
+      require(if(d < 0) !h.hasFreeVariablesIn(c, -d) else true)
+      require(if(d < 0) !hasFreeVariablesIn(t, c, -d) else true)
     }.ensuring(
       shift(h, d, c) :: shift(t, d, c)
       ==
@@ -1433,11 +1086,11 @@ object TransformationsProperties {
     @opaque @pure
     def shiftConcat(@induct env1: Environment, env2: Environment, d: BigInt, c: BigInt): Unit = {
       require(c >= 0)
-      require(d >= 0 || negativeShiftValidity(env1, d, c))
-      require(d >= 0 || negativeShiftValidity(env2, d, c))
+      require(if(d < 0) !hasFreeVariablesIn(env1, c, -d) else true)
+      require(if(d < 0) !hasFreeVariablesIn(env2, c, -d) else true)
 
     }.ensuring(
-      (d >= 0 || negativeShiftValidity(env1 ++ env2, d, c)) && 
+      (if (d < 0) !hasFreeVariablesIn(env1 ++ env2, c, -d) else true) && 
       ( shift(env1 ++ env2, d, c) == (shift(env1, d, c) ++ shift(env2, d, c)) )
     )
   }

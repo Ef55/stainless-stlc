@@ -32,7 +32,6 @@ object Reduction {
     assert(!arg.hasFreeVariablesIn(0, 0))
     TermsProp.boundRangeShift(arg, 1, 0, 0)
     TermsProp.boundRangeSubstitutionLemma(body, 0, Terms.shift(arg, 1, 0))
-    TermsProp.boundRangeShiftBackLemma(Terms.substitute(body, 0, Terms.shift(arg, 1, 0)), 1, 0)
     Terms.shift(Terms.substitute(body, 0, Terms.shift(arg, 1, 0)), -1, 0)
   }
 
@@ -41,7 +40,6 @@ object Reduction {
     assert(!arg.hasFreeVariablesIn(0, 0))
     TypesProp.boundRangeShift(arg, 1, 0, 0)
     TypesProp.boundRangeSubstitutionLemma(body, 0, Types.shift(arg, 1, 0))
-    TypesProp.boundRangeShiftBackLemma(Types.substitute(body, 0, Types.shift(arg, 1, 0)), 1, 0)
     Types.shift(Types.substitute(body, 0, Types.shift(arg, 1, 0)), -1, 0)
   }
 
@@ -50,7 +48,6 @@ object Reduction {
     assert(!arg.hasFreeVariablesIn(0, 0))
     TypesProp.boundRangeShift(arg, 1, 0, 0)
     TypesProp.boundRangeSubstitutionLemma(body, 0, Types.shift(arg, 1, 0))
-    TypesProp.boundRangeShiftBackLemma(Types.substitute(body, 0, Types.shift(arg, 1, 0)), 1, 0)
     Types.shift(Types.substitute(body, 0, Types.shift(arg, 1, 0)), -1, 0)
   }
 

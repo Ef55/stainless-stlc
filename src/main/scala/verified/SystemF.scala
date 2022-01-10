@@ -6,15 +6,6 @@ import stainless.annotation._
 
 object SystemF {
   sealed trait Type {
-    def hasFreeVariable(i: BigInt): Boolean = {
-      require(i >= 0)
-      this match {
-        case BasicType(_)         => false
-        case ArrowType(t1, t2)    => t1.hasFreeVariable(i) || t2.hasFreeVariable(i)
-        case VariableType(v)      => v == i
-        case UniversalType(body)  => body.hasFreeVariable(i+1)
-      }
-    }.ensuring(res => res == this.hasFreeVariablesIn(i, 1))
 
     def hasFreeVariablesIn(c: BigInt, d: BigInt): Boolean = {
       require(c >= 0)
@@ -69,18 +60,6 @@ object SystemF {
         }
     }
 
-    def hasFreeVariable(i: BigInt): Boolean = {
-      require(i >= 0)
-      this match {
-        case Var(k)         => k == i
-        case Abs(_, body)   => body.hasFreeVariable(i+1)
-        case App(t1, t2)    => t1.hasFreeVariable(i) || t2.hasFreeVariable(i)
-        case Fix(f)         => f.hasFreeVariable(i)
-        case TAbs(body)     => body.hasFreeVariable(i)
-        case TApp(t, _)     => t.hasFreeVariable(i)
-      }
-    }.ensuring(res => res == this.hasFreeVariablesIn(i, 1))
-
     def hasFreeVariablesIn(c: BigInt, d: BigInt): Boolean = {
       require(c >= 0)
       require(d >= 0)
@@ -108,18 +87,6 @@ object SystemF {
 
       rec(this, 0)
     }
-
-    def hasFreeTypeVariable(i: BigInt): Boolean = {
-      require(i >= 0)
-      this match {
-        case Var(k)         => false
-        case Abs(typ, body) => typ.hasFreeVariable(i) || body.hasFreeTypeVariable(i)
-        case App(t1, t2)    => t1.hasFreeTypeVariable(i) || t2.hasFreeTypeVariable(i)
-        case Fix(f)         => f.hasFreeTypeVariable(i)
-        case TAbs(body)     => body.hasFreeTypeVariable(i+1)
-        case TApp(t, typ)   => t.hasFreeTypeVariable(i) || typ.hasFreeVariable(i)
-      }
-    }.ensuring(res => res == this.hasFreeTypeVariablesIn(i, 1))
 
     def hasFreeTypeVariablesIn(c: BigInt, d: BigInt): Boolean = {
       require(c >= 0)
@@ -212,30 +179,6 @@ object SystemFProperties {
         case TApp(t, _) => boundRangeConcatenation(t, a, b, c)
       }
     }.ensuring(!t.hasFreeVariablesIn(a, b + c))
-
-    @opaque @pure
-    def boundRangeSinglize(t: Term, j: BigInt, d: BigInt, i: BigInt): Unit = {
-      require(j >= 0)
-      require(d >= 0)
-      require(j <= i && i < j+d)
-      require(!t.hasFreeVariablesIn(j, d))
-
-      t match {
-        case Var(_) => assert(!t.hasFreeVariable(i))
-        case Abs(_, body) => {
-          boundRangeSinglize(body, j+1, d, i+1)
-          assert(!t.hasFreeVariable(i))
-        }
-        case App(t1, t2) => {
-          boundRangeSinglize(t1, j, d, i)
-          boundRangeSinglize(t2, j, d, i)
-          assert(!t.hasFreeVariable(i))
-        }
-        case Fix(f) => boundRangeSinglize(f, j, d, i)
-        case TAbs(body) => boundRangeSinglize(body, j, d, i)
-        case TApp(t, _) => boundRangeSinglize(t, j, d, i)
-      }
-    }.ensuring(!t.hasFreeVariable(i))
   }
 
   object Types {
@@ -293,24 +236,6 @@ object SystemFProperties {
         case UniversalType(body) => boundRangeConcatenation(body, a + 1, b, c)
       }
     }.ensuring(!t.hasFreeVariablesIn(a, b + c))
-
-    @opaque @pure
-    def boundRangeSinglize(t: Type, j: BigInt, d: BigInt, i: BigInt): Unit = {
-      require(j >= 0)
-      require(d >= 0)
-      require(j <= i && i < j+d)
-      require(!t.hasFreeVariablesIn(j, d))
-
-      t match {
-        case BasicType(_) => assert(!t.hasFreeVariable(i))
-        case ArrowType(t1, t2) => {
-          boundRangeSinglize(t1, j, d, i)
-          boundRangeSinglize(t2, j, d, i)
-        }
-        case VariableType(v) => assert(!t.hasFreeVariable(i))
-        case UniversalType(body) => boundRangeSinglize(body, j+1, d, i+1)
-      }
-    }.ensuring(!t.hasFreeVariable(i))
 
     @opaque @pure
     def boundRangeDecrease(t: Term, c: BigInt, d1: BigInt, d2: BigInt): Unit = {
@@ -391,31 +316,6 @@ object SystemFProperties {
       }
     }.ensuring(!t.hasFreeTypeVariablesIn(a, b + c))
 
-    @opaque @pure
-    def boundRangeSinglize(t: Term, j: BigInt, d: BigInt, i: BigInt): Unit = {
-      require(j >= 0)
-      require(d >= 0)
-      require(j <= i && i < j+d)
-      require(!t.hasFreeTypeVariablesIn(j, d))
-
-      t match{
-        case Var(_) => ()
-        case Abs(targ, body) => {
-          boundRangeSinglize(targ, j, d, i)
-          boundRangeSinglize(body, j, d, i)
-        }
-        case App(t1, t2) => {
-          boundRangeSinglize(t1, j, d, i)
-          boundRangeSinglize(t2, j, d, i)
-        }
-        case Fix(f) => boundRangeSinglize(f, j, d, i)
-        case TAbs(body) => boundRangeSinglize(body, j+1, d, i+1)
-        case TApp(t, typ) => {
-          boundRangeSinglize(t, j, d, i)
-          boundRangeSinglize(typ, j, d, i)
-        }
-      }
-    }.ensuring(!t.hasFreeTypeVariable(i))
   }
 
 }
