@@ -170,25 +170,25 @@ object TypingProperties {
   }.ensuring(deriveType(td.env, td.term) == Some(td))
 
   @opaque @pure
-  def deriveTypeValidity(env: Environment, t: Term): Unit = {
+  def deriveTypeSoundness(env: Environment, t: Term): Unit = {
     require(deriveType(env, t).isDefined)
     t match {
       case Var(_) => ()
       case Abs(targ, body) => {
-        deriveTypeValidity(targ :: env, body)
+        deriveTypeSoundness(targ :: env, body)
       }
       case App(t1, t2) => {
-        deriveTypeValidity(env, t1)
-        deriveTypeValidity(env, t2)
+        deriveTypeSoundness(env, t1)
+        deriveTypeSoundness(env, t2)
       }
       case Fix(f) => {
-        deriveTypeValidity(env, f)
+        deriveTypeSoundness(env, f)
       }
       case TAbs(t) => {
-        deriveTypeValidity(TypeTr.shift(env, 1, 0), t)
+        deriveTypeSoundness(TypeTr.shift(env, 1, 0), t)
       }
       case TApp(t, typ) => {
-        deriveTypeValidity(env, t)
+        deriveTypeSoundness(env, t)
       }
     }
   }.ensuring(
@@ -496,7 +496,7 @@ object TypingProperties {
   }.ensuring(!td.t.hasFreeVariablesIn(c, -s))
 
   @opaque @pure
-  def shiftTypesInEnv(td: TypeDerivation, s: BigInt, c: BigInt): TypeDerivation = {
+  def shiftAllTypes(td: TypeDerivation, s: BigInt, c: BigInt): TypeDerivation = {
     require(td.isValid)
     require(c >= 0)
     require(if(s < 0) !hasFreeVariablesIn(td.env, c, -s) else true )
@@ -518,24 +518,24 @@ object TypingProperties {
         VarDerivation(newEnv, newTyp, newTerm.asInstanceOf[Var])
       }
       case AbsDerivation(env, typ, Abs(argTyp, body), btd) => {
-        val btdp = shiftTypesInEnv(btd, s, c)
+        val btdp = shiftAllTypes(btd, s, c)
         TypeTrProp.shiftPrepend(argTyp, td.env, s, c)
         AbsDerivation(newEnv, newTyp, Abs(TypeTr.shift(argTyp, s, c), btdp.term), btdp)
       }
       case AppDerivation(_, typ, _, td1, td2) => {
-        val td1p = shiftTypesInEnv(td1, s, c)
-        val td2p = shiftTypesInEnv(td2, s, c)
+        val td1p = shiftAllTypes(td1, s, c)
+        val td2p = shiftAllTypes(td2, s, c)
         AppDerivation(newEnv, newTyp, App(td1p.term, td2p.term), td1p, td2p)
       }
       case FixDerivation(_, _, _, ftd) => {
-        val ftdp = shiftTypesInEnv(ftd, s, c)
+        val ftdp = shiftAllTypes(ftd, s, c)
         FixDerivation(newEnv, newTyp, Fix(ftdp.term), ftdp)
       }
       case TAbsDerivation(_, _, _, btd) => {
         if(s < 0) {
           TypeTrProp.boundRangeShiftCutoff(td.env, 1, 0, c, -s)
         }
-        val btdp = shiftTypesInEnv(btd, s, c+1)
+        val btdp = shiftAllTypes(btd, s, c+1)
         if(s < 0) {
           TypeTrProp.shiftCommutativity2(td.env, s, c, 1, 0)
         }
@@ -545,7 +545,7 @@ object TypingProperties {
         TAbsDerivation(newEnv, newTyp, TAbs(btdp.term), btdp)
       }
       case TAppDerivation(_, typ, TApp(_, typeArg), btd) => {
-        val btdp = shiftTypesInEnv(btd, s, c)
+        val btdp = shiftAllTypes(btd, s, c)
         
         assert(btd.t.isInstanceOf[UniversalType])
         val UniversalType(bodyTyp) = btd.t
@@ -613,7 +613,7 @@ object TypingProperties {
         res
       }
       case TAbsDerivation(env, typ, TAbs(body), btd) => {
-        val sdp = shiftTypesInEnv(sd, 1, 0)
+        val sdp = shiftAllTypes(sd, 1, 0)
         TypeTrProp.shiftIndexing(sd.env, 1, 0, j)
         assert(btd.env == TypeTr.shift(sd.env, 1, 0))
         val btdp = preservationUnderSubst(btd, j, sdp)
@@ -823,7 +823,7 @@ object TypingProperties {
     // Type
     TypeTrProp.boundRangeSubstitutionLemma(typ, 0, TypeTr.shift(arg, 1, 0))
 
-    shiftTypesInEnv(td1, -1, 0)
+    shiftAllTypes(td1, -1, 0)
   }.ensuring(res =>
     res.isValid &&
     ( res.term == tabsSubstitution(tabsTd.btd.term, arg) ) &&
@@ -837,7 +837,7 @@ object TypingProperties {
   }.ensuring(td.isInstanceOf[AbsDerivation])
 
   @opaque @pure
-  def reductionPreservationTheorem(td: TypeDerivation, reduced: Term): TypeDerivation = {
+  def preservation(td: TypeDerivation, reduced: Term): TypeDerivation = {
     require(td.isValid)
     require(reducesTo(td.term, reduced).isDefined)
     decreases(td)
@@ -850,7 +850,7 @@ object TypingProperties {
         assert(rule == AbsCongruence)
         absCongruenceInversion(t, reduced)
         val tp = reduced.asInstanceOf[Abs]
-        val btdp = reductionPreservationTheorem(btd, tp.body)
+        val btdp = preservation(btd, tp.body)
         val tdp = AbsDerivation(env, typ, tp, btdp)
         assert(btdp.isValid)
         assert(btdp.term == tp.body)
@@ -874,7 +874,7 @@ object TypingProperties {
             val tp = reduced.asInstanceOf[App]
             val t1p = tp.t1
 
-            val td1p = reductionPreservationTheorem(td1, t1p)
+            val td1p = preservation(td1, t1p)
             val tdp = AppDerivation(env, typ, tp, td1p, td2)
             assert(td1p.isValid && td2.isValid)
             assert(tp == App(td1p.term, td2.term))
@@ -886,7 +886,7 @@ object TypingProperties {
             val tp = reduced.asInstanceOf[App]
             val t2p = tp.t2
             
-            val td2p = reductionPreservationTheorem(td2, t2p)
+            val td2p = preservation(td2, t2p)
             val tdp = AppDerivation(env, typ, tp, td1, td2p)
             assert(tdp.isValid)
             tdp
@@ -908,7 +908,7 @@ object TypingProperties {
             val tp = reduced.asInstanceOf[Fix]
             val fp = tp.t
 
-            val ftdp = reductionPreservationTheorem(ftd, fp)
+            val ftdp = preservation(ftd, fp)
             val tdp = FixDerivation(env, typ, tp, ftdp)
             assert(tdp.isValid)
             tdp
@@ -928,7 +928,7 @@ object TypingProperties {
             tappCongruenceInversion(t, reduced)
             val tp = reduced.asInstanceOf[TApp]
 
-            val btdp = reductionPreservationTheorem(btd, tp.t)
+            val btdp = preservation(btd, tp.t)
             val tdp = TAppDerivation(env, typ, tp, btdp)
             assert(tdp.isValid)
             tdp
@@ -944,7 +944,7 @@ object TypingProperties {
         assert(rule == TAbsCongruence)
         tabsCongruenceInversion(t, reduced)
         val tp = reduced.asInstanceOf[TAbs]
-        val btdp = reductionPreservationTheorem(btd, tp.t)
+        val btdp = preservation(btd, tp.t)
         TAbsDerivation(env, typ, tp, btdp)
       }
     }

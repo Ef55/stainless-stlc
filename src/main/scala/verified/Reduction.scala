@@ -98,36 +98,6 @@ object Reduction {
     }
   }
 
-  // { t' | t -> t' } Out-of-date
-  // def reduceAll(t: Term): Set[Term] = {
-  //   t match {
-  //     case Var(_) => Set[Term]()
-  //     case Abs(_, _) => Set[Term]()
-  //     case App(t1, t2) => {
-  //       reduceAll(t1).map[Term](t1p => App(t1p, t2)) ++ 
-  //         reduceAll(t2).map[Term](t2p => App(t1, t2p)) ++ 
-  //         (t1 match {
-  //           case Abs(_, body) => Set[Term](absSubstitution(body, t2))
-  //           case _ => Set[Term]()
-  //         })
-  //     }
-  //     case Fix(f) => {
-  //       f match {
-  //         case Abs(_, body) => reduceAll(f).map[Term](Fix(_)) + absSubstitution(body, t)
-  //         case _ => reduceAll(f).map(Fix(_))
-  //       }
-  //     }
-  //     case TAbs(body) => Set[Term]()
-  //     case TApp(term, typ) => {
-  //       reduceAll(term).map[Term](TApp(_, typ)) ++
-  //         (term match {
-  //           case TAbs(body) => Set[Term](tabsSubstitution(body, typ))
-  //           case _ => Set[Term]()
-  //         })
-  //     }
-  //   }
-  // }
-
   /// Call-by-value lambda calculus evaluation
 
   def reduceCallByValue(t: Term): Option[Term] = {
@@ -317,95 +287,6 @@ object ReductionProperties {
     t.isInstanceOf[TAbs] && tp.isInstanceOf[TAbs] &&
     reducesTo(t.asInstanceOf[TAbs].t, tp.asInstanceOf[TAbs].t).isDefined
   )
-
-  /// ReduceAll correctness
-
-  // @opaque @pure
-  // def reduceAllCompleteness(t: Term, tp: Term): Unit = {
-  //   require(reducesTo(t, tp).isDefined)
-
-  //   t match {
-  //     case Var(_) => assert(reduceAll(t).contains(tp))
-  //     case Abs(_, _) => assert(reduceAll(t).contains(tp))
-  //     case App(t1, t2) => {
-  //       tp match {
-  //         case App(t1p, t2p) if reducesTo(t1, t1p).isDefined && t2 == t2p  => {
-  //           reduceAllCompleteness(t1, t1p)
-  //           reduceAll(t1).mapPost1[Term](t1p => App(t1p, t2))(t1p)
-  //         }
-  //         case App(t1p, t2p) if t1 == t1p && reducesTo(t2, t2p).isDefined => {
-  //           reduceAllCompleteness(t2, t2p)
-  //           reduceAll(t2).mapPost1[Term](t2p => App(t1, t2p))(t2p)
-  //         }
-  //         case _ => assert(reduceAll(t).contains(tp))
-  //       }
-  //     }
-  //     case Fix(f) => {
-  //       tp match {
-  //         case Fix(fp) if reducesTo(f, fp).isDefined => {
-  //           reduceAllCompleteness(f, fp)
-  //           reduceAll(f).mapPost1[Term](Fix(_))(fp)
-  //         }
-  //         case _ => assert(reduceAll(t).contains(tp))
-  //       }
-  //     }
-  //     case TAbs(body) => assert(reducesTo(t, tp).isDefined)
-  //     case TApp(term, typ) => {
-  //       tp match {
-  //         case TApp(termp, typp) if reducesTo(term, termp).isDefined && typ == typp => {
-  //           reduceAllCompleteness(term, termp)
-  //           reduceAll(term).mapPost1[Term](TApp(_, typ))(termp)
-  //         }
-  //         case _ => assert(reduceAll(t).contains(tp))
-  //       }
-  //     }
-  //   }
-  // }.ensuring(reduceAll(t).contains(tp))
-
-  // @opaque @pure
-  // def reduceAllSoundness(t: Term, tp: Term): Unit = {
-  //   require(reduceAll(t).contains(tp))
-  //   t match {
-  //     case Var(_) => assert(reducesTo(t, tp).isDefined)
-  //     case Abs(_, _) => assert(reducesTo(t, tp).isDefined)
-  //     case App(t1, t2) => {
-  //       if(reduceAll(t1).map[Term](t1p => App(t1p, t2)).contains(tp)) {
-  //         val App(t1p, t2p) = tp
-  //         reduceAll(t1).mapPost2[Term](t1p => App(t1p, t2))(tp)
-  //         reduceAllSoundness(t1, t1p)
-  //       }
-  //       else if(reduceAll(t2).map[Term](t2p => App(t1, t2p)).contains(tp)) {
-  //         val App(t1p, t2p) = tp
-  //         reduceAll(t2).mapPost2[Term](t2p => App(t1, t2p))(tp)
-  //         reduceAllSoundness(t2, t2p)
-  //       }
-  //       else {
-  //         assert(reducesTo(t, tp).isDefined)
-  //       }
-  //     }
-  //     case Fix(f) => {
-  //       if(reduceAll(f).map[Term](Fix(_)).contains(tp)) {
-  //         val Fix(fp) = tp
-  //         reduceAll(f).mapPost2[Term](Fix(_))(tp)
-  //         reduceAllSoundness(f, fp)
-  //       }
-  //       else {
-  //         assert(reducesTo(t, tp).isDefined)
-  //       }
-  //     }
-  //     case TAbs(body) => assert(reducesTo(t, tp).isDefined)
-  //     case TApp(term, typ) => {
-  //       if(reduceAll(term).map[Term](TApp(_, typ)).contains(tp)) {
-  //         val TApp(termp, typp) = tp
-  //         reduceAll(term).mapPost2[Term](TApp(_, typ))(tp)
-  //         reduceAllSoundness(term, termp)
-  //       }
-  //       else {
-  //         assert(reducesTo(t, tp).isDefined)
-  //       }
-  //     }
-  //   }
-  // }.ensuring(reducesTo(t, tp).isDefined)
 
   /// Call-by-value soudness
 

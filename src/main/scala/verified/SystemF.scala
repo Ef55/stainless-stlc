@@ -193,7 +193,7 @@ object SystemFProperties {
 
   object Types {
 
-    def hasFreeVariablesInSoundness(t: Type, k: BigInt, c: BigInt, d: BigInt): Unit = {
+    def hasFreeVariablesInCompleteness(t: Type, k: BigInt, c: BigInt, d: BigInt): Unit = {
       require(t.freeVars.contains(k))
       require(c >= 0)
       require(d >= 0)
@@ -202,20 +202,21 @@ object SystemFProperties {
         case BasicType(_) => ()
         case ArrowType(t1, t2) => {
           if(t1.freeVars.contains(k)){
-            hasFreeVariablesInSoundness(t1, k, c, d)
+            hasFreeVariablesInCompleteness(t1, k, c, d)
           }
           else{
-            hasFreeVariablesInSoundness(t2, k, c, d)
+            hasFreeVariablesInCompleteness(t2, k, c, d)
           }
         }
         case VariableType(_) => ()
-        case UniversalType(body) => 
+        case UniversalType(body) => {
           ListProperties.mapInvertAddContains(body.freeVars.filter(x => x > 0), k, 1)
-          hasFreeVariablesInSoundness(body, k + 1, c + 1, d)
+          hasFreeVariablesInCompleteness(body, k + 1, c + 1, d)
+        }
       }
     }.ensuring(t.hasFreeVariablesIn(c, d))
 
-    def hasFreeVariablesInCompleteness(t: Type, c: BigInt, d: BigInt): Unit = {
+    def hasFreeVariablesInSoundness(t: Type, c: BigInt, d: BigInt): Unit = {
       require(c >= 0)
       require(d >= 0)
       require(t.freeVars.forall(x => x < c || x >= c + d))
@@ -224,14 +225,15 @@ object SystemFProperties {
         case BasicType(_) => ()
         case ArrowType(t1, t2) => {
           ListProperties.forallConcat(t1.freeVars, t2.freeVars, (x: BigInt) => x < c || x >= c + d)
-          hasFreeVariablesInCompleteness(t1, c, d)
-          hasFreeVariablesInCompleteness(t2, c, d)
+          hasFreeVariablesInSoundness(t1, c, d)
+          hasFreeVariablesInSoundness(t2, c, d)
         }
         case VariableType(_) => ()
-        case UniversalType(body) => 
+        case UniversalType(body) => {
           ListProperties.forallMapLemma(body.freeVars.filter(x => x > 0), c, d, 1)
           ListProperties.forallFilterLemma(body.freeVars, c, d, 1)
-          hasFreeVariablesInCompleteness(body, c + 1, d)
+          hasFreeVariablesInSoundness(body, c + 1, d)
+        }
       }
     }.ensuring(!t.hasFreeVariablesIn(c, d))
 

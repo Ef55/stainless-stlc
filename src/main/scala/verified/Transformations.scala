@@ -596,7 +596,7 @@ object TransformationsProperties {
       require(if (s < 0) {!subs.hasFreeVariablesIn(c, -s) && !typ.hasFreeVariablesIn(c, -s)} else {true})
 
       if(s < 0){
-        boundRangeTypeSubstitutionLemma1(typ, k, subs, -s, -s, c, c)
+        boundRangeSubstitutionLemma1(typ, k, subs, -s, -s, c, c)
       }
 
       typ match {
@@ -635,7 +635,7 @@ object TransformationsProperties {
       require(!typ.hasFreeVariablesIn(c, s))
 
       boundRangeShift(subs, s, c, 0)
-      boundRangeTypeSubstitutionLemma1(typ, k + s, shift(subs, s, c), s, s, c, c)
+      boundRangeSubstitutionLemma1(typ, k + s, shift(subs, s, c), s, s, c, c)
 
 
       typ match {
@@ -667,7 +667,7 @@ object TransformationsProperties {
     )
 
     @opaque @pure
-    def boundRangeTypeSubstitutionLemma1(t: Type, j: BigInt, s: Type, a: BigInt, b: BigInt, c: BigInt, d: BigInt): Unit = {
+    def boundRangeSubstitutionLemma1(t: Type, j: BigInt, s: Type, a: BigInt, b: BigInt, c: BigInt, d: BigInt): Unit = {
       require(j >= 0)
       require(a >= 0)
       require(b >= 0)
@@ -682,8 +682,8 @@ object TransformationsProperties {
         case BasicType(_) => 
           assert(!substitute(t, j, s).hasFreeVariablesIn(d, b))
         case ArrowType(t1, t2) => 
-          boundRangeTypeSubstitutionLemma1(t1, j, s, a, b, c, d)
-          boundRangeTypeSubstitutionLemma1(t2, j, s, a, b, c, d)
+          boundRangeSubstitutionLemma1(t1, j, s, a, b, c, d)
+          boundRangeSubstitutionLemma1(t2, j, s, a, b, c, d)
           assert(!substitute(t, j, s).hasFreeVariablesIn(d, b))
         case VariableType(v) => 
           boundRangeIncreaseCutoff(s, c, d, a)
@@ -700,7 +700,7 @@ object TransformationsProperties {
             boundRangeIncreaseCutoff(shift(s, 1, 0), 0, 1 , a + 1)
             assert(!shift(s, 1, 0).hasFreeVariablesIn(1, a))
           }
-          boundRangeTypeSubstitutionLemma1(body, j + 1, shift(s, 1, 0), a, b, c + 1, d + 1)
+          boundRangeSubstitutionLemma1(body, j + 1, shift(s, 1, 0), a, b, c + 1, d + 1)
 
           assert(!substitute(body, j + 1, shift(s, 1, 0)).hasFreeVariablesIn(d + 1, b))
           assert(!UniversalType(substitute(body, j + 1, shift(s, 1, 0))).hasFreeVariablesIn(d, b))
@@ -711,7 +711,7 @@ object TransformationsProperties {
     }.ensuring(!substitute(t, j, s).hasFreeVariablesIn(d, b))
 
     @opaque @pure
-    def boundRangeTypeSubstitutionLemma2(t: Type, j: BigInt, s: Type, a: BigInt, b: BigInt, c: BigInt, d: BigInt): Unit = {
+    def boundRangeSubstitutionLemma2(t: Type, j: BigInt, s: Type, a: BigInt, b: BigInt, c: BigInt, d: BigInt): Unit = {
       require(j >= 0)
       require(a >= 0)
       require(b >= 0)
@@ -726,8 +726,8 @@ object TransformationsProperties {
         case BasicType(_) => 
           assert(!substitute(t, j, s).hasFreeVariablesIn(c, a))
         case ArrowType(t1, t2) => 
-          boundRangeTypeSubstitutionLemma2(t1, j, s, a, b, c, d)
-          boundRangeTypeSubstitutionLemma2(t2, j, s, a, b, c, d)
+          boundRangeSubstitutionLemma2(t1, j, s, a, b, c, d)
+          boundRangeSubstitutionLemma2(t2, j, s, a, b, c, d)
           assert(!substitute(t, j, s).hasFreeVariablesIn(c, a))
         case VariableType(v) => 
           boundRangeIncreaseCutoff(t, d, c, b)
@@ -744,13 +744,13 @@ object TransformationsProperties {
             boundRangeIncreaseCutoff(shift(s, 1, 0), 0, 1 , a + 1)
             assert(!shift(s, 1, 0).hasFreeVariablesIn(1, a))
           }
-          boundRangeTypeSubstitutionLemma2(body, j + 1, shift(s, 1, 0), a, b, c + 1, d + 1)
+          boundRangeSubstitutionLemma2(body, j + 1, shift(s, 1, 0), a, b, c + 1, d + 1)
 
       }
     }.ensuring(!substitute(t, j, s).hasFreeVariablesIn(c, a))
 
     @opaque @pure
-    def boundRangeTypeSubstitutionLemma3(t: Type, j: BigInt, s: Type, a: BigInt, b: BigInt, c: BigInt, d: BigInt): Unit = {
+    def boundRangeSubstitutionLemma3(t: Type, j: BigInt, s: Type, a: BigInt, b: BigInt, c: BigInt, d: BigInt): Unit = {
       require(j >= 0)
       require(a >= 0)
       require(b >= 0)
@@ -766,8 +766,8 @@ object TransformationsProperties {
         case BasicType(_) => 
           assert(!substitute(t, j, s).hasFreeVariablesIn(c, b - (c - d)))
         case ArrowType(t1, t2) => 
-          boundRangeTypeSubstitutionLemma3(t1, j, s, a, b, c, d)
-          boundRangeTypeSubstitutionLemma3(t2, j, s, a, b, c, d)
+          boundRangeSubstitutionLemma3(t1, j, s, a, b, c, d)
+          boundRangeSubstitutionLemma3(t2, j, s, a, b, c, d)
           assert(!substitute(t, j, s).hasFreeVariablesIn(c, b - (c - d)))
         case VariableType(v) => 
           boundRangeDecrease(s, c, a, b - (c - d))
@@ -784,13 +784,13 @@ object TransformationsProperties {
             boundRangeIncreaseCutoff(shift(s, 1, 0), 0, 1 , a + 1)
             assert(!shift(s, 1, 0).hasFreeVariablesIn(1, a))
           }
-          boundRangeTypeSubstitutionLemma3(body, j + 1, shift(s, 1, 0), a, b, c + 1, d + 1)
+          boundRangeSubstitutionLemma3(body, j + 1, shift(s, 1, 0), a, b, c + 1, d + 1)
 
       }
     }.ensuring(!substitute(t, j, s).hasFreeVariablesIn(c, b - (c - d)))
 
     @opaque @pure
-    def boundRangeTypeSubstitutionLemma4(t: Type, j: BigInt, s: Type, a: BigInt, b: BigInt, c: BigInt, d: BigInt): Unit = {
+    def boundRangeSubstitutionLemma4(t: Type, j: BigInt, s: Type, a: BigInt, b: BigInt, c: BigInt, d: BigInt): Unit = {
       require(j >= 0)
       require(a >= 0)
       require(b >= 0)
@@ -806,8 +806,8 @@ object TransformationsProperties {
         case BasicType(_) => 
           assert(!substitute(t, j, s).hasFreeVariablesIn(d, a - (d - c)))
         case ArrowType(t1, t2) => 
-          boundRangeTypeSubstitutionLemma4(t1, j, s, a, b, c, d)
-          boundRangeTypeSubstitutionLemma4(t2, j, s, a, b, c, d)
+          boundRangeSubstitutionLemma4(t1, j, s, a, b, c, d)
+          boundRangeSubstitutionLemma4(t2, j, s, a, b, c, d)
           assert(!substitute(t, j, s).hasFreeVariablesIn(d, a - (d - c)))
         case VariableType(v) => 
           boundRangeDecrease(t, d, b, a - (d - c))
@@ -824,7 +824,7 @@ object TransformationsProperties {
             boundRangeIncreaseCutoff(shift(s, 1, 0), 0, 1 , a + 1)
             assert(!shift(s, 1, 0).hasFreeVariablesIn(1, a))
           }
-          boundRangeTypeSubstitutionLemma4(body, j + 1, shift(s, 1, 0), a, b, c + 1, d + 1)
+          boundRangeSubstitutionLemma4(body, j + 1, shift(s, 1, 0), a, b, c + 1, d + 1)
 
       }
     }.ensuring(!substitute(t, j, s).hasFreeVariablesIn(d, a - (d - c)))
@@ -915,7 +915,7 @@ object TransformationsProperties {
       }
     }.ensuring(!substitute(t, j, s).hasFreeTypeVariablesIn(j, 1))
 
-  //   /// Types in environments
+    /// Types in environments
 
 
     @opaque @pure
