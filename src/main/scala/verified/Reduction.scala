@@ -262,6 +262,7 @@ object ReductionProperties {
     require(reducesTo(tapp, tp).isDefined)
   }.ensuring(reducesTo(tapp, tp).get.isInstanceOf[TAppRule])
 
+  @opaque @pure
   def tappCongruenceInversion(t: Term, tp: Term): Unit = {
     require(reducesTo(t, tp).isDefined)
     require(reducesTo(t, tp).get == TAppCongruence)

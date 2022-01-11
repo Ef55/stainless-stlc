@@ -425,7 +425,7 @@ object TransformationsProperties {
       require(c >= 0)
       require(a >= 0)
       require(b >= 0)
-      require(a + b <= c)
+      require(a <= c)
       require(!t.hasFreeVariablesIn(a, b))
       t match {
         case BasicType(_) => ()

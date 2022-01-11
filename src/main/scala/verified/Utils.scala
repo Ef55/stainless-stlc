@@ -64,6 +64,35 @@ object ListProperties {
         }
     }
   }.ensuring(f(l(k)) == l.map(f)(k))
+
+  def mapInvertAddContains(l: List[BigInt], k: BigInt, s: BigInt): Unit = {
+    require(l.map(x => x - s).contains(k))
+    l match{
+      case Nil() => ()
+      case Cons(h, t) => 
+        if(t.size > 0){
+          if(h != k + s){
+            mapInvertAddContains(t, k, s)
+          }
+        }
+    }
+  }.ensuring(l.contains(k + s))
+
+  def forallConcat[T](@induct l1: List[T], l2: List[T], p: T => Boolean): Unit = {
+    require((l1 ++ l2).forall(p))
+  }.ensuring(l1.forall(p) && l2.forall(p))
+
+  def forallMapLemma(@induct l: List[BigInt], c: BigInt, d: BigInt, s: BigInt): Unit ={
+    require(l.map(x => x - s).forall(x => x < c || x >= c + d))
+  }.ensuring(l.forall(x => x < c + s || x >= c + s + d)) 
+
+  def forallFilterLemma(@induct l: List[BigInt], c: BigInt, d: BigInt, s: BigInt): Unit = {
+    require(c >= 0)
+    require(d >= 0)
+    require(s > 0)
+    require(l.filter(x => x > 0).forall(x => x < c + s || x >= c + s + d))
+    
+  }.ensuring(l.forall(x => x < c + s || x >= c + s + d))
 }
 
 object OptionProperties {

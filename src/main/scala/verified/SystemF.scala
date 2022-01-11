@@ -6,6 +6,15 @@ import stainless.annotation._
 
 object SystemF {
   sealed trait Type {
+  
+    def freeVars: List[BigInt] = {
+      this match {
+        case BasicType(_) => Nil()
+        case ArrowType(t1, t2) => t1.freeVars ++ t2.freeVars
+        case VariableType(v) => List[BigInt](v)
+        case UniversalType(body) => body.freeVars.filter(x => x > 0).map(x => x - 1)
+      }
+    }
 
     def hasFreeVariablesIn(c: BigInt, d: BigInt): Boolean = {
       require(c >= 0)
@@ -115,6 +124,7 @@ object SystemFProperties {
   import SystemF._
 
   object Terms {
+
     @opaque @pure
     def boundRangeDecrease(t: Term, c: BigInt, d1: BigInt, d2: BigInt): Unit = {
       require(d1 >= 0 && d2 >= 0)
@@ -182,6 +192,49 @@ object SystemFProperties {
   }
 
   object Types {
+
+    def hasFreeVariablesInSoundness(t: Type, k: BigInt, c: BigInt, d: BigInt): Unit = {
+      require(t.freeVars.contains(k))
+      require(c >= 0)
+      require(d >= 0)
+      require(c <= k && k < c + d)
+      t match{
+        case BasicType(_) => ()
+        case ArrowType(t1, t2) => {
+          if(t1.freeVars.contains(k)){
+            hasFreeVariablesInSoundness(t1, k, c, d)
+          }
+          else{
+            hasFreeVariablesInSoundness(t2, k, c, d)
+          }
+        }
+        case VariableType(_) => ()
+        case UniversalType(body) => 
+          ListProperties.mapInvertAddContains(body.freeVars.filter(x => x > 0), k, 1)
+          hasFreeVariablesInSoundness(body, k + 1, c + 1, d)
+      }
+    }.ensuring(t.hasFreeVariablesIn(c, d))
+
+    def hasFreeVariablesInCompleteness(t: Type, c: BigInt, d: BigInt): Unit = {
+      require(c >= 0)
+      require(d >= 0)
+      require(t.freeVars.forall(x => x < c || x >= c + d))
+
+      t match{
+        case BasicType(_) => ()
+        case ArrowType(t1, t2) => {
+          ListProperties.forallConcat(t1.freeVars, t2.freeVars, (x: BigInt) => x < c || x >= c + d)
+          hasFreeVariablesInCompleteness(t1, c, d)
+          hasFreeVariablesInCompleteness(t2, c, d)
+        }
+        case VariableType(_) => ()
+        case UniversalType(body) => 
+          ListProperties.forallMapLemma(body.freeVars.filter(x => x > 0), c, d, 1)
+          ListProperties.forallFilterLemma(body.freeVars, c, d, 1)
+          hasFreeVariablesInCompleteness(body, c + 1, d)
+      }
+    }.ensuring(!t.hasFreeVariablesIn(c, d))
+
     @opaque @pure
     def boundRangeDecrease(t: Type, c: BigInt, d1: BigInt, d2: BigInt): Unit = {
       require(d1 >= 0 && d2 >= 0)
