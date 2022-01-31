@@ -158,13 +158,13 @@ object TransformationsProperties {
 
 
       if (d < c){
-        boundRangeShift(t, a, c, 0)
-        boundRangeShiftBelowCutoff(t, a, c, d, c - d)
+        boundRangeShift(t, a, c, c, 0)
+        boundRangeShift(t, a, c, d, c - d)
         boundRangeConcatenation(shift(t, a, c), d, c - d, a)
         boundRangeDecrease(shift(t, a, c), d, c - d + a, a)
       }
       else{
-        boundRangeShift(t, a, c, d - c)
+        boundRangeShift(t, a, c, c, d - c)
         boundRangeIncreaseCutoff(shift(t, a, c), c, d, a + d - c)
       }
 
@@ -199,51 +199,36 @@ object TransformationsProperties {
     }.ensuring(shift(shift(t, a, c), b, d) == shift(t, a + b, c))
 
     @opaque @pure
-    def boundRangeShift(t: Term, d: BigInt, c: BigInt, b: BigInt): Unit = {
-      require(c >= 0)
-      require(d >= 0)
-      require(b >= 0)
-      require(!t.hasFreeVariablesIn(c, b))
-
-      t match {
-        case Var(_)    => assert(!shift(t, d, c).hasFreeVariablesIn(c, d+b))
-        case Abs(_, body)   => {
-          boundRangeShift(body, d, c+1, b)
-          assert(!shift(t, d, c).hasFreeVariablesIn(c, d+b))
-        }
-        case App(t1, t2)    => {
-          boundRangeShift(t1, d, c, b)
-          boundRangeShift(t2, d, c, b)
-          assert(!shift(t, d, c).hasFreeVariablesIn(c, d+b))
-        }
-        case Fix(f) => boundRangeShift(f, d, c, b)
-        case TAbs(body)     => boundRangeShift(body, d, c, b)
-        case TApp(t, _)     => boundRangeShift(t, d, c, b)
-      }
-
-    }.ensuring(!shift(t, d, c).hasFreeVariablesIn(c, d+b))
-
-    @opaque @pure
-    def boundRangeShiftBelowCutoff(t: Term, d: BigInt, c: BigInt, a: BigInt, b: BigInt): Unit = {
-      require(d >= 0)
+    def boundRangeShift(t: Term, d: BigInt, c: BigInt, a: BigInt, b: BigInt): Unit = {
       require(c >= 0)
       require(a >= 0)
       require(b >= 0)
-      require(a + b <= c)
       require(!t.hasFreeVariablesIn(a, b))
+      require(if(d < 0){!t.hasFreeVariablesIn(c, -d)} else true)
       t match {
         case Var(k) => ()
-        case Abs(targ, body) => 
-          boundRangeShiftBelowCutoff(body, d, c + 1, a + 1, b)
+        case Abs(_, body) => 
+          boundRangeShift(body, d, c + 1, a + 1, b)
         case App(t1, t2) => {
-          boundRangeShiftBelowCutoff(t1, d, c, a, b)
-          boundRangeShiftBelowCutoff(t2, d, c, a, b)
+          boundRangeShift(t1, d, c, a, b)
+          boundRangeShift(t2, d, c, a, b)
         }
-        case Fix(f) => boundRangeShiftBelowCutoff(f, d, c, a, b)
-        case TAbs(body) => boundRangeShiftBelowCutoff(body, d, c, a, b)
-        case TApp(t, _) => boundRangeShiftBelowCutoff(t, d, c, a, b)
+        case Fix(f) => boundRangeShift(f, d, c, a, b)
+        case TAbs(body) => boundRangeShift(body, d, c, a, b)
+        case TApp(t, _) => boundRangeShift(t, d, c, a, b)
       }
-    }.ensuring(!shift(t, d, c).hasFreeVariablesIn(a, b))
+    }.ensuring(
+      if(d >= 0){
+        (if(c >= a && c <= a + b)           {!shift(t, d, c).hasFreeVariablesIn(a, b + d)} else {true}) &&
+        (if(c <= a + b)                     {!shift(t, d, c).hasFreeVariablesIn(a + d, b)} else {true}) &&
+        (if(c >= a)                         {!shift(t, d, c).hasFreeVariablesIn(a, b)} else {true})
+      }
+      else{
+        (if(a + b <= c)                     {!shift(t, d, c).hasFreeVariablesIn(a, b)} else true) &&
+        (if(a + b >= c && a <= c)           {!shift(t, d, c).hasFreeVariablesIn(a, c - a)} else true) &&
+        (if(a + b >= -d + c && a <= -d + c) {!shift(t, d, c).hasFreeVariablesIn(c, a + b + d - c)} else true) &&
+        (if(a >= -d + c)                    {!shift(t, d, c).hasFreeVariablesIn(a + d, b)} else true) 
+      })
 
     @opaque @pure
     def boundRangeSubstitutionLemma(t: Term, j: BigInt, s: Term): Unit = {
@@ -255,7 +240,7 @@ object TransformationsProperties {
           boundRangeIncreaseCutoff(s, 0, j, j+1)
         }
         case Abs(_, body) => {
-          boundRangeShift(s, 1, 0, j+1)
+          boundRangeShift(s, 1, 0, 0, j+1)
           boundRangeIncreaseCutoff(shift(s, 1, 0), 0, j + 1, j+2)
           boundRangeSubstitutionLemma(body, j+1, shift(s, 1, 0))
         }
@@ -312,12 +297,8 @@ object TransformationsProperties {
     def shift0Identity(t: Type, c: BigInt): Unit = {
       require(c >= 0)
       t match {
-        case VariableType(k) => {
-          assert(shift(t, 0, c) == t)
-        }
-        case BasicType(_) => {
-          assert(shift(t, 0, c) == t)
-        }
+        case VariableType(k) => ()
+        case BasicType(_) => ()
         case UniversalType(body) => {
           shift0Identity(body, c+1)
         }
@@ -339,13 +320,13 @@ object TransformationsProperties {
 
 
       if (d < c){
-        boundRangeShift(t, a, c, 0)
-        boundRangeShiftBelowCutoff(t, a, c, d, c - d)
+        boundRangeShift(t, a, c, c, 0)
+        boundRangeShift(t, a, c, d, c - d)
         boundRangeConcatenation(shift(t, a, c), d, c - d, a)
         boundRangeDecrease(shift(t, a, c), d, c - d + a, a)
       }
       else{
-        boundRangeShift(t, a, c, d - c)
+        boundRangeShift(t, a, c, c, d - c)
         boundRangeIncreaseCutoff(shift(t, a, c), c, d, a + d - c)
       }
 
@@ -373,71 +354,39 @@ object TransformationsProperties {
       shift(shift(t, a, c), b, d) == shift(t, a + b, c)
     )
 
+    //TODO: adapt for d < 0
     @opaque @pure
-    def boundRangeShift(t: Type, d: BigInt, c: BigInt, b: BigInt): Unit = {
+    def boundRangeShift(t: Type, d: BigInt, c: BigInt, a: BigInt, b: BigInt): Unit = {
       require(c >= 0)
-      require(d >= 0)
-      require(b >= 0)
-      require(!t.hasFreeVariablesIn(c, b))
-
-      t match {
-        case BasicType(_) => ()
-        case VariableType(_)    => assert(!shift(t, d, c).hasFreeVariablesIn(c, d+b))
-        case UniversalType(body)   => {
-          boundRangeShift(body, d, c+1, b)
-          assert(!shift(t, d, c).hasFreeVariablesIn(c, d+b))
-        }
-        case ArrowType(t1, t2)    => {
-          boundRangeShift(t1, d, c, b)
-          boundRangeShift(t2, d, c, b)
-          assert(!shift(t, d, c).hasFreeVariablesIn(c, d+b))
-        }
-      }
-
-    }.ensuring(!shift(t, d, c).hasFreeVariablesIn(c, d+b))
-
-    @opaque @pure
-    def boundRangeShiftCutoff(t: Type, d: BigInt, c: BigInt, a: BigInt, b: BigInt): Unit = {
-      require(c >= 0)
-      require(d >= 0)
       require(b >= 0)
       require(a >= 0)
       require(!t.hasFreeVariablesIn(a, b))
-      require(c <= a)
+      require(if(d < 0){!t.hasFreeVariablesIn(c, -d)} else true)
 
       t match {
         case BasicType(_) => ()
         case VariableType(_) => ()
         case UniversalType(body)   => {
-          boundRangeShiftCutoff(body, d, c+1, a+1, b)
+          boundRangeShift(body, d, c+1, a + 1, b)
         }
         case ArrowType(t1, t2)    => {
-          boundRangeShiftCutoff(t1, d, c, a, b)
-          boundRangeShiftCutoff(t2, d, c, a, b)
+          boundRangeShift(t1, d, c, a, b)
+          boundRangeShift(t2, d, c, a, b)
         }
       }
 
-    }.ensuring(!shift(t, d, c).hasFreeVariablesIn(a + d, b))
-
-    @opaque @pure
-    def boundRangeShiftBelowCutoff(t: Type, d: BigInt, c: BigInt, a: BigInt, b: BigInt): Unit = {
-      require(d >= 0)
-      require(c >= 0)
-      require(a >= 0)
-      require(b >= 0)
-      require(a <= c)
-      require(!t.hasFreeVariablesIn(a, b))
-      t match {
-        case BasicType(_) => ()
-        case VariableType(_) => ()
-        case UniversalType(body) => 
-          boundRangeShiftBelowCutoff(body, d, c + 1, a + 1, b)
-        case ArrowType(t1, t2) => {
-          boundRangeShiftBelowCutoff(t1, d, c, a, b)
-          boundRangeShiftBelowCutoff(t2, d, c, a, b)
-        }
+    }.ensuring(
+      if(d >= 0){
+        (if(c >= a && c <= a + b)           {!shift(t, d, c).hasFreeVariablesIn(a, b + d)} else {true}) &&
+        (if(c <= a + b)                     {!shift(t, d, c).hasFreeVariablesIn(a + d, b)} else {true}) &&
+        (if(c >= a)                         {!shift(t, d, c).hasFreeVariablesIn(a, b)} else {true})
       }
-    }.ensuring(!shift(t, d, c).hasFreeVariablesIn(a, b))
+      else{
+        (if(a + b <= c)                     {!shift(t, d, c).hasFreeVariablesIn(a, b)} else true) &&
+        (if(a + b >= c && a <= c)           {!shift(t, d, c).hasFreeVariablesIn(a, c - a)} else true) &&
+        (if(a + b >= -d + c && a <= -d + c) {!shift(t, d, c).hasFreeVariablesIn(c, a + b + d - c)} else true) &&
+        (if(a >= -d + c)                    {!shift(t, d, c).hasFreeVariablesIn(a + d, b)} else true) 
+      })
 
     @opaque @pure
     def boundRangeSubstitutionLemma(t: Type, j: BigInt, s: Type): Unit = {
@@ -450,7 +399,7 @@ object TransformationsProperties {
           boundRangeIncreaseCutoff(s, 0, j, j+1)
         }
         case UniversalType(body) => {
-          boundRangeShift(s, 1, 0, j+1)
+          boundRangeShift(s, 1, 0, 0, j+1)
           boundRangeIncreaseCutoff(shift(s, 1, 0), 0, j + 1, j+2)
           boundRangeSubstitutionLemma(body, j+1, shift(s, 1, 0))
         }
@@ -611,7 +560,7 @@ object TransformationsProperties {
             shiftCommutativity(subs, c, 0, 1, s)
           }
           else{
-            boundRangeShiftCutoff(subs, 1, 0, c, -s)
+            boundRangeShift(subs, 1, 0, c, -s)
             shiftCommutativity2(subs, s, c, 1, 0)
           }
           shiftSubstitutionCommutativityType2(t, s, c+1, k+1, shift(subs, 1, 0))
@@ -634,7 +583,7 @@ object TransformationsProperties {
       require(s > 0)
       require(!typ.hasFreeVariablesIn(c, s))
 
-      boundRangeShift(subs, s, c, 0)
+      boundRangeShift(subs, s, c, c, 0)
       boundRangeSubstitutionLemma1(typ, k + s, shift(subs, s, c), s, s, c, c)
 
 
@@ -691,12 +640,12 @@ object TransformationsProperties {
           assert(!substitute(t, j, s).hasFreeVariablesIn(d, b))
         case UniversalType(body) =>
           if(c > 0){
-            boundRangeShiftCutoff(s, 1, 0, c, a)
+            boundRangeShift(s, 1, 0, c, a)
             assert(!shift(s, 1, 0).hasFreeVariablesIn(c + 1, a))
           }
           else{
             assert(!s.hasFreeVariablesIn(0, a))
-            boundRangeShift(s, 1, 0, a)
+            boundRangeShift(s, 1, 0, 0, a)
             boundRangeIncreaseCutoff(shift(s, 1, 0), 0, 1 , a + 1)
             assert(!shift(s, 1, 0).hasFreeVariablesIn(1, a))
           }
@@ -735,12 +684,12 @@ object TransformationsProperties {
           assert(!substitute(t, j, s).hasFreeVariablesIn(c, a))
         case UniversalType(body) =>
           if(c > 0){
-            boundRangeShiftCutoff(s, 1, 0, c, a)
+            boundRangeShift(s, 1, 0, c, a)
             assert(!shift(s, 1, 0).hasFreeVariablesIn(c + 1, a))
           }
           else{
             assert(!s.hasFreeVariablesIn(0, a))
-            boundRangeShift(s, 1, 0, a)
+            boundRangeShift(s, 1, 0, 0, a)
             boundRangeIncreaseCutoff(shift(s, 1, 0), 0, 1 , a + 1)
             assert(!shift(s, 1, 0).hasFreeVariablesIn(1, a))
           }
@@ -775,12 +724,12 @@ object TransformationsProperties {
           assert(!substitute(t, j, s).hasFreeVariablesIn(c, b - (c - d)))
         case UniversalType(body) =>
           if(c > 0){
-            boundRangeShiftCutoff(s, 1, 0, c, a)
+            boundRangeShift(s, 1, 0, c, a)
             assert(!shift(s, 1, 0).hasFreeVariablesIn(c + 1, a))
           }
           else{
             assert(!s.hasFreeVariablesIn(0, a))
-            boundRangeShift(s, 1, 0, a)
+            boundRangeShift(s, 1, 0, 0, a)
             boundRangeIncreaseCutoff(shift(s, 1, 0), 0, 1 , a + 1)
             assert(!shift(s, 1, 0).hasFreeVariablesIn(1, a))
           }
@@ -815,12 +764,12 @@ object TransformationsProperties {
           assert(!substitute(t, j, s).hasFreeVariablesIn(d, a - (d - c)))
         case UniversalType(body) =>
           if(c > 0){
-            boundRangeShiftCutoff(s, 1, 0, c, a)
+            boundRangeShift(s, 1, 0, c, a)
             assert(!shift(s, 1, 0).hasFreeVariablesIn(c + 1, a))
           }
           else{
             assert(!s.hasFreeVariablesIn(0, a))
-            boundRangeShift(s, 1, 0, a)
+            boundRangeShift(s, 1, 0, 0, a)
             boundRangeIncreaseCutoff(shift(s, 1, 0), 0, 1 , a + 1)
             assert(!shift(s, 1, 0).hasFreeVariablesIn(1, a))
           }
@@ -848,7 +797,7 @@ object TransformationsProperties {
         }
         case UniversalType(b) => {
           shiftSubstitutionCommutativityType(s, 1, 0, k, u)
-          boundRangeShiftCutoff(u, 1, 0, j, 1)
+          boundRangeShift(u, 1, 0, j, 1)
           substitutionCommutativity(b, j+1, shift(s, 1, 0), k+1, shift(u, 1, 0))
         }
       }
@@ -861,32 +810,39 @@ object TransformationsProperties {
     /// Types in terms 
 
     @opaque @pure
-    def boundRangeShift(t: Term, d: BigInt, c: BigInt, b: BigInt): Unit = {
+    def boundRangeShift(t: Term, d: BigInt, c: BigInt, a: BigInt, b: BigInt): Unit = {
       require(c >= 0)
-      require(d >= 0)
+      require(a >= 0)
       require(b >= 0)
-      require(!t.hasFreeTypeVariablesIn(c, b))
-
+      require(!t.hasFreeTypeVariablesIn(a, b))
+      require(if(d < 0) {!t.hasFreeTypeVariablesIn(c, -d)} else true)
       t match {
         case Var(k) => ()
-        case Abs(targ, body) => {
-          boundRangeShift(targ, d, c, b)
-          boundRangeShift(body, d, c, b)
-        }
+        case Abs(targ, body) =>
+          boundRangeShift(targ, d, c, a, b)
+          boundRangeShift(body, d, c, a, b)
         case App(t1, t2) => {
-          boundRangeShift(t1, d, c, b)
-          boundRangeShift(t2, d, c, b)
+          boundRangeShift(t1, d, c, a, b)
+          boundRangeShift(t2, d, c, a, b)
         }
-        case Fix(f) => boundRangeShift(f, d, c, b)
-        case TAbs(body) => {
-          boundRangeShift(body, d, c+1, b)
-        }
-        case TApp(term, typ) => {
-          boundRangeShift(term, d, c, b)
-          boundRangeShift(typ, d, c, b)
-        }
+        case Fix(f) => boundRangeShift(f, d, c, a, b)
+        case TAbs(body) => boundRangeShift(body, d, c + 1, a + 1, b)
+        case TApp(t, typ) => 
+          boundRangeShift(t, d, c, a, b)
+          boundRangeShift(typ, d, c, a, b)
       }
-    }.ensuring(!shift(t, d, c).hasFreeTypeVariablesIn(c, d+b))
+    }.ensuring(
+      if(d >= 0){
+        (if(c >= a && c <= a + b)           {!shift(t, d, c).hasFreeTypeVariablesIn(a, b + d)} else {true}) &&
+        (if(c <= a + b)                     {!shift(t, d, c).hasFreeTypeVariablesIn(a + d, b)} else {true}) &&
+        (if(c >= a)                         {!shift(t, d, c).hasFreeTypeVariablesIn(a, b)} else {true})
+      }
+      else{
+        (if(a + b <= c)                     {!shift(t, d, c).hasFreeTypeVariablesIn(a, b)} else true) &&
+        (if(a + b >= c && a <= c)           {!shift(t, d, c).hasFreeTypeVariablesIn(a, c - a)} else true) &&
+        (if(a + b >= -d + c && a <= -d + c) {!shift(t, d, c).hasFreeTypeVariablesIn(c, a + b + d - c)} else true) &&
+        (if(a >= -d + c)                    {!shift(t, d, c).hasFreeTypeVariablesIn(a + d, b)} else true) 
+      })
 
     @opaque @pure
     def boundRangeSubstitutionLemma(t: Term, j: BigInt, s: Type): Unit = {
@@ -905,7 +861,7 @@ object TransformationsProperties {
         }
         case Fix(f) => boundRangeSubstitutionLemma(f, j, s)
         case TAbs(body) => {
-          boundRangeShift(s, 1, 0, j+1)
+          boundRangeShift(s, 1, 0, 0, j+1)
           boundRangeSubstitutionLemma(body, j+1, shift(s, 1, 0))
         }
         case TApp(term, typ) => {
@@ -974,43 +930,33 @@ object TransformationsProperties {
     )
 
     @opaque @pure
-    def boundRangeShift(env: Environment, d: BigInt, c: BigInt, b: BigInt): Unit = {
+    def boundRangeShift(env: Environment, d: BigInt, c: BigInt, a: BigInt, b: BigInt): Unit = {
       require(c >= 0)
-      require(d >= 0)
-      require(b >= 0)
-      require(!hasFreeVariablesIn(env, c, b))
-
-      env match {
-        case Nil() => {
-          assert(!hasFreeVariablesIn(shift(env, d, c), c, d+b))
-        }
-        case Cons(h, t) => {
-          boundRangeShift(h, d, c, b)
-          boundRangeShift(t, d, c ,b)
-        }
-      }
-
-    }.ensuring(!hasFreeVariablesIn(shift(env, d, c), c, d+b))
-
-    @opaque @pure
-    def boundRangeShiftCutoff(env: Environment, d: BigInt, c: BigInt, a: BigInt, b: BigInt): Unit = {
-      require(c >= 0)
-      require(d >= 0)
       require(b >= 0)
       require(a >= 0)
       require(!hasFreeVariablesIn(env, a, b))
-      require(c <= a)
+      require(if(d < 0){!hasFreeVariablesIn(env, c, -d)} else true)
 
-      
       env match {
         case Nil() => ()
         case Cons(h, t) => {
-          boundRangeShiftCutoff(h, d, c, a, b)
-          boundRangeShiftCutoff(t, d, c, a, b)
+          boundRangeShift(h, d, c, a, b)
+          boundRangeShift(t, d, c, a, b)
         }
       }
-    }.ensuring(!hasFreeVariablesIn(shift(env, d, c), a + d, b))
 
+    }.ensuring(
+      if(d >= 0){
+        (if(c >= a && c <= a + b)           {!hasFreeVariablesIn(shift(env, d, c), a, b + d)} else {true}) &&
+        (if(c <= a + b)                     {!hasFreeVariablesIn(shift(env, d, c), a + d, b)} else {true}) &&
+        (if(c >= a)                         {!hasFreeVariablesIn(shift(env, d, c), a, b)} else {true})
+      }
+      else{
+        (if(a + b <= c)                     {!hasFreeVariablesIn(shift(env, d, c), a, b)} else true) &&
+        (if(a + b >= c && a <= c)           {!hasFreeVariablesIn(shift(env, d, c), a, c - a)} else true) &&
+        (if(a + b >= -d + c && a <= -d + c) {!hasFreeVariablesIn(shift(env, d, c), c, a + b + d - c)} else true) &&
+        (if(a >= -d + c)                    {!hasFreeVariablesIn(shift(env, d, c), a + d, b)} else true) 
+      })
 
     @opaque @pure
     def shiftCommutativity(env: Environment, c: BigInt, d: BigInt, a: BigInt, b: BigInt) : Unit ={

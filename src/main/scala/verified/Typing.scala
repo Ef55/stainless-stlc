@@ -407,23 +407,23 @@ object TypingProperties {
     require(if(d < 0) !body.hasFreeVariablesIn(c + 1, -d) else true)
     require(if(d < 0) !arg.hasFreeVariablesIn(c, -d) else true)
 
-    TypeTrProp.boundRangeShift(TypeTr.shift(arg, d, c), 1, 0, 0)
+    TypeTrProp.boundRangeShift(TypeTr.shift(arg, d, c), 1, 0, 0, 0)
     TypeTrProp.boundRangeSubstitutionLemma(TypeTr.shift(body, d, c+1), 0, TypeTr.shift(TypeTr.shift(arg, d, c), 1, 0))
 
     if(d >= 0) {
       TypeTrProp.shiftCommutativity(arg, c, 0, 1, d)
-      TypeTrProp.boundRangeShift(arg, 1, 0, 0)
+      TypeTrProp.boundRangeShift(arg, 1, 0, 0, 0)
       TypeTrProp.shiftSubstitutionCommutativityType2(body, d, c+1, 0, TypeTr.shift(arg, 1, 0))
-      TypeTrProp.boundRangeShift(arg, 1, 0, 0)
+      TypeTrProp.boundRangeShift(arg, 1, 0, 0, 0)
       TypeTrProp.boundRangeSubstitutionLemma(body, 0, TypeTr.shift(arg, 1, 0))
       TypeTrProp.shiftCommutativity3(TypeTr.substitute(body, 0, TypeTr.shift(arg, 1, 0)), -1, 0, d, c)
 
     }
     else {
       TypeTrProp.shiftCommutativity2(arg, d, c, 1, 0)
-      TypeTrProp.boundRangeShiftCutoff(arg, 1, 0, c, -d)
+      TypeTrProp.boundRangeShift(arg, 1, 0, c, -d)
       TypeTrProp.shiftSubstitutionCommutativityType2(body, d, c+1, 0, TypeTr.shift(arg, 1, 0))
-      TypeTrProp.boundRangeShift(arg, 1, 0, 0)
+      TypeTrProp.boundRangeShift(arg, 1, 0, 0, 0)
       TypeTrProp.boundRangeSubstitutionLemma(body, 0, TypeTr.shift(arg, 1, 0))
       TypeTrProp.shiftCommutativity4(TypeTr.substitute(body, 0, TypeTr.shift(arg, 1, 0)), d, c+1, -1, 0)
     }
@@ -459,7 +459,7 @@ object TypingProperties {
         termAndEnvNegativeShiftValidityImplyTypeNegativeShiftValidity(ftd, s, c)
       }
       case TAbsDerivation(_, _, _, btd) => {
-        TypeTrProp.boundRangeShiftCutoff(td.env, 1, 0, c, -s)
+        TypeTrProp.boundRangeShift(td.env, 1, 0, c, -s)
         termAndEnvNegativeShiftValidityImplyTypeNegativeShiftValidity(btd, s, c+1)
       }
       case TAppDerivation(_, _ , TApp(_, typArg), btd) => {
@@ -468,17 +468,17 @@ object TypingProperties {
         assert(btd.t.isInstanceOf[UniversalType])
         val UniversalType(bodyTyp) = btd.t
         
-        TypeTrProp.boundRangeShiftCutoff(typArg, 1, 0, c, -s)
+        TypeTrProp.boundRangeShift(typArg, 1, 0, c, -s)
         assert(!TypeTr.shift(typArg, 1, 0).hasFreeVariablesIn(c + 1, -s))
         TypeTrProp.shiftCommutativity2(typArg, s, c, 1, 0)
         TypeTrProp.shiftSubstitutionCommutativityType2(bodyTyp, s, c+1, 0, TypeTr.shift(typArg, 1, 0))
 
         {
-          TypeTrProp.boundRangeShift(typArg, 1, 0, 0)
+          TypeTrProp.boundRangeShift(typArg, 1, 0, 0, 0)
           TypeTrProp.boundRangeSubstitutionLemma(bodyTyp, 0, TypeTr.shift(typArg, 1, 0))
         }
         {
-          TypeTrProp.boundRangeShift(TypeTr.shift(typArg, s, c), 1, 0, 0)
+          TypeTrProp.boundRangeShift(TypeTr.shift(typArg, s, c), 1, 0, 0, 0)
           TypeTrProp.shiftCommutativity2(typArg, s, c, 1, 0)
 
           TypeTrProp.boundRangeSubstitutionLemma(
@@ -533,7 +533,7 @@ object TypingProperties {
       }
       case TAbsDerivation(_, _, _, btd) => {
         if(s < 0) {
-          TypeTrProp.boundRangeShiftCutoff(td.env, 1, 0, c, -s)
+          TypeTrProp.boundRangeShift(td.env, 1, 0, c, -s)
         }
         val btdp = shiftAllTypes(btd, s, c+1)
         if(s < 0) {
@@ -663,7 +663,7 @@ object TypingProperties {
   def universalSubstitutionSubstitutionCommutativity(body: Type, arg: Type, j: BigInt, s: Type): Unit = {
     require(j >= 0)
     
-    TypeTrProp.boundRangeShift(arg, 1, 0, 0)
+    TypeTrProp.boundRangeShift(arg, 1, 0, 0, 0)
     TypeTrProp.boundRangeSubstitutionLemma(body, 0, TypeTr.shift(arg, 1, 0))
 
     assert(
@@ -691,7 +691,7 @@ object TypingProperties {
     )
 
     assert(0 != j+1)
-    TypeTrProp.boundRangeShift(s, 1, 0, 0)
+    TypeTrProp.boundRangeShift(s, 1, 0, 0, 0)
     TypeTrProp.substitutionCommutativity(body, 0, TypeTr.shift(arg, 1, 0), j+1, TypeTr.shift(s, 1, 0))
     assert(
       TypeTr.substitute(universalSubstitution(body, arg), j, s)
@@ -790,7 +790,7 @@ object TypingProperties {
     val sd2 = preservationUnderSubst(absTd.btd, 0, sd1)
 
     assert(!sd0.term.hasFreeVariablesIn(0, 0))
-    TermTrProp.boundRangeShift(sd0.term, 1, 0, 0)
+    TermTrProp.boundRangeShift(sd0.term, 1, 0, 0, 0)
     TermTrProp.boundRangeSubstitutionLemma(absTd.btd.term, 0, sd1.term)
     removeTypeInEnv(Nil(), argType, env, sd2)
   }.ensuring(res => 
@@ -809,10 +809,10 @@ object TypingProperties {
     val td1 = preservationUnderTypeSubst(td0, 0, TypeTr.shift(arg, 1, 0))
 
     assert(!arg.hasFreeVariablesIn(0, 0))
-    TypeTrProp.boundRangeShift(arg, 1, 0, 0)
+    TypeTrProp.boundRangeShift(arg, 1, 0, 0, 0)
 
     // Environment
-    TypeTrProp.boundRangeShift(tabsTd.env, 1, 0, 0)
+    TypeTrProp.boundRangeShift(tabsTd.env, 1, 0, 0, 0)
     TypeTrProp.boundRangeSubstitutionIdentity(td0.env, 0, TypeTr.shift(arg, 1, 0))
     TypeTrProp.boundRangeShiftComposition(tabsTd.env, 1, -1, 0, 0)
     TypeTrProp.shift0Identity(tabsTd.env, 0)

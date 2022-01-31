@@ -30,7 +30,7 @@ object Reduction {
   // ↑⁻¹( [0 -> ↑¹(arg)]body )
   def absSubstitution(body: Term, arg: Term): Term = {
     assert(!arg.hasFreeVariablesIn(0, 0))
-    TermsProp.boundRangeShift(arg, 1, 0, 0)
+    TermsProp.boundRangeShift(arg, 1, 0, 0, 0)
     TermsProp.boundRangeSubstitutionLemma(body, 0, Terms.shift(arg, 1, 0))
     Terms.shift(Terms.substitute(body, 0, Terms.shift(arg, 1, 0)), -1, 0)
   }
@@ -38,7 +38,7 @@ object Reduction {
   // ↑⁻¹( [0 -> ↑¹(arg)]body )
   def universalSubstitution(body: Type, arg: Type): Type = {
     assert(!arg.hasFreeVariablesIn(0, 0))
-    TypesProp.boundRangeShift(arg, 1, 0, 0)
+    TypesProp.boundRangeShift(arg, 1, 0, 0, 0)
     TypesProp.boundRangeSubstitutionLemma(body, 0, Types.shift(arg, 1, 0))
     Types.shift(Types.substitute(body, 0, Types.shift(arg, 1, 0)), -1, 0)
   }
@@ -46,7 +46,7 @@ object Reduction {
   // ↑⁻¹( [0 -> ↑¹(arg)]body )
   def tabsSubstitution(body: Term, arg: Type): Term = {
     assert(!arg.hasFreeVariablesIn(0, 0))
-    TypesProp.boundRangeShift(arg, 1, 0, 0)
+    TypesProp.boundRangeShift(arg, 1, 0, 0, 0)
     TypesProp.boundRangeSubstitutionLemma(body, 0, Types.shift(arg, 1, 0))
     Types.shift(Types.substitute(body, 0, Types.shift(arg, 1, 0)), -1, 0)
   }
