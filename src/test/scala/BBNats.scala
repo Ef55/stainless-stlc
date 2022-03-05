@@ -1,11 +1,12 @@
-import stainless.lang._
+import stainless.lang.*
 
-import SystemF._
-import Reduction._
-import Typing._
+import verified.*
+import SystemF.*
+import Reduction.*
+import Typing.*
 
-import org.scalatest._
-import flatspec._
+import org.scalatest.*
+import flatspec.*
 
 // Uses a simplification of Boehm-Berarducci 
 // to encode naturals, some operations, and tests their correctness.

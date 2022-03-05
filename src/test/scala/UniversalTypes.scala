@@ -1,12 +1,13 @@
-import stainless.lang._
-import stainless.collection._
+import stainless.lang.*
+import stainless.collection.*
 
-import SystemF._
-import Reduction._
-import Typing._
+import verified.*
+import SystemF.*
+import Reduction.*
+import Typing.*
 
-import org.scalatest._
-import flatspec._
+import org.scalatest.*
+import flatspec.*
 
 // Tests to help ensure the implemented System F
 // behaves (seemingly) correctly, so that we don't
