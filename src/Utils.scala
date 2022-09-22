@@ -26,6 +26,7 @@ object ListProperties {
     } 
   }.ensuring((l1 ++ l2)(k) == l2(k - l1.size))
 
+  //Uses the previous thm
   @opaque @pure
   def concatFirstIndexing[T](l1: List[T], l2: List[T], k: BigInt): Unit = {
     require(k < l1.size)
@@ -35,8 +36,10 @@ object ListProperties {
     ListSpecs.reverseAppend(l1, l2)
     concatSecondIndexing(l2.reverse, l1.reverse, l1.size + l2.size - k - 1)
     ListSpecs.reverseIndex(l1, l1.size - k - 1)
-    ()
+    () //Unit required here for the return type
   }.ensuring((l1 ++ l2)(k) == l1(k))
+
+
 }
 
 object OptionProperties {

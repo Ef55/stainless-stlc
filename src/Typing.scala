@@ -5,6 +5,8 @@ import stainless.proof._
 
 object Typing {
   import STLC._
+  import Reduction._
+  import Transformations._
 
   sealed trait TypeDerivation {
 
@@ -54,12 +56,14 @@ object Typing {
       }
     }
     
+    def ===(that: TypeDerivation): Boolean = {
+      this.t == that.t && this.env == that.env
+    }
   }
-  case class VarDerivation(env: Environment, t: Type, term: Var) extends TypeDerivation
-  case class AbsDerivation(env: Environment, t: Type, term: Abs, btd: TypeDerivation) extends TypeDerivation
-  case class AppDerivation(env: Environment, t: Type, term: App, btd1: TypeDerivation, btd2: TypeDerivation) extends TypeDerivation
-  case class FixDerivation(env: Environment, t: Type, term: Fix, ftd: TypeDerivation) extends TypeDerivation
-
+  case class VarDerivation(e: Environment, typ: Type, ter: Var) extends TypeDerivation
+  case class AbsDerivation(e: Environment, typ: Type, ter: Abs, btd: TypeDerivation) extends TypeDerivation
+  case class AppDerivation(e: Environment, typ: Type, ter: App, btd1: TypeDerivation, btd2: TypeDerivation) extends TypeDerivation
+  case class FixDerivation(e: Environment, typ: Type, ter: Fix, ftd: TypeDerivation) extends TypeDerivation
 
   def deriveType(env: Environment, t: Term): Option[TypeDerivation] = {
     t match {
@@ -97,51 +101,55 @@ object Typing {
     }
   }
   
-  def typeOf(env: Environment, t: Term): Option[Type] = {
-    deriveType(env, t).map(der => der.t)
+  def deriveType(t: Term): Option[TypeDerivation] = {
+    deriveType(Nil(), t)
   }
 
-  def typeOf(t: Term): Option[Type] = {
-    typeOf(Nil(), t)
-  }
-}
+ }
+
 
 object TypingProperties {
   import STLC._
   import Typing._
-  import Reduction._
+  import Reduction._  
+  import Transformations.{ Terms => TermTr}
+
   import ListProperties._
-  import TermsProperties._
+  import STLCProperties.{ Terms => TermProp}
+  import ReductionProperties._
+  import TransformationsProperties.{ Terms => TermTrProp}
 
-  // Type derivations
 
+  /// Type derivations
   @opaque @pure
   def deriveTypeCompleteness(@induct td: TypeDerivation): Unit = {
     require(td.isValid)
   }.ensuring(deriveType(td.env, td.term) == Some(td))
 
   @opaque @pure
-  def deriveTypeValidity(env: Environment, t: Term): Unit = {
+  def deriveTypeSoundness(env: Environment, t: Term): Unit = {
+    require(deriveType(env, t).isDefined)
     t match {
       case Var(_) => ()
       case Abs(targ, body) => {
-        deriveTypeValidity(targ :: env, body)
+        deriveTypeSoundness(targ :: env, body)
       }
       case App(t1, t2) => {
-        deriveTypeValidity(env, t1)
-        deriveTypeValidity(env, t2)
+        deriveTypeSoundness(env, t1)
+        deriveTypeSoundness(env, t2)
       }
       case Fix(f) => {
-        deriveTypeValidity(env, f)
+        deriveTypeSoundness(env, f)
       }
     }
-  }.ensuring(deriveType(env, t) match {
-    case Some(td: TypeDerivation) => td.isValid && td.term == t && td.env == env
-    case None() => true
-  })
+  }.ensuring(
+    deriveType(env, t).get.isValid && 
+    deriveType(env, t).get.term == t && 
+    deriveType(env, t).get.env == env
+  )
 
   @opaque @pure
-  def TypeDerivationationsUniqueness(td1: TypeDerivation, td2: TypeDerivation): Unit = {
+  def typeDerivationsUniqueness(td1: TypeDerivation, td2: TypeDerivation): Unit = {
     require(td1.isValid)
     require(td2.isValid)
     require(td1.term == td2.term)
@@ -151,30 +159,7 @@ object TypingProperties {
     deriveTypeCompleteness(td2)
   }.ensuring(td1 == td2)
 
-  @opaque @pure
-  def TypeDerivationationTheorem(env: Environment, term: Term, td: TypeDerivation): Unit = {
-    deriveTypeValidity(env, term)
-    if(td.isValid) {
-      deriveTypeCompleteness(td)
-    }
-    else {
-      assert(deriveType(env, term) != Some(td))
-    }
-  }.ensuring(
-    (deriveType(env, term) == Some(td))
-    ==
-    (td.isValid && td.env == env && td.term == term)
-  )
-  
-  // TypeOf
-
-  @opaque @pure
-  def typeOfCompleteness(@induct td: TypeDerivation): Unit ={
-    require(td.isValid)
-  }.ensuring(typeOf(td.env, td.term) == Some(td.t))
-
-  // Progress
-
+  /// Progress
   @opaque @pure
   def callByValueProgress(t: Term): Unit = {
     require(deriveType(Nil(), t).isDefined)
@@ -189,237 +174,327 @@ object TypingProperties {
     }
   }.ensuring(reduceCallByValue(t).isDefined || t.isValue)
 
-  // Preservation
+
+  /// Preservation
 
   @opaque @pure
-  def environmentWeakening(t: Term, env: Environment, envExt: Environment): Unit = {
-    require(typeOf(env, t).isDefined)
-
-    t match{
-      case Var(k) => {
+  def environmentWeakening(td: TypeDerivation, envExt: Environment): TypeDerivation = {
+    require(td.isValid)
+    td match {
+      case VarDerivation(env, typ, Var(k)) => {
         concatFirstIndexing(env, envExt, k)
+        VarDerivation(env ++ envExt, typ, Var(k))
       }
-      case Abs(targ, body) => {
-        environmentWeakening(body, targ :: env, envExt)
+      case AbsDerivation(env, typ, Abs(argType, body), btd) => {
+        val resBtd = environmentWeakening(btd, envExt)
+        AbsDerivation(env ++ envExt, typ, Abs(argType, body), resBtd)
       }
-      case App(t1, t2) => {
-        environmentWeakening(t1, env, envExt)
-        environmentWeakening(t2, env, envExt)
+      case AppDerivation(env, typ, App(t1, t2), bt1, bt2) => {
+        val resBt1 = environmentWeakening(bt1, envExt)
+        val resBt2 = environmentWeakening(bt2, envExt)
+        AppDerivation(env ++ envExt, typ, App(t1, t2), resBt1, resBt2)
       }
-      case Fix(f) => {
-        environmentWeakening(f, env, envExt)
+      case FixDerivation(env, typ, Fix(f), ftd) => {
+        val resFtd = environmentWeakening(ftd, envExt)
+        FixDerivation(env ++ envExt, typ, Fix(f), resFtd)
       }
     }
-  }.ensuring(typeOf(env, t) == typeOf(env ++ envExt, t))
-
-  @opaque @pure
-  def varEnvironmentStrengthening(v: Var, env: Environment, envExt: Environment): Unit = {
-    require(typeOf(env ++ envExt, v).isDefined)
-    require(v.k < env.length)
-    concatFirstIndexing(env, envExt, v.k)
-  }.ensuring(typeOf(env, v) == typeOf(env ++ envExt, v))
-
-  @opaque @pure
-  def varEnvironmentUpdate(v: Var, env: Environment, oldEnv: Environment, newEnv: Environment): Unit = {
-    require(typeOf(env ++ oldEnv, v).isDefined)
-    require(v.k < env.length)
-    varEnvironmentStrengthening(v, env, oldEnv)
-    environmentWeakening(v, env, newEnv)
-  }.ensuring(typeOf(env ++ newEnv, v) == typeOf(env ++ oldEnv, v))
-
-  def absInversionLemma(env: Environment, targ: Type, body: Term): Unit = {
-    require(typeOf(targ :: env, body).isDefined)
-  }.ensuring(
-    typeOf(env, Abs(targ, body)).get
-    == 
-    ArrowType(targ, typeOf(targ:: env, body).get)
+  }.ensuring(res => 
+    res.isValid && 
+    ( res.env == td.env ++ envExt ) && 
+    ( res.term == td.term ) && 
+    ( res.t == td.t )
   )
 
   @opaque @pure
-  def appInversionLemma(env: Environment, t1: Term, t2: Term): Unit = {
-    require(typeOf(env, App(t1, t2)).isDefined)
-
-    assert(typeOf(env, t1).isDefined)
-    assert(typeOf(env, t2).isDefined)
-
-  }.ensuring(
-    typeOf(env, t1).get 
-    == 
-    ArrowType(typeOf(env, t2).get, typeOf(env, App(t1, t2)).get)
+  def variableEnvironmentStrengthening(v: VarDerivation, env: Environment, envExt: Environment): TypeDerivation = {
+    require(v.env == env ++ envExt)
+    require(v.isValid)
+    require(v.ter.k < env.length)
+    concatFirstIndexing(env, envExt, v.ter.k)
+    VarDerivation(env, v.typ, v.ter)
+  }.ensuring(res => 
+    res.isValid && 
+    ( res.env == env ) && 
+    ( res.t == v.t ) && 
+    ( res.term == v.term )
   )
 
   @opaque @pure
-  def insertTypeInEnv(env1: Environment, typ: Type, env2: Environment, t: Term): Unit = {
-    require(typeOf(env1 ++ env2, t).isDefined)
+  def variableEnvironmentUpdate(v: VarDerivation, env: Environment, oldEnv: Environment, newEnv: Environment): TypeDerivation = {
+    require(v.env == env ++ oldEnv)
+    require(v.isValid)
+    require(v.ter.k < env.length)  
+    val v2 = variableEnvironmentStrengthening(v, env, oldEnv) 
+    environmentWeakening(v2, newEnv)
+  }.ensuring(res => 
+    res.isValid && 
+    ( res.env == (env ++ newEnv) ) && 
+    ( res.t == v.t ) && 
+    ( res.term == v.term )
+  )
 
-    t match{
-      case Var(k) => {
+  @opaque @pure
+  def insertTypeInEnv(env1: Environment, insert: Type, env2: Environment, td: TypeDerivation): TypeDerivation = {
+    require(td.isValid)
+    require(env1 ++ env2 == td.env)
+
+    val newEnv = env1 ++ (insert :: env2)
+
+    td match {
+      case v@VarDerivation(_, typ, Var(k)) => {
         if (k < env1.size){
-          varEnvironmentUpdate(Var(k), env1, env2, (typ :: env2))
-          check(typeOf(env1 ++ env2, t) == typeOf(env1 ++ (typ :: env2), shift(t, 1, env1.size)))
+          variableEnvironmentUpdate(v, env1, env2, insert :: env2)
         }
         else{
-          insertionIndexing(env1, env2, typ, k)
-          check(typeOf(env1 ++ env2, t) == typeOf(env1 ++ (typ :: env2), shift(t, 1, env1.size)))
-        }
+          insertionIndexing(env1, env2, insert, k)
+          VarDerivation(newEnv, typ, Var(k + 1))
+         }
       }
-      case Abs(targ, body) => {
-        absInversionLemma(env1 ++ env2, targ, body)
-        insertTypeInEnv(targ :: env1, typ, env2, body)
-        absInversionLemma(env1 ++ (typ :: env2), targ, shift(body, 1, env1.size + 1))
-        check(typeOf(env1 ++ env2, t) == typeOf(env1 ++ (typ :: env2), shift(t, 1, env1.size)))
+      case AbsDerivation(_, typ, Abs(argType, body), btd) => {
+        val resBtd = insertTypeInEnv(argType :: env1, insert, env2, btd)
+        AbsDerivation(newEnv, typ, Abs(argType, resBtd.term), resBtd)
       }
-      case App(t1, t2) => {
-        appInversionLemma(env1 ++ env2, t1, t2)
-        insertTypeInEnv(env1, typ, env2, t2)
-        insertTypeInEnv(env1, typ, env2, t1)
-        appInversionLemma(env1 ++ (typ :: env2), shift(t1, 1, env1.size), shift(t2, 1, env1.size))
-        check(typeOf(env1 ++ env2, t) == typeOf(env1 ++ (typ :: env2), shift(t, 1, env1.size)))
+      case AppDerivation(_, typ, App(t1, t2), td1, td2) => {
+        val resTd1 = insertTypeInEnv(env1, insert, env2, td1)
+        val resTd2 = insertTypeInEnv(env1, insert, env2, td2)
+        AppDerivation(newEnv, typ, App(resTd1.term, resTd2.term), resTd1, resTd2)
       }
-      case Fix(f) => {
-        insertTypeInEnv(env1, typ, env2, f)
-        check(typeOf(env1 ++ env2, t) == typeOf(env1 ++ (typ :: env2), shift(t, 1, env1.size)))
+      case FixDerivation(_, typ, Fix(f), ftd) => {
+        val resFtd = insertTypeInEnv(env1, insert, env2, ftd)
+        FixDerivation(newEnv, typ, Fix(resFtd.term), resFtd)
       }
     }
-
-    assert(typeOf(env1 ++ env2, t) == typeOf(env1 ++ (typ :: env2), shift(t, 1, env1.size)))
-    OptionProperties.equalityImpliesDefined(
-      typeOf(env1 ++ env2, t),
-      typeOf(env1 ++ (typ :: env2), shift(t, 1, env1.size)), 
-    )
-  }.ensuring(
-    typeOf(env1 ++ (typ :: env2), shift(t, 1, env1.size)).isDefined 
-    &&
-    ( typeOf(env1 ++ env2, t) == typeOf(env1 ++ (typ :: env2), shift(t, 1, env1.size)) )
-  )
-
-  @opaque @pure
-  def removeTypeInEnv(env1: Environment, typ: Type, env2: Environment, t: Term): Unit = {
-    require(typeOf(env1 ++ (typ :: env2), t).isDefined)
-    require(!t.hasFreeVarsIn(env1.size, 1))
-
-    ReductionProperties.boundRangeShiftBackLemma(t, 1, env1.size)
-    t match {
-      case Var(k) => {
-        if (k < env1.size) {
-          varEnvironmentUpdate(Var(k), env1, typ :: env2, env2)
-          check(typeOf(env1 ++ (typ :: env2), t) == typeOf(env1 ++ env2, shift(t, -1, env1.size)))
-        }
-        else {
-          insertionIndexing(env1, env2, typ, k - 1)
-          check(typeOf(env1 ++ (typ :: env2), t) == typeOf(env1 ++ env2, shift(t, -1, env1.size)))
-        }
-      }
-      case Abs(targ, body) => {
-        absInversionLemma(env1 ++ (typ :: env2), targ, body)
-        removeTypeInEnv(targ :: env1, typ, env2, body)
-        absInversionLemma(env1 ++ env2, targ, shift(body, -1, env1.size + 1))
-        check(typeOf(env1 ++ (typ :: env2), t) == typeOf(env1 ++ env2, shift(t, -1, env1.size)))
-      }
-      case App(t1, t2) => {
-        appInversionLemma(env1 ++ (typ :: env2), t1, t2)
-        removeTypeInEnv(env1, typ, env2, t2)
-        removeTypeInEnv(env1, typ, env2, t1)
-        appInversionLemma(env1 ++ env2, shift(t1, -1, env1.size), shift(t2, -1, env1.size))
-        assert(App(shift(t1, -1, env1.size), shift(t2, -1, env1.size)) == shift(t, -1, env1.size))
-        check(typeOf(env1 ++ (typ :: env2), t) == typeOf(env1 ++ env2, shift(t, -1, env1.size)))
-      }
-      case Fix(f) => {
-        removeTypeInEnv(env1, typ, env2, f)
-        check(typeOf(env1 ++ (typ :: env2), t) == typeOf(env1 ++ env2, shift(t, -1, env1.size)))
-      }
-    }
-
-    assert(typeOf(env1 ++ (typ :: env2), t) == typeOf(env1 ++ env2, shift(t, -1, env1.size)))
-    OptionProperties.equalityImpliesDefined(
-      typeOf(env1 ++ (typ :: env2), t), 
-      typeOf(env1 ++ env2, shift(t, -1, env1.size))
-    )
-  }.ensuring(
-    typeOf(env1 ++ env2, shift(t, -1, env1.size)).isDefined 
-    &&
-    ( typeOf(env1 ++ (typ :: env2), t) == typeOf(env1 ++ env2, shift(t, -1, env1.size)) )
-  )
-
-  @opaque @pure
-  def preservationUnderSubst(env: Environment, t: Term, j: BigInt, s: Term): Unit = {
-    require(typeOf(env, t).isDefined)
-    require(typeOf(env, s).isDefined)
-    require(0 <= j && j < env.size)
-    require(env(j) == typeOf(env, s).get)
-
-    t match {
-      case Var(_) => assert(typeOf(env, t) == typeOf(env, substitute(t, j, s)))
-      case Abs(typ, body) => {
-        insertTypeInEnv(Nil(), typ, env, s)
-        preservationUnderSubst(typ :: env, body, j+1, shift(s, 1, 0))
-      }
-      case App(t1, t2) => {
-        preservationUnderSubst(env, t1, j, s)
-        preservationUnderSubst(env, t2, j, s)
-      }
-      case Fix(f) => {
-        preservationUnderSubst(env, f, j, s)
-      }
-    }
-  }.ensuring(typeOf(env, t) == typeOf(env, substitute(t, j, s)))
-
-  @opaque @pure
-  def preservationUnderAbsSubst(env: Environment, body: Term, arg: Term) = {
-    require(typeOf(env, arg).isDefined)
-    require(typeOf(typeOf(env, arg).get :: env, body).isDefined)
-
     
-    val Some(argType) = typeOf(env, arg)
-    val Some(typ) = typeOf(argType :: env, body)
+  }.ensuring(res =>
+    res.isValid &&
+    ( res.term == TermTr.shift(td.term, 1, env1.size) ) &&
+    ( res.env == env1 ++ (insert :: env2) ) &&
+    ( td.t == res.t )
+  )
 
-    insertTypeInEnv(Nil(), argType, env, arg)
-    assert(typeOf(argType :: env, shift(arg, 1, 0)).get == argType)
-    preservationUnderSubst(argType :: env, body, 0, shift(arg, 1, 0))
-
-    assert(!arg.hasFreeVarsIn(0, 0))
-    ReductionProperties.boundRangeShift(arg, 1, 0, 0)
-    ReductionProperties.boundRangeSubstitutionLemma(body, 0, shift(arg, 1, 0))
-    ReductionProperties.boundRangeShiftBackLemma(substitute(body, 0, shift(arg, 1, 0)), 1, 0)
-    removeTypeInEnv(Nil(), argType, env, substitute(body, 0, shift(arg, 1, 0)))
-
-  }.ensuring(typeOf(env, absSubsitution(body, arg)) == typeOf(typeOf(env, arg).get :: env, body))
-  
   @opaque @pure
-  def callByValuePreservationTheorem(env: Environment, t: Term): Unit = {
-    require(typeOf(env, t).isDefined)
-    require(reduceCallByValue(t).isDefined)
-    val typeT = typeOf(env, t).get
+  def removeTypeInEnv(env1: Environment, remove: Type, env2: Environment, td: TypeDerivation): TypeDerivation = {
+    require(td.isValid)
+    require(td.env == env1 ++ (remove :: env2))
+    require(!td.term.hasFreeVariablesIn(env1.size, 1))
 
-    t match{
-      case Var(_) => ()
-      case Abs(_, _) => ()
-      case App(t1, t2) => {
-        if(!t1.isValue) {
-          callByValuePreservationTheorem(env, t1)
+    val newEnv = env1 ++ env2
+
+    td match {
+      case v@VarDerivation(_, typ, Var(k)) => {
+        if (k < env1.size){
+          val res = variableEnvironmentUpdate(v, env1, remove :: env2, env2)
+          res
         }
-        else if(!t2.isValue)
-          callByValuePreservationTheorem(env, t2)
+        else{
+          insertionIndexing(env1, env2, remove, k - 1)
+          val res = VarDerivation(newEnv, typ, Var(k - 1))
+          res
+         }
+      }
+      case AbsDerivation(_, typ, Abs(argType, body), btd) => {
+        val resBtd = removeTypeInEnv(argType :: env1, remove, env2, btd)
+        val res = AbsDerivation(newEnv, typ, Abs(argType, resBtd.term), resBtd)
+        res
+      }
+      case AppDerivation(_, typ, App(t1, t2), td1, td2) => {
+        val resTd1 = removeTypeInEnv(env1, remove, env2, td1)
+        val resTd2 = removeTypeInEnv(env1, remove, env2, td2)
+        val res = AppDerivation(newEnv, typ, App(resTd1.term, resTd2.term), resTd1, resTd2)
+        res
+      }
+      case FixDerivation(_, typ, Fix(f), ftd) => {
+        val resFtd = removeTypeInEnv(env1, remove, env2, ftd)
+        val res = FixDerivation(newEnv, typ, Fix(resFtd.term), resFtd)
+        res
+      }
+    }
+  }.ensuring(res =>
+    res.isValid &&
+    ( res.term == TermTr.shift(td.term, -1, env1.size) ) &&
+    ( res.env == env1 ++ env2 ) &&
+    ( td.t == res.t)
+  )
+
+
+
+  @opaque @pure
+  def absDerivationInversion(td: TypeDerivation): Unit = {
+    require(td.term.isInstanceOf[Abs])
+  }.ensuring(td.isInstanceOf[AbsDerivation])
+
+
+  @opaque @pure
+  def preservationUnderSubst(td: TypeDerivation, j: BigInt, sd: TypeDerivation): TypeDerivation = {
+    require(td.isValid)
+    require(sd.isValid)
+    require(td.env == sd.env)
+    require(0 <= j && j < td.env.size)
+    require(td.env(j) == sd.t)
+
+    val result = TermTr.substitute(td.term, j, sd.term)
+
+    td match {
+      case VarDerivation(env, typ, Var(k)) => {
+        if(j == k) {
+          assert(result == sd.term)
+          sd
+        }
         else {
-          assert(t1.isValue && t2.isValue)
-          t1 match {
-              case Abs(_, body) => 
-                preservationUnderAbsSubst(env, body, t2)
-              case _ => ()
+          assert(result == td.term)
+          td
+        }
+      }
+      case AbsDerivation(env, typ, Abs(argType, body), btd) => {
+        val d0 = insertTypeInEnv(Nil(), argType, td.env, sd)
+        assert(btd.env == argType :: td.env)
+        val d1 = preservationUnderSubst(btd, j+1, d0) // Fragile: require 3/5
+        val res = AbsDerivation(env, typ, Abs(argType, d1.term), d1)
+        assert(  res.isValid )
+        assert( res.term == TermTr.substitute(td.term, j, sd.term) )
+        assert( td === res )
+        res
+      }
+      case AppDerivation(env, typ, App(t1, t2), td1, td2) => {
+        val td1p = preservationUnderSubst(td1, j, sd)
+        val td2p = preservationUnderSubst(td2, j, sd)
+        val res = AppDerivation(env, typ, App(td1p.term, td2p.term), td1p, td2p)
+        assert(  res.isValid )
+        assert( res.term == TermTr.substitute(td.term, j, sd.term) )
+        assert( td === res )
+        res
+      }
+      case FixDerivation(env, typ, Fix(f), ftd) => {
+        val ftdp = preservationUnderSubst(ftd, j, sd)
+        val res = FixDerivation(env, typ, Fix(ftdp.term), ftdp)
+        assert(  res.isValid )
+        assert( res.term == TermTr.substitute(td.term, j, sd.term) )
+        assert( td === res )
+        res
+      }
+    }
+
+  }.ensuring(res =>
+    res.isValid &&
+    ( res.term == TermTr.substitute(td.term, j, sd.term) ) &&
+    ( td === res )
+  )
+
+  @opaque @pure
+  def preservationUnderAbsSubst(env: Environment, absTd: AbsDerivation, argTd: TypeDerivation, typ: Type): TypeDerivation = {
+    require(absTd.isValid && argTd.isValid)
+    require(absTd.env == env && argTd.env == env)
+    require(absTd.ter.argType == argTd.t)
+    require(absTd.t == ArrowType(argTd.t, typ))
+
+    val Abs(argType, _) = absTd.term
+
+    val sd0 = argTd
+    val sd1 = insertTypeInEnv(Nil(), argType, sd0.env, sd0)
+    val sd2 = preservationUnderSubst(absTd.btd, 0, sd1)
+
+    assert(!sd0.term.hasFreeVariablesIn(0, 0))
+    TermTrProp.boundRangeShift(sd0.term, 1, 0, 0, 0)
+    TermTrProp.boundRangeSubstitutionLemma(absTd.btd.term, 0, sd1.term)
+    removeTypeInEnv(Nil(), argType, env, sd2)
+  }.ensuring(res => 
+    res.isValid &&
+    ( res.term == absSubstitution(absTd.ter.body, argTd.term) ) &&
+    ( res.env == env ) &&
+    ( res.t == typ )
+  )
+
+  @opaque @pure
+  def preservation(td: TypeDerivation, reduced: Term): TypeDerivation = {
+    require(td.isValid)
+    require(reducesTo(td.term, reduced).isDefined)
+    decreases(td)
+
+    val Some(rule) = reducesTo(td.term, reduced)
+
+    td match {
+      case AbsDerivation(env, typ, t@Abs(argType, body), btd) => {
+        absReducesToSoundness(t, reduced)
+        assert(rule == AbsCongruence)
+        absCongruenceInversion(t, reduced)
+        val tp = reduced.asInstanceOf[Abs]
+        val btdp = preservation(btd, tp.body)
+        val tdp = AbsDerivation(env, typ, tp, btdp)
+        assert(btdp.isValid)
+        assert(btdp.term == tp.body)
+        assert(btd.env == argType :: td.env)
+        assert(btdp.env == btd.env)
+        assert(typ.isInstanceOf[ArrowType])
+        val ArrowType(t1, t2) = typ
+        assert(t1 == argType)
+        assert(t2 == btdp.t)
+        assert(tp == Abs(argType, btdp.term))
+        assert(tdp.isValid)
+        tdp
+      }
+      case AppDerivation(env, typ, t@App(t1, t2), td1, td2) => {
+
+        assert(td.term == t)
+        appReducesToSoundness(t, reduced)
+        rule match {
+          case App1Congruence => {
+            app1CongruenceInversion(t, reduced)
+            val tp = reduced.asInstanceOf[App]
+            val t1p = tp.t1
+
+            val td1p = preservation(td1, t1p)
+            val tdp = AppDerivation(env, typ, tp, td1p, td2)
+            assert(td1p.isValid && td2.isValid)
+            assert(tp == App(td1p.term, td2.term))
+            assert(tdp.isValid)
+            tdp
+          }
+          case App2Congruence => {
+            app2CongruenceInversion(t, reduced)
+            val tp = reduced.asInstanceOf[App]
+            val t2p = tp.t2
+            
+            val td2p = preservation(td2, t2p)
+            val tdp = AppDerivation(env, typ, tp, td1, td2p)
+            assert(tdp.isValid)
+            tdp
+          }
+          case AbsAppReduction => {
+            absAppReductionInversion(t, reduced)
+            absDerivationInversion(td1)
+            preservationUnderAbsSubst(env, td1.asInstanceOf[AbsDerivation], td2, typ)
           }
         }
       }
-      case Fix(f) => {
-        if(!f.isValue) {
-          callByValuePreservationTheorem(env, f)
-        }
-        else {
-          f match {
-            case Abs(_, body) => preservationUnderAbsSubst(env, body, t)
+      case FixDerivation(env, typ, t@Fix(f), ftd) => {
+
+        assert(td.term == t)
+        fixReducesToSoundness(t, reduced)
+        rule match {
+          case FixCongruence => {
+            fixCongruenceInversion(t, reduced)
+            val tp = reduced.asInstanceOf[Fix]
+            val fp = tp.t
+
+            val ftdp = preservation(ftd, fp)
+            val tdp = FixDerivation(env, typ, tp, ftdp)
+            assert(tdp.isValid)
+            tdp
+          }
+          case AbsFixReduction => {
+            absFixReductionInversion(t, reduced)
+            absDerivationInversion(ftd)
+            preservationUnderAbsSubst(env, ftd.asInstanceOf[AbsDerivation], td, typ)
           }
         }
       }
     }
-  }.ensuring( typeOf(env, reduceCallByValue(t).get) == typeOf(env, t) )
+
+  }.ensuring(res => 
+    res.isValid &&
+    ( res.term == reduced ) &&
+    ( res === td )
+  )
 
 }
