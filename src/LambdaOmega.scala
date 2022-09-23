@@ -5,7 +5,7 @@ import stainless.annotation._
 object LambdaOmega {
 
   sealed trait Kind
-  case object TypeKind extends Kind
+  case object ProperKind extends Kind
   case class ArrowKind(k1: Kind, k2: Kind) extends Kind
 
   sealed trait Type{
@@ -41,6 +41,21 @@ object LambdaOmega {
   case class AppType(t1: Type, t2: Type) extends Type
 
   type TypeEnvironment = List[Type]
+
+  def hasFreeVariablesIn(env: TypeEnvironment, c: BigInt, d: BigInt): Boolean = {
+    require(c >= 0)
+    require(d >= 0)
+
+    env match {
+      case Nil() => false
+      case Cons(h, t) => h.hasFreeVariablesIn(c, d) || hasFreeVariablesIn(t, c, d)
+    }
+  }.ensuring(res =>
+    ( !res ==> env.forall(!_.hasFreeVariablesIn(c, d)) ) &&
+    ( res ==> env.exists(_.hasFreeVariablesIn(c, d)) ) &&
+    ( (d == 0) ==> !res )
+  )
+
   type KindEnvironment = List[Kind]
 
   sealed trait Term {
@@ -82,8 +97,8 @@ object LambdaOmega {
 
 }
 
-object STLCProperties{
-  import STLC._
+object LambdaOmegaProperties{
+  import LambdaOmega._
 
   object Terms {
     @opaque @pure
@@ -147,6 +162,73 @@ object STLCProperties{
   }
 
   object Types {
+
+@opaque @pure
+    def boundRangeDecrease(t: Type, c: BigInt, d1: BigInt, d2: BigInt): Unit = {
+      require(d1 >= 0 && d2 >= 0)
+      require(c >= 0)
+      require(d2 <= d1)
+      require(!t.hasFreeVariablesIn(c, d1))
+
+      t match{
+        case BasicType(_) => ()
+        case ArrowType(t1, t2) => {
+          boundRangeDecrease(t1, c, d1, d2)
+          boundRangeDecrease(t2, c, d1, d2)
+        }
+        case VariableType(v) => ()
+        case AbsType(_, body) => boundRangeDecrease(body, c+1, d1, d2)
+        case AppType(t1, t2) => {
+          boundRangeDecrease(t1, c, d1, d2)
+          boundRangeDecrease(t2, c, d1, d2)
+        }
+      }
+    }.ensuring(!t.hasFreeVariablesIn(c, d2))
+
+    @opaque @pure
+    def boundRangeIncreaseCutoff(t: Type, c1: BigInt, c2: BigInt, d: BigInt): Unit = {
+      require(c1 >= 0 && c2 >= 0)
+      require(0 <= d && c2 - c1 <= d)
+      require(c1 <= c2)
+      require(!t.hasFreeVariablesIn(c1, d))
+
+      t match {
+        case BasicType(_) => ()
+        case ArrowType(t1, t2) => {
+          boundRangeIncreaseCutoff(t1, c1, c2, d)
+          boundRangeIncreaseCutoff(t2, c1, c2, d)
+        }
+        case VariableType(v) => ()
+        case AbsType(_, body) => boundRangeIncreaseCutoff(body, c1 + 1, c2 + 1, d)
+        case AppType(t1, t2) => {
+          boundRangeIncreaseCutoff(t1, c1, c2, d)
+          boundRangeIncreaseCutoff(t2, c1, c2, d)
+        }
+      }
+    }.ensuring(!t.hasFreeVariablesIn(c2, d - (c2 - c1)))
+
+    @opaque @pure
+    def boundRangeConcatenation(t: Type, a: BigInt, b: BigInt, c: BigInt): Unit = {
+      require(a >= 0)
+      require(b >= 0)
+      require(c >= 0)
+      require(!t.hasFreeVariablesIn(a, b))
+      require(!t.hasFreeVariablesIn(a + b, c))
+
+      t match{
+        case BasicType(_) => ()
+        case ArrowType(t1, t2) => {
+          boundRangeConcatenation(t1, a, b, c)
+          boundRangeConcatenation(t2, a, b, c)
+        }
+        case VariableType(v) => ()
+        case AbsType(_, body) => boundRangeConcatenation(body, a + 1, b, c)
+        case AppType(t1, t2) => {
+          boundRangeConcatenation(t1, a, b, c)
+          boundRangeConcatenation(t2, a, b, c)
+        }
+      }
+    }.ensuring(!t.hasFreeVariablesIn(a, b + c))
     
   }
 
