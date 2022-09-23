@@ -76,7 +76,7 @@ object Kinding {
       case arr@ArrowType(t1, t2) => {
         (deriveKind(env, t1), deriveKind(env, t2)) match {
           case (Some(kd1), Some(kd2)) => {
-            if(kd1.k == ProperKind && kd1.k == ProperKind){
+            if(kd1.k == ProperKind && kd2.k == ProperKind){
               Some(ArrowTypeDerivation(env, ProperKind, arr, kd1, kd2))
             }
             else{
@@ -114,45 +114,47 @@ object Kinding {
  }
 
 
-// object TypingProperties {
-//   import STLC._
-//   import Typing._
+object TypingProperties {
+  import LambdaOmega._
+  import Kinding._
 //   import Reduction._  
 //   import Transformations.{ Terms => TermTr}
 
 //   import ListProperties._
-//   import STLCProperties.{ Terms => TermProp}
+  // import STLCProperties.{ Terms => TermProp}
 //   import ReductionProperties._
 //   import TransformationsProperties.{ Terms => TermTrProp}
 
 
-//   /// Type derivations
-//   @opaque @pure
-//   def deriveTypeCompleteness(@induct td: TypeDerivation): Unit = {
-//     require(td.isValid)
-//   }.ensuring(deriveType(td.env, td.term) == Some(td))
+  /// Type derivations
+  @opaque @pure
+  def deriveKindCompleteness(@induct kd: KindDerivation): Unit = {
+    require(kd.isValid)
+  }.ensuring(deriveKind(kd.env, kd.typ) == Some(kd))
 
-//   @opaque @pure
-//   def deriveTypeSoundness(env: TypeEnvironment, t: Term): Unit = {
-//     require(deriveType(env, t).isDefined)
-//     t match {
-//       case Var(_) => ()
-//       case Abs(targ, body) => {
-//         deriveTypeSoundness(targ :: env, body)
-//       }
-//       case App(t1, t2) => {
-//         deriveTypeSoundness(env, t1)
-//         deriveTypeSoundness(env, t2)
-//       }
-//       case Fix(f) => {
-//         deriveTypeSoundness(env, f)
-//       }
-//     }
-//   }.ensuring(
-//     deriveType(env, t).get.isValid && 
-//     deriveType(env, t).get.term == t && 
-//     deriveType(env, t).get.env == env
-//   )
+  @opaque @pure
+  def deriveKindSoundness(env: KindEnvironment, t: Type): Unit = {
+    require(deriveKind(env, t).isDefined)
+    t match {
+      case BasicType(_) => ()
+      case VariableType(_) => ()
+      case AbsType(argK, body) => {
+        deriveKindSoundness(argK :: env, body)
+      }
+      case ArrowType(t1, t2) => {
+        deriveKindSoundness(env, t1)
+        deriveKindSoundness(env, t2)
+      }
+      case AppType(t1, t2) => {
+        deriveKindSoundness(env, t1)
+        deriveKindSoundness(env, t2)
+      }
+    }
+  }.ensuring(
+    deriveKind(env, t).get.isValid && 
+    deriveKind(env, t).get.typ == t && 
+    deriveKind(env, t).get.env == env
+  )
 
 //   @opaque @pure
 //   def typeDerivationsUniqueness(td1: TypeDerivation, td2: TypeDerivation): Unit = {
@@ -503,4 +505,4 @@ object Kinding {
 //     ( res === td )
 //   )
 
-// }
+}
