@@ -2,12 +2,46 @@ import stainless.lang._
 import stainless.collection._
 import stainless.annotation._
 
-object STLC {
-  sealed trait Type
+object LambdaOmega {
+
+  sealed trait Kind
+  case object TypeKind extends Kind
+  case class ArrowKind(k1: Kind, k2: Kind) extends Kind
+
+  sealed trait Type{
+    def hasFreeVariablesIn(c: BigInt, d: BigInt): Boolean = {
+      require(c >= 0)
+      require(d >= 0)
+      this match {
+        case BasicType(_)         => false
+        case ArrowType(t1, t2)    => t1.hasFreeVariablesIn(c, d) || t2.hasFreeVariablesIn(c, d)
+        case VariableType(v)      => (c <= v) && (v < c+d)
+        case AbsType(_, body)     => body.hasFreeVariablesIn(c+1, d)
+        case AppType(t1, t2)      => t1.hasFreeVariablesIn(c, d) || t2.hasFreeVariablesIn(c, d)
+      }
+    }.ensuring(res => (d == 0) ==> !res)
+
+    def isClosed: Boolean = {
+      def rec(t: Type, c: BigInt): Boolean = {
+        t match {
+          case BasicType(_)         => true
+          case ArrowType(t1, t2)    => rec(t1, c) && rec(t2, c)
+          case VariableType(v)      => v < c
+          case AbsType(_, body)     => rec(body, c+1)
+          case AppType(t1, t2)      => rec(t1, c) && rec(t2, c)
+        }
+      }
+      rec(this, 0)
+    }
+  }
   case class BasicType(s: String) extends Type
   case class ArrowType(t1: Type, t2: Type) extends Type
+  case class VariableType(v: BigInt) extends Type {require(v >= 0)}
+  case class AbsType(argKind: Kind, body: Type) extends Type
+  case class AppType(t1: Type, t2: Type) extends Type
 
-  type Environment = List[Type]
+  type TypeEnvironment = List[Type]
+  type KindEnvironment = List[Kind]
 
   sealed trait Term {
     def isValue: Boolean = {
@@ -110,6 +144,10 @@ object STLCProperties{
         case Fix(f) => boundRangeConcatenation(f, a, b, c)
       }
     }.ensuring(!t.hasFreeVariablesIn(a, b + c))
+  }
+
+  object Types {
+    
   }
 
 }

@@ -10,7 +10,7 @@ object Typing {
 
   sealed trait TypeDerivation {
 
-    def env: Environment = this match {
+    def env: TypeEnvironment = this match {
       case VarDerivation(e, _, _) => e
       case AbsDerivation(e, _, _, _) => e
       case AppDerivation(e, _, _, _, _) => e
@@ -60,12 +60,12 @@ object Typing {
       this.t == that.t && this.env == that.env
     }
   }
-  case class VarDerivation(e: Environment, typ: Type, ter: Var) extends TypeDerivation
-  case class AbsDerivation(e: Environment, typ: Type, ter: Abs, btd: TypeDerivation) extends TypeDerivation
-  case class AppDerivation(e: Environment, typ: Type, ter: App, btd1: TypeDerivation, btd2: TypeDerivation) extends TypeDerivation
-  case class FixDerivation(e: Environment, typ: Type, ter: Fix, ftd: TypeDerivation) extends TypeDerivation
+  case class VarDerivation(e: TypeEnvironment, typ: Type, ter: Var) extends TypeDerivation
+  case class AbsDerivation(e: TypeEnvironment, typ: Type, ter: Abs, btd: TypeDerivation) extends TypeDerivation
+  case class AppDerivation(e: TypeEnvironment, typ: Type, ter: App, btd1: TypeDerivation, btd2: TypeDerivation) extends TypeDerivation
+  case class FixDerivation(e: TypeEnvironment, typ: Type, ter: Fix, ftd: TypeDerivation) extends TypeDerivation
 
-  def deriveType(env: Environment, t: Term): Option[TypeDerivation] = {
+  def deriveType(env: TypeEnvironment, t: Term): Option[TypeDerivation] = {
     t match {
       case v@Var(k) => if (k < env.size) Some(VarDerivation(env, env(k), v)) else None()
       case abs@Abs(targ, body) => {
@@ -127,7 +127,7 @@ object TypingProperties {
   }.ensuring(deriveType(td.env, td.term) == Some(td))
 
   @opaque @pure
-  def deriveTypeSoundness(env: Environment, t: Term): Unit = {
+  def deriveTypeSoundness(env: TypeEnvironment, t: Term): Unit = {
     require(deriveType(env, t).isDefined)
     t match {
       case Var(_) => ()
@@ -178,7 +178,7 @@ object TypingProperties {
   /// Preservation
 
   @opaque @pure
-  def environmentWeakening(td: TypeDerivation, envExt: Environment): TypeDerivation = {
+  def environmentWeakening(td: TypeDerivation, envExt: TypeEnvironment): TypeDerivation = {
     require(td.isValid)
     td match {
       case VarDerivation(env, typ, Var(k)) => {
@@ -207,7 +207,7 @@ object TypingProperties {
   )
 
   @opaque @pure
-  def variableEnvironmentStrengthening(v: VarDerivation, env: Environment, envExt: Environment): TypeDerivation = {
+  def variableEnvironmentStrengthening(v: VarDerivation, env: TypeEnvironment, envExt: TypeEnvironment): TypeDerivation = {
     require(v.env == env ++ envExt)
     require(v.isValid)
     require(v.ter.k < env.length)
@@ -221,7 +221,7 @@ object TypingProperties {
   )
 
   @opaque @pure
-  def variableEnvironmentUpdate(v: VarDerivation, env: Environment, oldEnv: Environment, newEnv: Environment): TypeDerivation = {
+  def variableEnvironmentUpdate(v: VarDerivation, env: TypeEnvironment, oldEnv: TypeEnvironment, newEnv: TypeEnvironment): TypeDerivation = {
     require(v.env == env ++ oldEnv)
     require(v.isValid)
     require(v.ter.k < env.length)  
@@ -235,7 +235,7 @@ object TypingProperties {
   )
 
   @opaque @pure
-  def insertTypeInEnv(env1: Environment, insert: Type, env2: Environment, td: TypeDerivation): TypeDerivation = {
+  def insertTypeInEnv(env1: TypeEnvironment, insert: Type, env2: TypeEnvironment, td: TypeDerivation): TypeDerivation = {
     require(td.isValid)
     require(env1 ++ env2 == td.env)
 
@@ -274,7 +274,7 @@ object TypingProperties {
   )
 
   @opaque @pure
-  def removeTypeInEnv(env1: Environment, remove: Type, env2: Environment, td: TypeDerivation): TypeDerivation = {
+  def removeTypeInEnv(env1: TypeEnvironment, remove: Type, env2: TypeEnvironment, td: TypeDerivation): TypeDerivation = {
     require(td.isValid)
     require(td.env == env1 ++ (remove :: env2))
     require(!td.term.hasFreeVariablesIn(env1.size, 1))
@@ -382,7 +382,7 @@ object TypingProperties {
   )
 
   @opaque @pure
-  def preservationUnderAbsSubst(env: Environment, absTd: AbsDerivation, argTd: TypeDerivation, typ: Type): TypeDerivation = {
+  def preservationUnderAbsSubst(env: TypeEnvironment, absTd: AbsDerivation, argTd: TypeDerivation, typ: Type): TypeDerivation = {
     require(absTd.isValid && argTd.isValid)
     require(absTd.env == env && argTd.env == env)
     require(absTd.ter.argType == argTd.t)
