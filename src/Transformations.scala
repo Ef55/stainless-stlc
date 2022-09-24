@@ -5,7 +5,7 @@ import stainless.annotation._
 object Transformations {
 
   import LambdaOmega._
-  import TransformationsProperties._
+  import TransformationsProperties.{Terms => TermsProp, Types => TypesProp}
 
   object Terms {
     // ↑ᵈ_c(t)
@@ -29,6 +29,15 @@ object Transformations {
         case Fix(f) => Fix(substitute(f, j, s))
       }
     }
+
+    // ↑⁻¹( [0 -> ↑¹(arg)]body )
+    def absSubstitution(body: Term, arg: Term): Term = {
+      assert(!arg.hasFreeVariablesIn(0, 0))
+      TermsProp.boundRangeShift(arg, 1, 0, 0, 0)
+      TermsProp.boundRangeSubstitutionLemma(body, 0, shift(arg, 1, 0))
+      shift(substitute(body, 0, shift(arg, 1, 0)), -1, 0)
+    }
+
   }
 
   object Types{
@@ -53,6 +62,14 @@ object Transformations {
         case AbsType(k, b) => AbsType(k, substitute(b, j + 1, shift(s, 1, 0)))
         case AppType(t1, t2) => AppType(substitute(t1, j, s), substitute(t2, j, s))
       }
+    }
+
+    // ↑⁻¹( [0 -> ↑¹(arg)]body )
+    def absSubstitution(body: Type, arg: Type): Type = {
+      assert(!arg.hasFreeVariablesIn(0, 0))
+      TypesProp.boundRangeShift(arg, 1, 0, 0, 0)
+      TypesProp.boundRangeSubstitutionLemma(body, 0, shift(arg, 1, 0))
+      shift(substitute(body, 0, shift(arg, 1, 0)), -1, 0)
     }
 
     def shift(env: TypeEnvironment, d: BigInt, c: BigInt): TypeEnvironment = {
@@ -184,50 +201,50 @@ object TransformationsProperties {
     import LambdaOmegaProperties.Types._
     import Transformations.Types._
 
-    @opaque @pure
-    def boundRangeSubstitutionIdentity(t: Type, j: BigInt, typ: Type): Unit = {
-      require(j >= 0)
-      require(!t.hasFreeVariablesIn(j, 1))
+    // @opaque @pure
+    // def boundRangeSubstitutionIdentity(t: Type, j: BigInt, typ: Type): Unit = {
+    //   require(j >= 0)
+    //   require(!t.hasFreeVariablesIn(j, 1))
 
-      t match {
-        case VariableType(k) => ()
-        case BasicType(_) =>  ()
-        case AbsType(_, body) => {
-          boundRangeSubstitutionIdentity(body, j+1, shift(typ, 1 ,0))
-        }
-        case ArrowType(t1, t2) => {
-          boundRangeSubstitutionIdentity(t1, j, typ)
-          boundRangeSubstitutionIdentity(t2, j, typ)
-        }
-        case AppType(t1, t2) => {
-          boundRangeSubstitutionIdentity(t1, j, typ)
-          boundRangeSubstitutionIdentity(t2, j, typ)
-        }
-      }
+    //   t match {
+    //     case VariableType(k) => ()
+    //     case BasicType(_) =>  ()
+    //     case AbsType(_, body) => {
+    //       boundRangeSubstitutionIdentity(body, j+1, shift(typ, 1 ,0))
+    //     }
+    //     case ArrowType(t1, t2) => {
+    //       boundRangeSubstitutionIdentity(t1, j, typ)
+    //       boundRangeSubstitutionIdentity(t2, j, typ)
+    //     }
+    //     case AppType(t1, t2) => {
+    //       boundRangeSubstitutionIdentity(t1, j, typ)
+    //       boundRangeSubstitutionIdentity(t2, j, typ)
+    //     }
+    //   }
 
-    }.ensuring(
-      substitute(t, j, typ) == t
-    )
+    // }.ensuring(
+    //   substitute(t, j, typ) == t
+    // )
 
-    @opaque @pure
-    def shift0Identity(t: Type, c: BigInt): Unit = {
-      require(c >= 0)
-      t match {
-        case VariableType(k) => ()
-        case BasicType(_) => ()
-        case AbsType(_, body) => {
-          shift0Identity(body, c+1)
-        }
-        case ArrowType(t1, t2) => {
-          shift0Identity(t1, c)
-          shift0Identity(t2, c)
-        }
-        case AppType(t1, t2) => {
-          shift0Identity(t1, c)
-          shift0Identity(t2, c)
-        }
-      }
-    }.ensuring(shift(t, 0, c) == t)
+    // @opaque @pure
+    // def shift0Identity(t: Type, c: BigInt): Unit = {
+    //   require(c >= 0)
+    //   t match {
+    //     case VariableType(k) => ()
+    //     case BasicType(_) => ()
+    //     case AbsType(_, body) => {
+    //       shift0Identity(body, c+1)
+    //     }
+    //     case ArrowType(t1, t2) => {
+    //       shift0Identity(t1, c)
+    //       shift0Identity(t2, c)
+    //     }
+    //     case AppType(t1, t2) => {
+    //       shift0Identity(t1, c)
+    //       shift0Identity(t2, c)
+    //     }
+    //   }
+    // }.ensuring(shift(t, 0, c) == t)
 
     @opaque @pure
     def boundRangeShiftComposition(t: Type, a: BigInt, b: BigInt, c: BigInt, d: BigInt): Unit = {
@@ -315,6 +332,30 @@ object TransformationsProperties {
         (if(a >= -d + c)                    {!shift(t, d, c).hasFreeVariablesIn(a + d, b)} else true) 
       })
 
+    def boundRangeSubstitutionLemma(t: Type, j: BigInt, s: Type): Unit = {
+      require(j >= 0)
+      require(!s.hasFreeVariablesIn(0, j+1))
+
+      t match {
+        case BasicType(_) => ()
+        case VariableType(k) => {
+          boundRangeIncreaseCutoff(s, 0, j, j+1)
+        }
+        case AbsType(_, body) => {
+          boundRangeShift(s, 1, 0, 0, j+1)
+          boundRangeIncreaseCutoff(shift(s, 1, 0), 0, j + 1, j+2)
+          boundRangeSubstitutionLemma(body, j+1, shift(s, 1, 0))
+        }
+        case ArrowType(t1, t2) => {
+          boundRangeSubstitutionLemma(t1, j, s)
+          boundRangeSubstitutionLemma(t2, j, s)
+        }
+        case AppType(t1, t2) => {
+          boundRangeSubstitutionLemma(t1, j, s)
+          boundRangeSubstitutionLemma(t2, j, s)
+        }
+      }
+    }.ensuring(!substitute(t, j, s).hasFreeVariablesIn(j, 1))
   }
 
 }
