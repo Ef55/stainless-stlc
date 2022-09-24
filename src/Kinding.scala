@@ -156,16 +156,16 @@ object TypingProperties {
     deriveKind(env, t).get.env == env
   )
 
-//   @opaque @pure
-//   def typeDerivationsUniqueness(td1: TypeDerivation, td2: TypeDerivation): Unit = {
-//     require(td1.isValid)
-//     require(td2.isValid)
-//     require(td1.term == td2.term)
-//     require(td1.env == td2.env)
+  @opaque @pure
+  def kindDerivationUniqueness(kd1: KindDerivation, kd2: KindDerivation): Unit = {
+    require(kd1.isValid)
+    require(kd2.isValid)
+    require(kd1.typ == kd2.typ)
+    require(kd1.env == kd2.env)
 
-//     deriveTypeCompleteness(td1)
-//     deriveTypeCompleteness(td2)
-//   }.ensuring(td1 == td2)
+    deriveKindCompleteness(kd1)
+    deriveKindCompleteness(kd2)
+  }.ensuring(kd1 == kd2)
 
 //   /// Progress
 //   @opaque @pure
