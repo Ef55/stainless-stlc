@@ -180,3 +180,44 @@ object ParallelReduction{
     }.ensuring(_ => reducesTo(prd.type1, prd.type2).isDefined)
 
   }
+
+  object BiMultiStepReductionDerivation{
+
+    import ParallelReduction._
+    import TypeEquivalence._
+
+    sealed trait BiMultiStepReductionDerivation{
+      def type1: Type = {
+        this match{
+          case SimpleStepDerivation(ssr) => ssr.type1
+          case TransitiveStepDerivation(t1, _, _, _) => t1
+          case SymmetricStepDerivation(t1, _, _) => t1
+        }
+      }
+
+      def type2: Type = {
+        this match{
+          case SimpleStepDerivation(ssr) => ssr.type2
+          case TransitiveStepDerivation(_, t2, _, _) => t2
+          case SymmetricStepDerivation(_, t2, _) => t2
+        }
+      }
+
+      def isValid: Boolean = {
+        this match{
+          case SimpleStepDerivation(ssr) => ssr.isValid
+          case TransitiveStepDerivation(t1, t2, msr1, msr2) => 
+            t1 == msr1.type1 && t2 == msr2.type2 && msr1.type2 == msr2.type1 &&
+            msr1.isValid && msr2.isValid
+          case SymmetricStepDerivation(t1, t2, msr) => 
+            t1 == msr.type2 && t2 == msr.type1 && msr.isValid
+        }
+      }
+    }
+    case class SimpleStepDerivation(ssr: ParallelReductionDerivation) extends BiMultiStepReductionDerivation
+    case class TransitiveStepDerivation(t1: Type, t2: Type, msr1: BiMultiStepReductionDerivation, msr2: BiMultiStepReductionDerivation) extends BiMultiStepReductionDerivation
+    case class SymmetricStepDerivation(t1: Type, t2: Type, msr: BiMultiStepReductionDerivation) extends BiMultiStepReductionDerivation
+
+    //def typeEqImpliesBiReduction(t1: Type)
+
+  }
