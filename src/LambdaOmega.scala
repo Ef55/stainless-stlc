@@ -33,6 +33,16 @@ object LambdaOmega {
       }
       rec(this, 0)
     }
+
+    def size: BigInt = {
+      this match{
+        case BasicType(_) => BigInt(1)
+        case ArrowType(t1, t2) => t1.size + t2.size
+        case VariableType(_) => BigInt(1)
+        case AbsType(_, body) => body.size + BigInt(1)
+        case AppType(t1, t2) => t1.size + t2.size
+      }
+    }.ensuring(_ > BigInt(0))
   }
   case class BasicType(s: String) extends Type
   case class ArrowType(t1: Type, t2: Type) extends Type

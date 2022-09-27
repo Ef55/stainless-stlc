@@ -73,7 +73,7 @@ object ParallelReduction{
         case ArrowDerivation(t1, _, _, _) => t1
         case AbsDerivation(t1, _, _) => t1
         case AppDerivation(t1, _, _, _) => t1
-        case AppAbsDerivation(t1, _, _, _) => t1
+        case AppAbsDerivation(t1, _) => t1
       }
     }
 
@@ -83,7 +83,7 @@ object ParallelReduction{
         case ArrowDerivation(_, t2, _, _) => t2
         case AbsDerivation(_, t2, _) => t2
         case AppDerivation(_, t2, _, _) => t2
-        case AppAbsDerivation(_, t2, _, _) => t2
+        case AppAbsDerivation(_, t2) => t2
       }
     }
 
@@ -98,10 +98,8 @@ object ParallelReduction{
         case AppDerivation(AppType(t11, t12), AppType(t21, t22), prd1, prd2) =>
           prd1.isValid && prd2.isValid && prd1.type1 == t11 &&
           prd1.type2 == t21 && prd2.type1 == t12 && prd2.type2 == t22
-        case AppAbsDerivation(AppType(AbsType(argK, body), t2), t3, prd1, prd2) =>
-          prd1.isValid && prd2.isValid && prd1.type1 == body &&
-          prd2.type1 == t2 && t3 == absSubstitution(prd1.type2, prd2.type2) 
-        case AppAbsDerivation(_, _, _, _) => false
+        case AppAbsDerivation(AppType(AbsType(argK, body), t12), t3) => t3 == absSubstitution(body, t12) 
+        case _ => false
       }
     }
   }
@@ -109,9 +107,10 @@ object ParallelReduction{
   case class ArrowDerivation(t1: ArrowType, t2: ArrowType, prd1: ParallelReductionDerivation, prd2: ParallelReductionDerivation) extends ParallelReductionDerivation
   case class AbsDerivation(t1: AbsType, t2: AbsType, prd: ParallelReductionDerivation) extends ParallelReductionDerivation
   case class AppDerivation(t1: AppType, t2: AppType, prd1: ParallelReductionDerivation, prd2: ParallelReductionDerivation) extends ParallelReductionDerivation
-  case class AppAbsDerivation(t1: AppType, t2: Type, prd1: ParallelReductionDerivation, prd2: ParallelReductionDerivation) extends ParallelReductionDerivation
+  case class AppAbsDerivation(t1: AppType, t2: Type) extends ParallelReductionDerivation
 
   def reducesTo(t1: Type, t2: Type): Option[ParallelReductionDerivation] = {
+    decreases(t1.size + t2.size)
     if(t1 == t2){
       Some(ReflDerivation(t1))
     }
@@ -122,8 +121,62 @@ object ParallelReduction{
               case (Some(prd1), Some(prd2)) => Some(ArrowDerivation(at1, at2, prd1, prd2))
               case _ => None()
            }
-        case _ => None()
-          }
+        case (at1@AbsType(k1, body1), at2@AbsType(k2, body2)) =>
+           reducesTo(body1, body2) match {
+              case Some(prd) if k1 == k2 => Some(AbsDerivation(at1, at2, prd))
+              case _ => None()
+           }
+        
+        case (at1@AppType(AbsType(argK, body), t12), t3) if t3 == absSubstitution(body, t12) => Some(AppAbsDerivation(at1, t3))
+        case (at1@AppType(t11, t12), at2@AppType(t21, t22)) =>
+           (reducesTo(t11, t21), reducesTo(t12, t22)) match {
+              case (Some(prd1), Some(prd2)) => Some(AppDerivation(at1, at2, prd1, prd2))
+              case _ => None()
+           }
+        case (_, _) => None()
+        }
       }
     }
+
+    def reducesToSoundness(t1: Type, t2: Type): Unit = {
+      require(reducesTo(t1, t2).isDefined)
+      decreases(t1.size + t2.size)
+      if(t1 == t2){
+        ()
+      }
+      else{
+        (t1, t2) match{
+          case (at1@ArrowType(t11, t12), at2@ArrowType(t21, t22)) =>
+            reducesToSoundness(t11, t21)
+            reducesToSoundness(t12, t22)
+          case (at1@AbsType(k1, body1), at2@AbsType(k2, body2)) =>
+            reducesToSoundness(body1, body2)
+          case (at1@AppType(AbsType(argK, body), t12), t3) if t3 == absSubstitution(body, t12) => ()
+          case (at1@AppType(t11, t12), at2@AppType(t21, t22)) =>
+            reducesToSoundness(t11, t21)
+            reducesToSoundness(t12, t22)
+          case (_, _) => ()
+          }
+        }
+    }.ensuring(_ => reducesTo(t1, t2).get.isValid)
+
+    def reducesToCompleteness(prd: ParallelReductionDerivation): Unit = {
+      require(prd.isValid)
+      prd match{
+        case ReflDerivation(t) => ()
+        case ArrowDerivation(ArrowType(_, _), ArrowType(_, _), prd1, prd2) =>
+          reducesToCompleteness(prd1)
+          reducesToCompleteness(prd2)
+        case AbsDerivation(AbsType(_, _), AbsType(_, _), prd1) =>
+          reducesToCompleteness(prd1)
+        case AppDerivation(AppType(_, _), AppType(_, _), prd1, prd2) =>
+          reducesToCompleteness(prd1)
+          reducesToCompleteness(prd2)
+        case AppAbsDerivation(AppType(AbsType(argK, body), t12), t3) => 
+          assert(t3 == absSubstitution(body, t12))
+          ()
+        case _ => ()
+      }
+    }.ensuring(_ => reducesTo(prd.type1, prd.type2).isDefined)
+
   }

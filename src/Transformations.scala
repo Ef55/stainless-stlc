@@ -52,7 +52,7 @@ object Transformations {
         case AbsType(arg, body) => AbsType(arg, shift(body, d, c + 1))
         case AppType(t1, t2) => AppType(shift(t1, d, c), shift(t2, d, c))
       }
-    }
+    }.ensuring(_.size == t.size)
 
     def substitute(t: Type, j: BigInt, s: Type): Type = {
       t match {
