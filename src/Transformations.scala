@@ -99,7 +99,7 @@ object TransformationsProperties {
     import LambdaOmegaProperties.Terms._
     import Transformations.Terms._
 
-  @opaque @pure
+    @opaque @pure
     def boundRangeShiftComposition(t: Term, a: BigInt, b: BigInt, c: BigInt, d: BigInt): Unit = {
       require(a >= 0)
       require(c >= 0)

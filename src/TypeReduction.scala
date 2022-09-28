@@ -182,35 +182,35 @@ object TypeReduction{
       }
     }.ensuring(_ => reducesTo(prd.type1, prd.type2).isDefined)
 
-    sealed trait MultiStepParallelReduction{
-      def type1: Type = {
-        this match{
-          case SimpleStepDerivation(ssr) => ssr.type1
-          case TransitiveStepDerivation(t1, _, _, _) => t1
-        }
+  sealed trait MultiStepParallelReduction{
+    def type1: Type = {
+      this match{
+        case SimpleStepDerivation(ssr) => ssr.type1
+        case TransitiveStepDerivation(t1, _, _, _) => t1
       }
-
-      def type2: Type = {
-        this match{
-          case SimpleStepDerivation(ssr) => ssr.type2
-          case TransitiveStepDerivation(_, t2, _, _) => t2
-        }
-      }
-
-      def isValid: Boolean = {
-        this match{
-          case SimpleStepDerivation(strd) => strd.isValid
-          case TransitiveStepDerivation(t1, t2, strd1, strd2) => 
-            t1 == strd1.type1 && t2 == strd2.type2 && strd1.type2 == strd2.type1 &&
-            strd1.isValid && strd2.isValid
-        }
-      }
-
     }
-    case class SimpleStepDerivation(prd: ParallelReductionDerivation) extends MultiStepParallelReduction
-    case class TransitiveStepDerivation(t1: Type, t2: Type, strd1: MultiStepParallelReduction, strd2: MultiStepParallelReduction) extends MultiStepParallelReduction
+
+    def type2: Type = {
+      this match{
+        case SimpleStepDerivation(ssr) => ssr.type2
+        case TransitiveStepDerivation(_, t2, _, _) => t2
+      }
+    }
+
+    def isValid: Boolean = {
+      this match{
+        case SimpleStepDerivation(strd) => strd.isValid
+        case TransitiveStepDerivation(t1, t2, strd1, strd2) => 
+          t1 == strd1.type1 && t2 == strd2.type2 && strd1.type2 == strd2.type1 &&
+          strd1.isValid && strd2.isValid
+      }
+    }
+
+  }
+  case class SimpleStepDerivation(prd: ParallelReductionDerivation) extends MultiStepParallelReduction
+  case class TransitiveStepDerivation(t1: Type, t2: Type, strd1: MultiStepParallelReduction, strd2: MultiStepParallelReduction) extends MultiStepParallelReduction
   
-sealed trait DetReductionDerivation{
+  sealed trait DetReductionDerivation{
     def type1: Type = {
       this match{
         case DetArrow1Derivation(t1, _, _) => t1
@@ -225,7 +225,6 @@ sealed trait DetReductionDerivation{
       this match{
         case DetArrow1Derivation(_, t2, _) => t2
         case DetArrow2Derivation(_, t2, _) => t2
-        case DetAbsDerivation(_, t2, _) => t2
         case DetApp1Derivation(_, t2, _) => t2
         case DetApp2Derivation(_, t2, _) => t2
         case DetBetaDerivation(_, t2) => t2
@@ -314,36 +313,30 @@ sealed trait DetReductionDerivation{
         detReducesToSoundness(t11, t21)
       case (at1@ArrowType(t11, t12), at2@ArrowType(t21, t22)) if t11 == t21 =>
         detReducesToSoundness(t12, t22) 
-
+      case (at1@AppType(AbsType(argK, body), t12), t3) if t3 == absSubstitution(body, t12) => ()
       case (at1@AppType(t11, t12), at2@AppType(t21, t22)) if t12 == t22 =>
         detReducesToSoundness(t11, t21) 
       case (at1@AppType(t11, t12), at2@AppType(t21, t22)) if t11 == t21 =>
         detReducesToSoundness(t12, t22) 
-      case (at1@AbsType(k1, body1), at2@AbsType(k2, body2)) if k1 == k2 =>
-        detReducesToSoundness(body1, body2) 
-      case (at1@AppType(AbsType(argK, body), t12), t3) if t3 == absSubstitution(body, t12) => ()
       case (_, _) => ()
     }
   }.ensuring(_ => detReducesTo(t1, t2).get.isValid)
 
-  def detReducesToCompleteness(prd: ParallelReductionDerivation): Unit = {
-    require(prd.isValid)
-    prd match{
-      case ReflDerivation(t) => ()
-      case ArrowDerivation(ArrowType(_, _), ArrowType(_, _), prd1, prd2) =>
-        detReducesToCompleteness(prd1)
-        detReducesToCompleteness(prd2)
-      case AbsDerivation(AbsType(_, _), AbsType(_, _), prd1) =>
-        detReducesToCompleteness(prd1)
-      case AppDerivation(AppType(_, _), AppType(_, _), prd1, prd2) =>
-        reducesToCompleteness(prd1)
-        reducesToCompleteness(prd2)
-      case AppAbsDerivation(AppType(AbsType(argK, body), t12), t3) => 
-        assert(t3 == absSubstitution(body, t12))
-        ()
+  def detReducesToCompleteness(drd: DetReductionDerivation): Unit = {
+    require(drd.isValid)
+    drd match {
+      case DetArrow1Derivation(ArrowType(t11, t12), ArrowType(t21, t22), drd1) =>
+        detReducesToCompleteness(drd1)
+      case DetArrow2Derivation(ArrowType(t11, t12), ArrowType(t21, t22), drd2) =>
+        detReducesToCompleteness(drd2)
+      case DetApp1Derivation(AppType(t11, t12), AppType(t21, t22), drd1) =>
+        detReducesToCompleteness(drd1)
+      case DetApp2Derivation(AppType(t11, t12), AppType(t21, t22), drd2) =>
+        detReducesToCompleteness(drd2)
+      case DetBetaDerivation(AppType(AbsType(argK, body), t12), t3) => ()
       case _ => ()
     }
-  }.ensuring(_ => reducesTo(prd.type1, prd.type2).isDefined)
+  }.ensuring(_ => reducesTo(drd.type1, drd.type2).isDefined)
 
   def detReduceSoundness(t: Type): Unit = {
     require(detReduce(t).isDefined)
@@ -361,15 +354,12 @@ sealed trait DetReductionDerivation{
           case Some(prd1) => detReduceSoundness(t11)
           case _ => detReduce(t12) match {
             case Some(prd2) => detReduceSoundness(t12)
-            case _ => ()
+            case _ => t11 match {
+              case AbsType(argK, body) => ()
+              case _ => ()
+            }
           }
         }
-      case at@AbsType(k1, body1) =>
-        detReduce(body1) match {
-          case Some(prd) => detReduceSoundness(body1)
-          case _ => ()
-        }
-      case AppType(AbsType(argK, body), t12) => ()
       case _ => ()
       }
   }.ensuring(_ => detReduce(t).get.isValid)
@@ -379,29 +369,29 @@ sealed trait DetReductionDerivation{
     t match{
       case at@ArrowType(t11, t12) =>
         detReduce(t11) match {
-          case Some(prd1) => detReduceSoundness(t11)
+          case Some(prd1) => detReducesToReduce(t11)
           case _ => detReduce(t12) match{
-            case Some(prd2) => detReduceSoundness(t12)
+            case Some(prd2) => detReducesToReduce(t12)
             case None() => ()
           }
         }
       case at@AppType(t11, t12) =>
         detReduce(t11) match {
-          case Some(prd1) => detReduceSoundness(t11)
+          case Some(prd1) => detReducesToReduce(t11)
           case _ => detReduce(t12) match {
-            case Some(prd2) => detReduceSoundness(t12)
+            case Some(prd2) => detReducesToReduce(t12)
             case _ => ()
           }
         }
       case at@AbsType(k1, body1) =>
         detReduce(body1) match {
-          case Some(prd) => detReduceSoundness(body1)
+          case Some(prd) => detReducesToReduce(body1)
           case _ => ()
         }
       case AppType(AbsType(argK, body), t12) => ()
       case _ => ()
       }
-  }.ensuring(_ => detReducesTo(t, detReduce(t)))
+  }.ensuring(_ => detReducesTo(t, detReduce(t).get.type2).isDefined)
 
   sealed trait DetMultiStepReductionDerivation{
 
