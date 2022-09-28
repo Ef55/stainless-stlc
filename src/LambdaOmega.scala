@@ -9,6 +9,13 @@ object LambdaOmega {
   case class ArrowKind(k1: Kind, k2: Kind) extends Kind
 
   sealed trait Type{
+    def isValue: Boolean = {
+      this match{
+        case AbsType(_, body) => true
+        case BasicType(_) => true
+        case _ => false
+      }
+    }
     def hasFreeVariablesIn(c: BigInt, d: BigInt): Boolean = {
       require(c >= 0)
       require(d >= 0)
@@ -43,6 +50,7 @@ object LambdaOmega {
         case AppType(t1, t2) => t1.size + t2.size
       }
     }.ensuring(_ > BigInt(0))
+
   }
   case class BasicType(s: String) extends Type
   case class ArrowType(t1: Type, t2: Type) extends Type
