@@ -3,6 +3,7 @@ import stainless.collection._
 import stainless.annotation._
 import LambdaOmega._
 import Transformations.Types._
+import Kinding._
 
 object TypeEquivalence{
 
@@ -64,6 +65,25 @@ object TypeEquivalence{
   case class AppEqDerivation(t1: AppType, t2: AppType, ed: EquivalenceDerivation, ed2: EquivalenceDerivation) extends EquivalenceDerivation
   case class AppAbsEqDerivation(t1: AppType, t2: Type) extends EquivalenceDerivation
 
+  def equivalentSameKind(eq: EquivalenceDerivation, env: KindEnvironment): Unit = {
+    require(eq.isValid)
+    eq match{
+      case ReflEqDerivation(_) => ()
+      case SymmEqDerivation(t1, t2, ed) => equivalentSameKind(ed, env)
+      case TransEqDerivation(t1, t2, ed1, ed2) => 
+        equivalentSameKind(ed1, env)
+        equivalentSameKind(ed2, env)
+      case ArrowEqDerivation(t1, t2, ed1, ed2) =>
+        equivalentSameKind(ed1, env)
+        equivalentSameKind(ed2, env)
+      case AbsEqDerivation(t1, t2, ed) =>
+        equivalentSameKind(ed, t1.argKind :: env)
+      case AppEqDerivation(t1, t2, ed1, ed2) =>
+        equivalentSameKind(ed1, env)
+        equivalentSameKind(ed2, env)
+      case _ => ()
+    }
+  }.ensuring(_ => deriveKind(env, eq.type1) == deriveKind(env, eq.type2))
 
  }
 
@@ -255,26 +275,24 @@ object TypeReduction{
   def detReducesTo(t1: Type, t2: Type): Option[DetReductionDerivation] = {
     decreases(t1.size + t2.size)
     (t1, t2) match{
-      case (at1@ArrowType(t11, t12), at2@ArrowType(t21, t22)) if t12 == t22 =>
+      case (at1@ArrowType(t11, t12), at2@ArrowType(t21, t22)) =>
         detReducesTo(t11, t21) match {
-          case Some(prd1) => Some(DetArrow1Derivation(at1, at2, prd1))
-          case _ => None()
-        }
-      case (at1@ArrowType(t11, t12), at2@ArrowType(t21, t22)) if t11 == t21 =>
-        detReducesTo(t12, t22) match {
-          case Some(prd2) => Some(DetArrow2Derivation(at1, at2, prd2))
-          case _ => None()
+          case Some(prd1) if t12 == t22 => Some(DetArrow1Derivation(at1, at2, prd1))
+          case _ => 
+            detReducesTo(t12, t22) match {
+              case Some(prd2) if t11 == t21 => Some(DetArrow2Derivation(at1, at2, prd2))
+              case _ => None()
+            }
         }
       case (at1@AppType(AbsType(argK, body), t12), t3) if t3 == absSubstitution(body, t12) => Some(DetBetaDerivation(at1, t3))
-      case (at1@AppType(t11, t12), at2@AppType(t21, t22)) if t12 == t22 =>
+      case (at1@AppType(t11, t12), at2@AppType(t21, t22)) =>
         detReducesTo(t11, t21) match {
-          case Some(prd1) => Some(DetApp1Derivation(at1, at2, prd1))
-          case _ => None()
-        }
-      case (at1@AppType(t11, t12), at2@AppType(t21, t22)) if t11 == t21 =>
-        detReducesTo(t12, t22) match {
-          case Some(prd2) => Some(DetApp2Derivation(at1, at2, prd2))
-          case _ => None()
+          case Some(prd1) if t12 == t22 => Some(DetApp1Derivation(at1, at2, prd1))
+          case _ => 
+            detReducesTo(t12, t22) match {
+              case Some(prd2) if t11 == t21 => Some(DetApp2Derivation(at1, at2, prd2))
+              case _ => None()
+            }
         }
       case (_, _) => None()
       }
@@ -309,15 +327,25 @@ object TypeReduction{
     require(detReducesTo(t1, t2).isDefined)
     decreases(t1.size + t2.size)
     (t1, t2) match{
-      case (at1@ArrowType(t11, t12), at2@ArrowType(t21, t22)) if t12 == t22 =>
-        detReducesToSoundness(t11, t21)
-      case (at1@ArrowType(t11, t12), at2@ArrowType(t21, t22)) if t11 == t21 =>
-        detReducesToSoundness(t12, t22) 
+      case (at1@ArrowType(t11, t12), at2@ArrowType(t21, t22)) =>
+        detReducesTo(t11, t21) match {
+          case Some(prd1) if t12 == t22 => detReducesToSoundness(t11, t21)
+          case _ => 
+            detReducesTo(t12, t22) match {
+              case Some(prd2) if t11 == t21 => detReducesToSoundness(t12, t22)
+              case _ => ()
+            }
+        }
       case (at1@AppType(AbsType(argK, body), t12), t3) if t3 == absSubstitution(body, t12) => ()
-      case (at1@AppType(t11, t12), at2@AppType(t21, t22)) if t12 == t22 =>
-        detReducesToSoundness(t11, t21) 
-      case (at1@AppType(t11, t12), at2@AppType(t21, t22)) if t11 == t21 =>
-        detReducesToSoundness(t12, t22) 
+      case (at1@AppType(t11, t12), at2@AppType(t21, t22)) =>
+        detReducesTo(t11, t21) match {
+          case Some(prd1) if t12 == t22 => detReducesToSoundness(t11, t21)
+          case _ => 
+            detReducesTo(t12, t22) match {
+              case Some(prd2) if t11 == t21 => detReducesToSoundness(t12, t22)
+              case _ => ()
+            }
+        }
       case (_, _) => ()
     }
   }.ensuring(_ => detReducesTo(t1, t2).get.isValid)
@@ -371,8 +399,9 @@ object TypeReduction{
         detReduce(t11) match {
           case Some(prd1) => detReducesToReduce(t11)
           case _ => detReduce(t12) match{
-            case Some(prd2) => detReducesToReduce(t12)
-            case None() => ()
+            case Some(prd2) => 
+              detReducesToReduce(t12)
+            case None() => () 
           }
         }
       case at@AppType(t11, t12) =>
@@ -380,18 +409,21 @@ object TypeReduction{
           case Some(prd1) => detReducesToReduce(t11)
           case _ => detReduce(t12) match {
             case Some(prd2) => detReducesToReduce(t12)
-            case _ => ()
+            case _ => t11 match {
+                case AbsType(argK, body) => ()
+                case _ => ()
+            }
           }
         }
-      case at@AbsType(k1, body1) =>
-        detReduce(body1) match {
-          case Some(prd) => detReducesToReduce(body1)
-          case _ => ()
-        }
-      case AppType(AbsType(argK, body), t12) => ()
       case _ => ()
       }
   }.ensuring(_ => detReducesTo(t, detReduce(t).get.type2).isDefined)
+
+  // def properNormalFormsAreEquivalent(eq: EquivalenceDerivation){
+  //   require(eq.isValid)
+  //   require(deriveKind(eq).isDefined)
+  //   require(deriveKind().isDefined)
+  // }
 
   sealed trait DetMultiStepReductionDerivation{
 

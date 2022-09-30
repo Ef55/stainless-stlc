@@ -9,7 +9,7 @@ object Kinding {
   sealed trait KindDerivation {
 
     def env: KindEnvironment = this match {
-      case BasicTypeDerivation(e, _, _) => e
+      case BasicTypeDerivation(e, _) => e
       case VariableTypeDerivation(e, _, _) => e
       case AbsTypeDerivation(e, _, _, _) => e
       case AppTypeDerivation(e, _, _, _, _) => e
@@ -18,7 +18,7 @@ object Kinding {
     }
 
     def k: Kind = this match {
-      case BasicTypeDerivation(_, k, _) => k
+      case BasicTypeDerivation(_, _) => ProperKind
       case VariableTypeDerivation(_, k, _) => k
       case AbsTypeDerivation(_, k, _, _) => k
       case AppTypeDerivation(_, k, _, _, _) => k
@@ -26,7 +26,7 @@ object Kinding {
     }
 
     def typ: Type = this match{
-      case BasicTypeDerivation(_, _, typ) => typ
+      case BasicTypeDerivation(_, typ) => typ
       case VariableTypeDerivation(_, _, typ) => typ
       case AbsTypeDerivation(_, _, typ, _) => typ
       case AppTypeDerivation(_, _, typ, _, _) => typ
@@ -35,7 +35,7 @@ object Kinding {
 
     def isValid: Boolean = {
       this match{
-        case BasicTypeDerivation(_, k, _) => k == ProperKind
+        case BasicTypeDerivation(_, _) => true
         case VariableTypeDerivation(env, k, VariableType(j)) => {
           (j < env.size) &&
           env(j) == k
@@ -63,7 +63,7 @@ object Kinding {
       this.k == that.k && this.env == that.env
     }
   }
-  case class BasicTypeDerivation(e: KindEnvironment, k: Kind, typ: BasicType) extends KindDerivation
+  case class BasicTypeDerivation(e: KindEnvironment, typ: BasicType) extends KindDerivation
   case class VariableTypeDerivation(e: KindEnvironment, k: Kind, typ: VariableType) extends KindDerivation
   case class AbsTypeDerivation(e: KindEnvironment, k: Kind, typ: AbsType, bkd: KindDerivation) extends KindDerivation
   case class AppTypeDerivation(e: KindEnvironment, k: Kind, typ: AppType, bkd1: KindDerivation, bkd2: KindDerivation) extends KindDerivation
@@ -71,7 +71,7 @@ object Kinding {
 
   def deriveKind(env: KindEnvironment, t: Type): Option[KindDerivation] = {
     t match {
-      case bt@BasicType(_) => Some(BasicTypeDerivation(env, ProperKind, bt))
+      case bt@BasicType(_) => Some(BasicTypeDerivation(env, bt))
       case v@VariableType(j) => if (j < env.size) Some(VariableTypeDerivation(env, env(j), v)) else None()
       case arr@ArrowType(t1, t2) => {
         (deriveKind(env, t1), deriveKind(env, t2)) match {
@@ -118,9 +118,9 @@ object TypingProperties {
   import LambdaOmega._
   import Kinding._
 //   import Reduction._  
-//   import Transformations.{ Terms => TermTr}
+  import Transformations.{ Terms => TermTr, Types => TypeTr}
 
-//   import ListProperties._
+  import ListProperties._
   // import STLCProperties.{ Terms => TermProp}
 //   import ReductionProperties._
 //   import TransformationsProperties.{ Terms => TermTrProp}
@@ -185,34 +185,32 @@ object TypingProperties {
 
 //   /// Preservation
 
-//   @opaque @pure
-//   def environmentWeakening(td: TypeDerivation, envExt: TypeEnvironment): TypeDerivation = {
-//     require(td.isValid)
-//     td match {
-//       case VarDerivation(env, typ, Var(k)) => {
-//         concatFirstIndexing(env, envExt, k)
-//         VarDerivation(env ++ envExt, typ, Var(k))
-//       }
-//       case AbsDerivation(env, typ, Abs(argType, body), btd) => {
-//         val resBtd = environmentWeakening(btd, envExt)
-//         AbsDerivation(env ++ envExt, typ, Abs(argType, body), resBtd)
-//       }
-//       case AppDerivation(env, typ, App(t1, t2), bt1, bt2) => {
-//         val resBt1 = environmentWeakening(bt1, envExt)
-//         val resBt2 = environmentWeakening(bt2, envExt)
-//         AppDerivation(env ++ envExt, typ, App(t1, t2), resBt1, resBt2)
-//       }
-//       case FixDerivation(env, typ, Fix(f), ftd) => {
-//         val resFtd = environmentWeakening(ftd, envExt)
-//         FixDerivation(env ++ envExt, typ, Fix(f), resFtd)
-//       }
-//     }
-//   }.ensuring(res => 
-//     res.isValid && 
-//     ( res.env == td.env ++ envExt ) && 
-//     ( res.term == td.term ) && 
-//     ( res.t == td.t )
-//   )
+  // @opaque @pure
+  // def environmentWeakening(kd: KindDerivation, envExt: KindEnvironment): KindDerivation = {
+  //   require(kd.isValid)
+  //   kd match {
+  //     case BasicTypeDerivation(env, bt) => BasicTypeDerivation(env ++ envExt, bt)
+  //     case VariableTypeDerivation(env, typ, VariableType(k)) => {
+  //       concatFirstIndexing(env, envExt, k)
+  //       VariableTypeDerivation(env ++ envExt, typ, VariableType(k))
+  //     }
+  //     case AbsTypeDerivation(env, k, AbsType(argKind, body), bkd) => {
+  //       val resBkd = environmentWeakening(bkd, envExt)
+  //       AbsTypeDerivation(env ++ envExt, k, AbsType(argKind, body), resBkd)
+  //     }
+  //     case AppTypeDerivation(env, k, AppType(t1, t2), bk1, bk2) => {
+  //       val resBk1 = environmentWeakening(bk1, envExt)
+  //       val resBk2 = environmentWeakening(bk2, envExt)
+  //       AppTypeDerivation(env ++ envExt, k, AppType(t1, t2), resBk1, resBk2)
+  //     }
+
+  //   }
+  // }.ensuring(res => 
+  //   res.isValid && 
+  //   ( res.env == kd.env ++ envExt ) && 
+  //   ( res.typ == kd.typ) && 
+  //   ( res.k == kd.k )
+  // )
 
 //   @opaque @pure
 //   def variableEnvironmentStrengthening(v: VarDerivation, env: TypeEnvironment, envExt: TypeEnvironment): TypeDerivation = {
@@ -242,44 +240,45 @@ object TypingProperties {
 //     ( res.term == v.term )
 //   )
 
-//   @opaque @pure
-//   def insertTypeInEnv(env1: TypeEnvironment, insert: Type, env2: TypeEnvironment, td: TypeDerivation): TypeDerivation = {
-//     require(td.isValid)
-//     require(env1 ++ env2 == td.env)
+  // @opaque @pure
+  // def insertKindInEnv(env1: KindEnvironment, insert: Kind, env2: KindEnvironment, kd: KindDerivation): KindDerivation = {
+  //   require(td.isValid)
+  //   require(env1 ++ env2 == kd.env)
 
-//     val newEnv = env1 ++ (insert :: env2)
+  //   val newEnv = env1 ++ (insert :: env2)
 
-//     td match {
-//       case v@VarDerivation(_, typ, Var(k)) => {
-//         if (k < env1.size){
-//           variableEnvironmentUpdate(v, env1, env2, insert :: env2)
-//         }
-//         else{
-//           insertionIndexing(env1, env2, insert, k)
-//           VarDerivation(newEnv, typ, Var(k + 1))
-//          }
-//       }
-//       case AbsDerivation(_, typ, Abs(argType, body), btd) => {
-//         val resBtd = insertTypeInEnv(argType :: env1, insert, env2, btd)
-//         AbsDerivation(newEnv, typ, Abs(argType, resBtd.term), resBtd)
-//       }
-//       case AppDerivation(_, typ, App(t1, t2), td1, td2) => {
-//         val resTd1 = insertTypeInEnv(env1, insert, env2, td1)
-//         val resTd2 = insertTypeInEnv(env1, insert, env2, td2)
-//         AppDerivation(newEnv, typ, App(resTd1.term, resTd2.term), resTd1, resTd2)
-//       }
-//       case FixDerivation(_, typ, Fix(f), ftd) => {
-//         val resFtd = insertTypeInEnv(env1, insert, env2, ftd)
-//         FixDerivation(newEnv, typ, Fix(resFtd.term), resFtd)
-//       }
-//     }
+  //   td match {
+  //     case 
+  //     case v@VarDerivation(_, typ, Var(k)) => {
+  //       if (k < env1.size){
+  //         variableEnvironmentUpdate(v, env1, env2, insert :: env2)
+  //       }
+  //       else{
+  //         insertionIndexing(env1, env2, insert, k)
+  //         VarDerivation(newEnv, typ, Var(k + 1))
+  //        }
+  //     }
+  //     case AbsDerivation(_, typ, Abs(argType, body), btd) => {
+  //       val resBtd = insertTypeInEnv(argType :: env1, insert, env2, btd)
+  //       AbsDerivation(newEnv, typ, Abs(argType, resBtd.term), resBtd)
+  //     }
+  //     case AppDerivation(_, typ, App(t1, t2), td1, td2) => {
+  //       val resTd1 = insertTypeInEnv(env1, insert, env2, td1)
+  //       val resTd2 = insertTypeInEnv(env1, insert, env2, td2)
+  //       AppDerivation(newEnv, typ, App(resTd1.term, resTd2.term), resTd1, resTd2)
+  //     }
+  //     case FixDerivation(_, typ, Fix(f), ftd) => {
+  //       val resFtd = insertTypeInEnv(env1, insert, env2, ftd)
+  //       FixDerivation(newEnv, typ, Fix(resFtd.term), resFtd)
+  //     }
+  //   }
     
-//   }.ensuring(res =>
-//     res.isValid &&
-//     ( res.term == TermTr.shift(td.term, 1, env1.size) ) &&
-//     ( res.env == env1 ++ (insert :: env2) ) &&
-//     ( td.t == res.t )
-//   )
+  // }.ensuring(res =>
+  //   res.isValid &&
+  //   ( res.term == TermTr.shift(td.term, 1, env1.size) ) &&
+  //   ( res.env == env1 ++ (insert :: env2) ) &&
+  //   ( td.t == res.t )
+  // )
 
 //   @opaque @pure
 //   def removeTypeInEnv(env1: TypeEnvironment, remove: Type, env2: TypeEnvironment, td: TypeDerivation): TypeDerivation = {
@@ -333,61 +332,62 @@ object TypingProperties {
 //   }.ensuring(td.isInstanceOf[AbsDerivation])
 
 
-//   @opaque @pure
-//   def preservationUnderSubst(td: TypeDerivation, j: BigInt, sd: TypeDerivation): TypeDerivation = {
-//     require(td.isValid)
-//     require(sd.isValid)
-//     require(td.env == sd.env)
-//     require(0 <= j && j < td.env.size)
-//     require(td.env(j) == sd.t)
+  // @opaque @pure
+  // def preservationUnderSubst(td: KindDerivation, j: BigInt, sd: KindDerivation): KindDerivation = {
+  //   require(td.isValid)
+  //   require(sd.isValid)
+  //   require(td.env == sd.env)
+  //   require(0 <= j && j < td.env.size)
+  //   require(td.env(j) == sd.k)
 
-//     val result = TermTr.substitute(td.term, j, sd.term)
+  //   val result = TypeTr.substitute(td.term, j, sd.term)
 
-//     td match {
-//       case VarDerivation(env, typ, Var(k)) => {
-//         if(j == k) {
-//           assert(result == sd.term)
-//           sd
-//         }
-//         else {
-//           assert(result == td.term)
-//           td
-//         }
-//       }
-//       case AbsDerivation(env, typ, Abs(argType, body), btd) => {
-//         val d0 = insertTypeInEnv(Nil(), argType, td.env, sd)
-//         assert(btd.env == argType :: td.env)
-//         val d1 = preservationUnderSubst(btd, j+1, d0) // Fragile: require 3/5
-//         val res = AbsDerivation(env, typ, Abs(argType, d1.term), d1)
-//         assert(  res.isValid )
-//         assert( res.term == TermTr.substitute(td.term, j, sd.term) )
-//         assert( td === res )
-//         res
-//       }
-//       case AppDerivation(env, typ, App(t1, t2), td1, td2) => {
-//         val td1p = preservationUnderSubst(td1, j, sd)
-//         val td2p = preservationUnderSubst(td2, j, sd)
-//         val res = AppDerivation(env, typ, App(td1p.term, td2p.term), td1p, td2p)
-//         assert(  res.isValid )
-//         assert( res.term == TermTr.substitute(td.term, j, sd.term) )
-//         assert( td === res )
-//         res
-//       }
-//       case FixDerivation(env, typ, Fix(f), ftd) => {
-//         val ftdp = preservationUnderSubst(ftd, j, sd)
-//         val res = FixDerivation(env, typ, Fix(ftdp.term), ftdp)
-//         assert(  res.isValid )
-//         assert( res.term == TermTr.substitute(td.term, j, sd.term) )
-//         assert( td === res )
-//         res
-//       }
-//     }
+  //   td match {
+  //     case BasicTypeDerivation(_, _, _) => {
+  //       td
+  //     }
+  //     case VariableTypeDerivation(_, _, VariableType(k)) => {
+  //       if(j == k) {
+  //         sd
+  //       }
+  //       else {
+  //         td
+  //       }
+  //     }
+  //     case AbsDerivation(env, typ, Abs(argType, body), btd) => {
+  //       val d0 = insertTypeInEnv(Nil(), argType, td.env, sd)
+  //       assert(btd.env == argType :: td.env)
+  //       val d1 = preservationUnderSubst(btd, j+1, d0) // Fragile: require 3/5
+  //       val res = AbsDerivation(env, typ, Abs(argType, d1.term), d1)
+  //       assert(  res.isValid )
+  //       assert( res.term == TermTr.substitute(td.term, j, sd.term) )
+  //       assert( td === res )
+  //       res
+  //     }
+  //     case AppDerivation(env, typ, App(t1, t2), td1, td2) => {
+  //       val td1p = preservationUnderSubst(td1, j, sd)
+  //       val td2p = preservationUnderSubst(td2, j, sd)
+  //       val res = AppDerivation(env, typ, App(td1p.term, td2p.term), td1p, td2p)
+  //       assert(  res.isValid )
+  //       assert( res.term == TermTr.substitute(td.term, j, sd.term) )
+  //       assert( td === res )
+  //       res
+  //     }
+  //     case FixDerivation(env, typ, Fix(f), ftd) => {
+  //       val ftdp = preservationUnderSubst(ftd, j, sd)
+  //       val res = FixDerivation(env, typ, Fix(ftdp.term), ftdp)
+  //       assert(  res.isValid )
+  //       assert( res.term == TermTr.substitute(td.term, j, sd.term) )
+  //       assert( td === res )
+  //       res
+  //     }
+  //   }
 
-//   }.ensuring(res =>
-//     res.isValid &&
-//     ( res.term == TermTr.substitute(td.term, j, sd.term) ) &&
-//     ( td === res )
-//   )
+  // }.ensuring(res =>
+  //   res.isValid &&
+  //   ( res.term == TermTr.substitute(td.term, j, sd.term) ) &&
+  //   ( td === res )
+  // )
 
 //   @opaque @pure
 //   def preservationUnderAbsSubst(env: TypeEnvironment, absTd: AbsDerivation, argTd: TypeDerivation, typ: Type): TypeDerivation = {
