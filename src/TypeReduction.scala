@@ -3,7 +3,6 @@ import stainless.collection._
 import stainless.annotation._
 import LambdaOmega._
 import Transformations.Types._
-import Kinding._
 
 object TypeEquivalence{
 
@@ -64,26 +63,6 @@ object TypeEquivalence{
   case class AbsEqDerivation(t1: AbsType, t2: AbsType, ed: EquivalenceDerivation) extends EquivalenceDerivation
   case class AppEqDerivation(t1: AppType, t2: AppType, ed: EquivalenceDerivation, ed2: EquivalenceDerivation) extends EquivalenceDerivation
   case class AppAbsEqDerivation(t1: AppType, t2: Type) extends EquivalenceDerivation
-
-  def equivalentSameKind(eq: EquivalenceDerivation, env: KindEnvironment): Unit = {
-    require(eq.isValid)
-    eq match{
-      case ReflEqDerivation(_) => ()
-      case SymmEqDerivation(t1, t2, ed) => equivalentSameKind(ed, env)
-      case TransEqDerivation(t1, t2, ed1, ed2) => 
-        equivalentSameKind(ed1, env)
-        equivalentSameKind(ed2, env)
-      case ArrowEqDerivation(t1, t2, ed1, ed2) =>
-        equivalentSameKind(ed1, env)
-        equivalentSameKind(ed2, env)
-      case AbsEqDerivation(t1, t2, ed) =>
-        equivalentSameKind(ed, t1.argKind :: env)
-      case AppEqDerivation(t1, t2, ed1, ed2) =>
-        equivalentSameKind(ed1, env)
-        equivalentSameKind(ed2, env)
-      case _ => ()
-    }
-  }.ensuring(_ => deriveKind(env, eq.type1) == deriveKind(env, eq.type2))
 
  }
 

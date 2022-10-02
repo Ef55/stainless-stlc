@@ -13,6 +13,7 @@ object LambdaOmega {
       this match{
         case AbsType(_, body) => true
         case BasicType(_) => true
+        case ArrowType(t1, t2) => t1.isValue && t2.isValue
         case _ => false
       }
     }
@@ -54,7 +55,7 @@ object LambdaOmega {
   }
   case class BasicType(s: String) extends Type
   case class ArrowType(t1: Type, t2: Type) extends Type
-  case class VariableType(v: BigInt) extends Type {require(v >= 0)}
+  case class VariableType(j: BigInt) extends Type {require(j >= 0)}
   case class AbsType(argKind: Kind, body: Type) extends Type
   case class AppType(t1: Type, t2: Type) extends Type
 
