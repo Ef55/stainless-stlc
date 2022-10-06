@@ -442,26 +442,26 @@ object TypingProperties{
   //   (kd2.isValid && kd2.k == ProperKind && kd2.typ.isValue && kd2.env == Nil())
   // )
 
-  def equivalentSameKind(eq: EquivalenceDerivation, env: KindEnvironment, k: Kind): Unit = {
-    require(eq.isValid)
+  // def equivalentSameKind(eq: EquivalenceDerivation, env: KindEnvironment, k: Kind): Unit = {
+  //   require(eq.isValid)
 
-    eq match
-      case ReflEqDerivation(_) => ()
-      case SymmEqDerivation(t1, t2, ed) => 
-        equivalentSameKind(ed, env, k)
-      case TransEqDerivation(t1, t2, ed1, ed2) => 
-        equivalentSameKind(ed1, env, k)
-        equivalentSameKind(ed2, env, k)
-      case ArrowEqDerivation(ArrowType(t11, t12), at2@ArrowType(t21, t22), ed1, ed2) =>
-        equivalentSameKind(ed1, env, k)
-        equivalentSameKind(ed1, env, k)
-      case AppEqDerivation(AppType(t11, t12), at2@AppType(t21, t22), ed1, ed2) =>
-        equivalentSameKind(ed1, env, k)
-        equivalentSameKind(ed1, env, k)
-      case _ => ( )
+  //   eq match
+  //     case ReflEqDerivation(_) => ()
+  //     case SymmEqDerivation(t1, t2, ed) => 
+  //       equivalentSameKind(ed, env, k)
+  //     case TransEqDerivation(t1, t2, ed1, ed2) => 
+  //       equivalentSameKind(ed1, env, k)
+  //       equivalentSameKind(ed2, env, k)
+  //     case ArrowEqDerivation(ArrowType(t11, t12), at2@ArrowType(t21, t22), ed1, ed2) =>
+  //       equivalentSameKind(ed1, env, k)
+  //       equivalentSameKind(ed1, env, k)
+  //     case AppEqDerivation(AppType(t11, t12), at2@AppType(t21, t22), ed1, ed2) =>
+  //       equivalentSameKind(ed1, env, k)
+  //       equivalentSameKind(ed1, env, k)
+  //     case _ => ( )
     
-  }.ensuring(_ => (deriveKind(env, eq.type1).isDefined && deriveKind(env, eq.type1).get.isValid && deriveKind(env, eq.type1).get == k) ==
-                  (deriveKind(env, eq.type2).isDefined && deriveKind(env, eq.type1).get.isValid && deriveKind(env, eq.type2).get == k)    )
+  // }.ensuring(_ => (deriveKind(env, eq.type1).isDefined && deriveKind(env, eq.type1).get.isValid && deriveKind(env, eq.type1).get == k) ==
+  //                 (deriveKind(env, eq.type2).isDefined && deriveKind(env, eq.type1).get.isValid && deriveKind(env, eq.type2).get == k)    )
 
 //   @opaque @pure
 //   def preservation(td: KindDerivation, reduced: Type): KindDerivation = 
