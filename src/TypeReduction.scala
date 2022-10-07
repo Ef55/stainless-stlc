@@ -33,6 +33,17 @@ object TypeReduction{
       }
     }
 
+    def size: BigInt = {
+      this match
+        case ReflDerivation(_) => BigInt(1)
+        case SymmDerivation(_, _, ed) => ed.size + BigInt(1)
+        case TransDerivation(_, _, ed1, ed2) => ed1.size + ed2.size
+        case ArrowDerivation(_, _, ed1, ed2) => ed1.size + ed2.size
+        case AbsDerivation(_, _, ed) => ed.size + BigInt(1)
+        case AppDerivation(_, _, ed1, ed2) => ed1.size + ed2.size
+        case AppAbsDerivation(_, _) => BigInt(1)
+    }.ensuring(_ > BigInt(0))
+
     def isEquivalence: Boolean = {
       this match {
         case ReflDerivation(_) => true
@@ -149,6 +160,7 @@ object TypeReduction{
   }.ensuring(_ => reducesTo(prd.type1, prd.type2).isDefined)
 
   def diamondProperty(prd1: TypeToTypeDerivation, prd2: TypeToTypeDerivation): (TypeToTypeDerivation, TypeToTypeDerivation) = {
+    decreases(prd1.size + prd2.size)
     require(prd1.type1 == prd2.type1)
     require(prd1.isParallelReduction)
     require(prd2.isParallelReduction)
@@ -158,8 +170,11 @@ object TypeReduction{
       (prd1, prd2) match {
         case (ReflDerivation(t), _) => (prd2, prd1)
         case (_, ReflDerivation(t)) => (prd2, prd1)
-        case (ArrowDerivation(ArrowType(t11, t12), ArrowDerivation(t21, t22), prd1, prd2), ArrowDerivation(ArrowType(t31, t32), ArrowDerivation(t41, t42), prd3, prd4)) =>
-
+        case (ArrowDerivation(ArrowType(t11, t12), ArrowType(t21, t22), prd11, prd12), ArrowDerivation(ArrowType(t31, t32), ArrowType(t41, t42), prd21, prd22)) =>
+          val (dP11, dP12) = diamondProperty(prd11, prd21)
+          val (dP21, dP22) = diamondProperty(prd12, prd22)
+          (ArrowDerivation(ArrowType(dP11.type1, dP21.type1), ArrowType(dP11.type2, dP21.type2), dP11, dP21), ArrowDerivation(ArrowType(dP12.type1, dP22.type1), ArrowType(dP12.type2, dP22.type2), dP12, dP22))
+        case _ => (ReflDerivation(prd1.type2), ReflDerivation(prd2.type2))
       }
   }.ensuring(res => res._1.type1 == prd1.type2 &&
                     res._2.type1 == prd2.type2 &&
