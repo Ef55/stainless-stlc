@@ -142,7 +142,7 @@ object TypeReduction{
 
   def reducesToCompleteness(prd: TypeToTypeDerivation): Unit = {
     require(prd.isParallelReduction)
-    prd match{
+    prd match
       case ReflDerivation(t) => ()
       case ArrowDerivation(ArrowType(_, _), ArrowType(_, _), prd1, prd2) =>
         reducesToCompleteness(prd1)
@@ -156,8 +156,27 @@ object TypeReduction{
         assert(t3 == absSubstitution(body, t12))
         ()
       case _ => ()
-    }
   }.ensuring(_ => reducesTo(prd.type1, prd.type2).isDefined)
+
+  // def reduceSubst(td: TypeToTypeDerivation, j: BigInt, sd: TypeToTypeDerivation): TypeToTypeDerivation = {
+  //   require(td.isParallelReduction)
+  //   require(sd.isParallelReduction)
+    
+  //   td match
+  //     case ReflDerivation(t) =>
+
+
+  //   td.type1 match
+  //     case bt@BasicType(_) => ReflDerivation(bt)
+  //     case AbsType(k, body) => 
+  //       val bodyDeriv = reduceSubst()
+  //       AbsDerivation(AbsType(k, substitute(body, j, sd.type1)), )
+  //     case _ => ReflDerivation(td.type1)
+
+  // }.ensuring(res =>
+  //   res.isParallelReduction &&
+  //   res.type1 == substitute(td.type1, j, sd.type1)
+  //   res.type2 == substitute(td.type2, j, sd.type2))
 
   def diamondProperty(prd1: TypeToTypeDerivation, prd2: TypeToTypeDerivation): (TypeToTypeDerivation, TypeToTypeDerivation) = {
     decreases(prd1.size + prd2.size)
@@ -167,15 +186,23 @@ object TypeReduction{
     if prd1.type2 == prd2.type2 then
       (ReflDerivation(prd1.type2), ReflDerivation(prd2.type2))
     else
-      (prd1, prd2) match {
-        case (ReflDerivation(t), _) => (prd2, prd1)
-        case (_, ReflDerivation(t)) => (prd2, prd1)
+      (prd1, prd2) match 
+        case (ReflDerivation(t), _) => (prd2, ReflDerivation(prd2.type2))
+        case (_, ReflDerivation(t)) => (ReflDerivation(prd1.type2), prd1)
         case (ArrowDerivation(ArrowType(t11, t12), ArrowType(t21, t22), prd11, prd12), ArrowDerivation(ArrowType(t31, t32), ArrowType(t41, t42), prd21, prd22)) =>
           val (dP11, dP12) = diamondProperty(prd11, prd21)
           val (dP21, dP22) = diamondProperty(prd12, prd22)
           (ArrowDerivation(ArrowType(dP11.type1, dP21.type1), ArrowType(dP11.type2, dP21.type2), dP11, dP21), ArrowDerivation(ArrowType(dP12.type1, dP22.type1), ArrowType(dP12.type2, dP22.type2), dP12, dP22))
+        case (AbsDerivation(AbsType(k1, b1), AbsType(k2, b2), prd11), AbsDerivation(AbsType(k3, b3), AbsType(k4, b4), prd12)) =>
+          val (dP1, dP2) = diamondProperty(prd11, prd12)
+          (AbsDerivation(AbsType(k2, dP1.type1), AbsType(k2, dP1.type2), dP1), AbsDerivation(AbsType(k2, dP2.type1), AbsType(k2, dP2.type2), dP2))
+        case (AppDerivation(AppType(t11, t12), AppType(t21, t22), prd11, prd12), AppDerivation(AppType(t31, t32), AppType(t41, t42), prd21, prd22)) =>
+          val (dP11, dP12) = diamondProperty(prd11, prd21)
+          val (dP21, dP22) = diamondProperty(prd12, prd22)
+          (AppDerivation(AppType(dP11.type1, dP21.type1), AppType(dP11.type2, dP21.type2), dP11, dP21), AppDerivation(AppType(dP12.type1, dP22.type1), AppType(dP12.type2, dP22.type2), dP12, dP22))
+        
+        
         case _ => (ReflDerivation(prd1.type2), ReflDerivation(prd2.type2))
-      }
   }.ensuring(res => res._1.type1 == prd1.type2 &&
                     res._2.type1 == prd2.type2 &&
                     res._1.type2 == res._2.type2 &&
@@ -396,6 +423,27 @@ object TypeReduction{
       case _ => ()
       }
   }.ensuring(_ => detReducesTo(t, detReduce(t).get.type2).isDefined)
+
+  // def reduceSubst(td: TypeToTypeDerivation, j: BigInt, sd: TypeToTypeDerivation): TypeToTypeDerivation = {
+  //   require(td.isParallelReduction)
+  //   require(sd.isParallelReduction)
+    
+  //   td match
+  //     case ReflDerivation(t) =>
+
+
+  //   td.type1 match
+  //     case bt@BasicType(_) => ReflDerivation(bt)
+  //     case AbsType(k, body) => 
+  //       val bodyDeriv = reduceSubst()
+  //       AbsDerivation(AbsType(k, substitute(body, j, sd.type1)), )
+  //     case _ => ReflDerivation(td.type1)
+
+  // }.ensuring(res =>
+  //   res.isParallelReduction &&
+  //   res.type1 == substitute(td.type1, j, sd.type1)
+  //   res.type2 == substitute(td.type2, j, sd.type2))
+
 
   // def properNormalFormsAreEquivalent(eq: TypeToTypeDerivation){
   //   require(eq.isValid)
