@@ -156,7 +156,30 @@ object TypeReduction{
         assert(t3 == absSubstitution(body, t12))
         ()
       case _ => ()
-  }.ensuring(_ => reducesTo(prd.type1, prd.type2).isDefined)
+  }.ensuring(_ => reducesTo(prd.type1, prd.type2). isDefined)
+
+
+  def reduceReflSust(t: Type, j: BigInt, sd: TypeToTypeDerivation): TypeToTypeDerivation = {
+    require(sd.isParallelReduction)
+    
+    t match
+      case ArrowType(t1, t2) =>
+        val d1 = reduceReflSust(t1, j, sd)
+        val d2 = reduceReflSust(t2, j, sd)
+        ArrowDerivation(ArrowType(substitute(t1, j, s1), substitute(t2, j, sd.type1)), ArrowType(d1.type2, d2.type2), d1, d2)
+      case AppType(t1, t2) =>
+        val d1 = reduceReflSust(t1, j, sd)
+        val d2 = reduceReflSust(t2, j, sd)
+        AppDerivation(AppType(substitute(t1, j, s1), substitute(t2, j, sd.type1)), AppType(d1.type2, d2.type2), d1, d2)
+      case AbsType(_, body)
+        //case AbsType(k, b) => AbsType(k, substitute(b, j + 1, shift(s, 1, 0)))
+        val d1 = reduceReflSust(t1, j, sd)
+      
+
+  }.ensuring(res => 
+    res.isParallelReduction &&
+    res.type1 == substitute(t, j, sd.type1)
+    res.type2 == substitute(t, j, sd.type2))
 
   // def reduceSubst(td: TypeToTypeDerivation, j: BigInt, sd: TypeToTypeDerivation): TypeToTypeDerivation = {
   //   require(td.isParallelReduction)
@@ -164,14 +187,6 @@ object TypeReduction{
     
   //   td match
   //     case ReflDerivation(t) =>
-
-
-  //   td.type1 match
-  //     case bt@BasicType(_) => ReflDerivation(bt)
-  //     case AbsType(k, body) => 
-  //       val bodyDeriv = reduceSubst()
-  //       AbsDerivation(AbsType(k, substitute(body, j, sd.type1)), )
-  //     case _ => ReflDerivation(td.type1)
 
   // }.ensuring(res =>
   //   res.isParallelReduction &&
@@ -200,8 +215,9 @@ object TypeReduction{
           val (dP11, dP12) = diamondProperty(prd11, prd21)
           val (dP21, dP22) = diamondProperty(prd12, prd22)
           (AppDerivation(AppType(dP11.type1, dP21.type1), AppType(dP11.type2, dP21.type2), dP11, dP21), AppDerivation(AppType(dP12.type1, dP22.type1), AppType(dP12.type2, dP22.type2), dP12, dP22))
-        
-        
+        case (AppAbsDerivation(_, _), AppAbsDerivation(_, _)) => (ReflDerivation(prd1.type2), ReflDerivation(prd2.type2))
+        case (AppAbsDerivation(_, _), AppDerivation(AppType(t11, t12), AppType(t21, t22), prd11, prd12)) => (ReflDerivation(prd1.type2), ReflDerivation(prd2.type2))
+        case (AppDerivation(AppType(t11, t12), AppType(t21, t22), prd11, prd12), AppAbsDerivation(_, _)) => (ReflDerivation(prd1.type2), ReflDerivation(prd2.type2))
         case _ => (ReflDerivation(prd1.type2), ReflDerivation(prd2.type2))
   }.ensuring(res => res._1.type1 == prd1.type2 &&
                     res._2.type1 == prd2.type2 &&

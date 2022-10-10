@@ -300,7 +300,6 @@ object TransformationsProperties {
       require(c >= 0)
       require(b >= 0)
       require(a >= 0)
-      require(!t.hasFreeVariablesIn(a, b))
       require(if(d < 0){!t.hasFreeVariablesIn(c, -d)} else true)
 
       t match {
@@ -330,7 +329,9 @@ object TransformationsProperties {
         (if(a + b >= c && a <= c)           {!shift(t, d, c).hasFreeVariablesIn(a, c - a)} else true) &&
         (if(a + b >= -d + c && a <= -d + c) {!shift(t, d, c).hasFreeVariablesIn(c, a + b + d - c)} else true) &&
         (if(a >= -d + c)                    {!shift(t, d, c).hasFreeVariablesIn(a + d, b)} else true) 
-      })
+      } 
+      == 
+      !t.hasFreeVariablesIn(a, b))
 
     def boundRangeSubstitutionLemma(t: Type, j: BigInt, s: Type): Unit = {
       require(j >= 0)
@@ -356,6 +357,389 @@ object TransformationsProperties {
         }
       }
     }.ensuring(!substitute(t, j, s).hasFreeVariablesIn(j, 1))
+
+    @opaque @pure
+    def shiftCommutativity(subs: Type, b: BigInt, c: BigInt, a: BigInt, d: BigInt) : Unit ={
+      require(c >= 0)
+      require(d >= 0)
+      require(a >= 0)
+      require(d <= c)
+      require(if b < 0 then !subs.hasFreeVariablesIn(c, -b) || !shift(subs, a, d).hasFreeVariablesIn(c + a, -b) else true)
+
+      subs match {
+        case BasicType(_) => ()
+        case ArrowType(t1, t2) => {
+          shiftCommutativity2(t1, b, c, a, d)
+          shiftCommutativity2(t2, b, c, a, d)
+        }
+        case AppType(t1, t2) => {
+          shiftCommutativity2(t1, b, c, a, d)
+          shiftCommutativity2(t2, b, c, a, d)
+        }
+        case VariableType(v) => {
+          ()
+        }
+        case AbsType(_, t) => {
+          shiftCommutativity2(t, b, c+1, a, d+1) 
+        }
+      }
+    }.ensuring(
+      (if b < 0 then
+        !subs.hasFreeVariablesIn(c, -b) &&
+        !shift(subs, a, d).hasFreeVariablesIn(c + a, -b)
+      else true) &&
+      shift(shift(subs, b, c), a, d) == shift(shift(subs, a, d), b, c+a)
+    )
+    
+    @opaque @pure
+    def shiftCommutativity3(subs: Type, b: BigInt, c1: BigInt, d2: BigInt, c2: BigInt) : Unit ={
+      require(c1 >= 0)
+      require(c2 >= 0)
+      require(d1 < 0)
+      require(d2 >= 0)
+      require(c2 >= c1)
+      require(!subs.hasFreeVariablesIn(c1, -b) || !shift(subs, d2, c2-b).hasFreeVariablesIn(c1, -b))
+
+      subs match {
+        case BasicType(_) => ()
+        case ArrowType(t1, t2) => {
+          shiftCommutativity3(t1, b, c1, d2, c2)
+          shiftCommutativity3(t2, b, c1, d2, c2)
+        }
+        case VariableType(v) => {
+          ()
+        }
+        case UniversalType(t) => {
+          shiftCommutativity3(t, b, c1+1, d2, c2+1) 
+        }
+      }
+    }.ensuring(
+      !subs.hasFreeVariablesIn(c1, -b) &&
+      !shift(subs, d2, c2-b).hasFreeVariablesIn(c1, -b) &&
+      shift(shift(subs, b, c1), d2, c2) == shift(shift(subs, d2, c2-b), b, c1)
+    )
+
+    // @opaque @pure
+    // def shiftCommutativity4(subs: Type, d1: BigInt, c1: BigInt, d2: BigInt, c2: BigInt) : Unit ={
+    //   require(c1 >= 0)
+    //   require(c2 >= 0)
+    //   require(d1 < 0)
+    //   require(d2 < 0)
+    //   require(c1 >= c2)
+    //   require(c2 <= c1+d2)
+    //   require(!subs.hasFreeVariablesIn(c1, -d1))
+    //   require(!subs.hasFreeVariablesIn(c2, -d2))
+    //   require(!shift(subs, d1, c1).hasFreeVariablesIn(c2, -d2))
+
+    //   subs match {
+    //     case BasicType(_) => ()
+    //     case ArrowType(t1, t2) => {
+    //       shiftCommutativity4(t1, d1, c1, d2, c2)
+    //       shiftCommutativity4(t2, d1, c1, d2, c2)
+    //     }
+    //     case VariableType(v) => {
+    //       ()
+    //     }
+    //     case UniversalType(t) => {
+    //       shiftCommutativity4(t, d1, c1+1, d2, c2+1) 
+    //     }
+    //   }
+    // }.ensuring(
+    //   !shift(subs, d2, c2).hasFreeVariablesIn(c1+d2, -d1) &&
+    //   shift(shift(subs, d1, c1), d2, c2) == shift(shift(subs, d2, c2), d1, c1+d2)
+    // )
+
+    // @opaque @pure
+    // def shiftSubstitutionCommutativityType(typ: Type, s: BigInt, c: BigInt, k: BigInt, subs: Type): Unit = {
+    //   require(s >= 0)
+    //   require(c >= 0 && c <= k)
+
+    //   typ match {
+    //     case BasicType(_) => ()
+    //     case ArrowType(t1, t2) => {
+    //       shiftSubstitutionCommutativityType(t1, s, c, k, subs)
+    //       shiftSubstitutionCommutativityType(t2, s, c, k, subs)
+    //     }
+    //     case VariableType(v) => ()
+    //     case UniversalType(t) => {
+    //       shiftCommutativity(subs, c, 0, 1, s)
+    //       shiftSubstitutionCommutativityType(t, s, c+1, k+1, shift(subs, 1, 0))
+    //     }
+    //   }
+    // }.ensuring(
+    //   shift(substitute(typ, k, subs), s, c) 
+    //   == 
+    //   substitute(shift(typ, s, c), k+s, shift(subs, s, c))
+    // )
+
+    // @opaque @pure
+    // def shiftSubstitutionCommutativityType2(typ: Type, s: BigInt, c: BigInt, k: BigInt, subs: Type): Unit = {
+    //   require(c > k)
+    //   require(k >= 0)
+    //   require(if (s < 0) {!subs.hasFreeVariablesIn(c, -s) && !typ.hasFreeVariablesIn(c, -s)} else {true})
+
+    //   if(s < 0){
+    //     boundRangeSubstitutionLemma1(typ, k, subs, -s, -s, c, c)
+    //   }
+
+    //   typ match {
+    //     case BasicType(_) => {}
+    //     case ArrowType(t1, t2) => {
+    //       shiftSubstitutionCommutativityType2(t1, s, c, k, subs)
+    //       shiftSubstitutionCommutativityType2(t2, s, c, k, subs)
+    //     }
+    //     case VariableType(v) => {}
+    //     case UniversalType(t) => {
+    //       if(s >= 0){
+    //         shiftCommutativity(subs, c, 0, 1, s)
+    //       }
+    //       else{
+    //         boundRangeShift(subs, 1, 0, c, -s)
+    //         shiftCommutativity2(subs, s, c, 1, 0)
+    //       }
+    //       shiftSubstitutionCommutativityType2(t, s, c+1, k+1, shift(subs, 1, 0))
+    //     }
+    //   }
+    // }.ensuring(
+    //     (if(s < 0){ (
+    //       !substitute(typ, k, subs).hasFreeVariablesIn(c, -s) 
+    //     )} else true) &&
+    //   (
+    //     shift(substitute(typ, k, subs), s, c) 
+    //     == 
+    //     substitute(shift(typ, s, c), k, shift(subs, s, c))
+    //   )
+    // )
+
+    // @opaque @pure
+    // def shiftSubstitutionCommutativityTypeNeg(typ: Type, s: BigInt, c: BigInt, k: BigInt, subs: Type): Unit = {
+    //   require(c >= 0 && c <= k)
+    //   require(s > 0)
+    //   require(!typ.hasFreeVariablesIn(c, s))
+
+    //   boundRangeShift(subs, s, c, c, 0)
+    //   boundRangeSubstitutionLemma1(typ, k + s, shift(subs, s, c), s, s, c, c)
+
+
+    //   typ match {
+    //     case BasicType(_) => {}
+    //     case ArrowType(t1, t2) => {
+    //       shiftSubstitutionCommutativityTypeNeg(t1, s, c, k, subs)
+    //       shiftSubstitutionCommutativityTypeNeg(t2, s, c, k, subs)
+    //     }
+    //     case VariableType(v) => {
+    //       boundRangeShiftComposition(subs, s, -s, c, c)
+    //       if (v >= c && k == v - s){
+    //           boundRangeShiftComposition(subs, s, -s, c, c)
+    //           shift0Identity(subs, c)          
+
+    //       }
+    //     }
+    //     case UniversalType(t) => {
+    //       shiftSubstitutionCommutativityTypeNeg(t, s, c + 1, k + 1, shift(subs, 1, 0))
+    //       shiftCommutativity(subs, c, 0, 1, s)
+    //     }
+    //   }
+    // }.ensuring(
+    //   !substitute(typ, k + s, shift(subs, s, c)).hasFreeVariablesIn(c, s) &&
+    //   (
+    //     shift(substitute(typ, k + s, shift(subs, s, c)), -s, c) 
+    //     == 
+    //     substitute(shift(typ, -s, c), k, subs)
+    //   )
+    // )
+
+    // @opaque @pure
+    // def boundRangeSubstitutionLemma1(t: Type, j: BigInt, s: Type, a: BigInt, b: BigInt, c: BigInt, d: BigInt): Unit = {
+    //   require(j >= 0)
+    //   require(a >= 0)
+    //   require(b >= 0)
+    //   require(c >= 0)
+    //   require(d >= 0)
+    //   require(!s.hasFreeVariablesIn(c, a))
+    //   require(!t.hasFreeVariablesIn(d, b))
+    //   require(c + a >= d + b)
+    //   require(c <= d)
+
+    //   t match {
+    //     case BasicType(_) => 
+    //       assert(!substitute(t, j, s).hasFreeVariablesIn(d, b))
+    //     case ArrowType(t1, t2) => 
+    //       boundRangeSubstitutionLemma1(t1, j, s, a, b, c, d)
+    //       boundRangeSubstitutionLemma1(t2, j, s, a, b, c, d)
+    //       assert(!substitute(t, j, s).hasFreeVariablesIn(d, b))
+    //     case VariableType(v) => 
+    //       boundRangeIncreaseCutoff(s, c, d, a)
+    //       boundRangeDecrease(s, d, a - (d - c), b)
+    //       assert(!substitute(t, j, s).hasFreeVariablesIn(d, b))
+    //     case UniversalType(body) =>
+    //       if(c > 0){
+    //         boundRangeShift(s, 1, 0, c, a)
+    //         assert(!shift(s, 1, 0).hasFreeVariablesIn(c + 1, a))
+    //       }
+    //       else{
+    //         assert(!s.hasFreeVariablesIn(0, a))
+    //         boundRangeShift(s, 1, 0, 0, a)
+    //         boundRangeIncreaseCutoff(shift(s, 1, 0), 0, 1 , a + 1)
+    //         assert(!shift(s, 1, 0).hasFreeVariablesIn(1, a))
+    //       }
+    //       boundRangeSubstitutionLemma1(body, j + 1, shift(s, 1, 0), a, b, c + 1, d + 1)
+
+    //       assert(!substitute(body, j + 1, shift(s, 1, 0)).hasFreeVariablesIn(d + 1, b))
+    //       assert(!UniversalType(substitute(body, j + 1, shift(s, 1, 0))).hasFreeVariablesIn(d, b))
+    //       assert(!substitute(UniversalType(body), j, s).hasFreeVariablesIn(d, b))
+    //       assert(!substitute(t, j, s).hasFreeVariablesIn(d, b))
+
+    //   }
+    // }.ensuring(!substitute(t, j, s).hasFreeVariablesIn(d, b))
+
+    // @opaque @pure
+    // def boundRangeSubstitutionLemma2(t: Type, j: BigInt, s: Type, a: BigInt, b: BigInt, c: BigInt, d: BigInt): Unit = {
+    //   require(j >= 0)
+    //   require(a >= 0)
+    //   require(b >= 0)
+    //   require(c >= 0)
+    //   require(d >= 0)
+    //   require(!s.hasFreeVariablesIn(c, a))
+    //   require(!t.hasFreeVariablesIn(d, b))
+    //   require(c + a <= d + b)
+    //   require(c >= d)
+
+    //   t match {
+    //     case BasicType(_) => 
+    //       assert(!substitute(t, j, s).hasFreeVariablesIn(c, a))
+    //     case ArrowType(t1, t2) => 
+    //       boundRangeSubstitutionLemma2(t1, j, s, a, b, c, d)
+    //       boundRangeSubstitutionLemma2(t2, j, s, a, b, c, d)
+    //       assert(!substitute(t, j, s).hasFreeVariablesIn(c, a))
+    //     case VariableType(v) => 
+    //       boundRangeIncreaseCutoff(t, d, c, b)
+    //       boundRangeDecrease(t, c, b - (c - d), a)
+    //       assert(!substitute(t, j, s).hasFreeVariablesIn(c, a))
+    //     case UniversalType(body) =>
+    //       if(c > 0){
+    //         boundRangeShift(s, 1, 0, c, a)
+    //         assert(!shift(s, 1, 0).hasFreeVariablesIn(c + 1, a))
+    //       }
+    //       else{
+    //         assert(!s.hasFreeVariablesIn(0, a))
+    //         boundRangeShift(s, 1, 0, 0, a)
+    //         boundRangeIncreaseCutoff(shift(s, 1, 0), 0, 1 , a + 1)
+    //         assert(!shift(s, 1, 0).hasFreeVariablesIn(1, a))
+    //       }
+    //       boundRangeSubstitutionLemma2(body, j + 1, shift(s, 1, 0), a, b, c + 1, d + 1)
+
+    //   }
+    // }.ensuring(!substitute(t, j, s).hasFreeVariablesIn(c, a))
+
+    // @opaque @pure
+    // def boundRangeSubstitutionLemma3(t: Type, j: BigInt, s: Type, a: BigInt, b: BigInt, c: BigInt, d: BigInt): Unit = {
+    //   require(j >= 0)
+    //   require(a >= 0)
+    //   require(b >= 0)
+    //   require(c >= 0)
+    //   require(d >= 0)
+    //   require(!s.hasFreeVariablesIn(c, a))
+    //   require(!t.hasFreeVariablesIn(d, b))
+    //   require(c <= d + b)
+    //   require(c + a >= d + b)
+    //   require(c >= d)
+
+    //   t match {
+    //     case BasicType(_) => 
+    //       assert(!substitute(t, j, s).hasFreeVariablesIn(c, b - (c - d)))
+    //     case ArrowType(t1, t2) => 
+    //       boundRangeSubstitutionLemma3(t1, j, s, a, b, c, d)
+    //       boundRangeSubstitutionLemma3(t2, j, s, a, b, c, d)
+    //       assert(!substitute(t, j, s).hasFreeVariablesIn(c, b - (c - d)))
+    //     case VariableType(v) => 
+    //       boundRangeDecrease(s, c, a, b - (c - d))
+    //       boundRangeIncreaseCutoff(t, d, c, b)
+    //       assert(!substitute(t, j, s).hasFreeVariablesIn(c, b - (c - d)))
+    //     case UniversalType(body) =>
+    //       if(c > 0){
+    //         boundRangeShift(s, 1, 0, c, a)
+    //         assert(!shift(s, 1, 0).hasFreeVariablesIn(c + 1, a))
+    //       }
+    //       else{
+    //         assert(!s.hasFreeVariablesIn(0, a))
+    //         boundRangeShift(s, 1, 0, 0, a)
+    //         boundRangeIncreaseCutoff(shift(s, 1, 0), 0, 1 , a + 1)
+    //         assert(!shift(s, 1, 0).hasFreeVariablesIn(1, a))
+    //       }
+    //       boundRangeSubstitutionLemma3(body, j + 1, shift(s, 1, 0), a, b, c + 1, d + 1)
+
+    //   }
+    // }.ensuring(!substitute(t, j, s).hasFreeVariablesIn(c, b - (c - d)))
+
+    // @opaque @pure
+    // def boundRangeSubstitutionLemma4(t: Type, j: BigInt, s: Type, a: BigInt, b: BigInt, c: BigInt, d: BigInt): Unit = {
+    //   require(j >= 0)
+    //   require(a >= 0)
+    //   require(b >= 0)
+    //   require(c >= 0)
+    //   require(d >= 0)
+    //   require(!s.hasFreeVariablesIn(c, a))
+    //   require(!t.hasFreeVariablesIn(d, b))
+    //   require(c + a >= d)
+    //   require(c + a <= d + b)
+    //   require(c <= d)
+
+    //   t match {
+    //     case BasicType(_) => 
+    //       assert(!substitute(t, j, s).hasFreeVariablesIn(d, a - (d - c)))
+    //     case ArrowType(t1, t2) => 
+    //       boundRangeSubstitutionLemma4(t1, j, s, a, b, c, d)
+    //       boundRangeSubstitutionLemma4(t2, j, s, a, b, c, d)
+    //       assert(!substitute(t, j, s).hasFreeVariablesIn(d, a - (d - c)))
+    //     case VariableType(v) => 
+    //       boundRangeDecrease(t, d, b, a - (d - c))
+    //       boundRangeIncreaseCutoff(s, c, d, a)
+    //       assert(!substitute(t, j, s).hasFreeVariablesIn(d, a - (d - c)))
+    //     case UniversalType(body) =>
+    //       if(c > 0){
+    //         boundRangeShift(s, 1, 0, c, a)
+    //         assert(!shift(s, 1, 0).hasFreeVariablesIn(c + 1, a))
+    //       }
+    //       else{
+    //         assert(!s.hasFreeVariablesIn(0, a))
+    //         boundRangeShift(s, 1, 0, 0, a)
+    //         boundRangeIncreaseCutoff(shift(s, 1, 0), 0, 1 , a + 1)
+    //         assert(!shift(s, 1, 0).hasFreeVariablesIn(1, a))
+    //       }
+    //       boundRangeSubstitutionLemma4(body, j + 1, shift(s, 1, 0), a, b, c + 1, d + 1)
+
+    //   }
+    // }.ensuring(!substitute(t, j, s).hasFreeVariablesIn(d, a - (d - c)))
+
+    // @opaque @pure
+    // def substitutionCommutativity(t: Type, j: BigInt, s: Type, k: BigInt, u: Type): Unit = {
+    //   require(j >= 0 && k >= 0)
+    //   require(j != k)
+    //   require(!u.hasFreeVariablesIn(j, 1))
+
+    //   t match {
+    //     case VariableType(i) => {
+    //       if(i == k) {
+    //         boundRangeSubstitutionIdentity(u, j, substitute(s, k, u))
+    //       }
+    //     }
+    //     case BasicType(_) => ()
+    //     case ArrowType(t1, t2) => {
+    //       substitutionCommutativity(t1, j, s, k, u)
+    //       substitutionCommutativity(t2, j, s, k, u)
+    //     }
+    //     case UniversalType(b) => {
+    //       shiftSubstitutionCommutativityType(s, 1, 0, k, u)
+    //       boundRangeShift(u, 1, 0, j, 1)
+    //       substitutionCommutativity(b, j+1, shift(s, 1, 0), k+1, shift(u, 1, 0))
+    //     }
+    //   }
+    // }.ensuring(
+    //   substitute(substitute(t, j, s), k, u)
+    //   ==
+    //   substitute(substitute(t, k, u), j, substitute(s, k, u))
+    // )    
   }
 
 }
