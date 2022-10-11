@@ -359,94 +359,140 @@ object TransformationsProperties {
     }.ensuring(!substitute(t, j, s).hasFreeVariablesIn(j, 1))
 
     @opaque @pure
-    def shiftCommutativity(subs: Type, b: BigInt, c: BigInt, a: BigInt, d: BigInt) : Unit ={
+    def shiftCommutativity(subs: Type, b: BigInt, c: BigInt, a: BigInt, d: BigInt, e: BigInt) : Unit ={
       require(c >= 0)
       require(d >= 0)
       require(a >= 0)
       require(d <= c)
-      require(if b < 0 then !subs.hasFreeVariablesIn(c, -b) || !shift(subs, a, d).hasFreeVariablesIn(c + a, -b) else true)
+      require(b >= 0)
 
       subs match {
         case BasicType(_) => ()
         case ArrowType(t1, t2) => {
-          shiftCommutativity2(t1, b, c, a, d)
-          shiftCommutativity2(t2, b, c, a, d)
+          shiftCommutativity(t1, b, c, a, d, e)
+          shiftCommutativity(t2, b, c, a, d, e)
         }
         case AppType(t1, t2) => {
-          shiftCommutativity2(t1, b, c, a, d)
-          shiftCommutativity2(t2, b, c, a, d)
+          shiftCommutativity(t1, b, c, a, d, e)
+          shiftCommutativity(t2, b, c, a, d, e)
         }
         case VariableType(v) => {
           ()
         }
         case AbsType(_, t) => {
-          shiftCommutativity2(t, b, c+1, a, d+1) 
+          shiftCommutativity(t, b, c+1, a, d+1, e) 
         }
       }
     }.ensuring(
-      (if b < 0 then
-        !subs.hasFreeVariablesIn(c, -b) &&
-        !shift(subs, a, d).hasFreeVariablesIn(c + a, -b)
-      else true) &&
-      shift(shift(subs, b, c), a, d) == shift(shift(subs, a, d), b, c+a)
-    )
-    
-    @opaque @pure
-    def shiftCommutativity3(subs: Type, b: BigInt, c1: BigInt, d2: BigInt, c2: BigInt) : Unit ={
-      require(c1 >= 0)
-      require(c2 >= 0)
-      require(d1 < 0)
-      require(d2 >= 0)
-      require(c2 >= c1)
-      require(!subs.hasFreeVariablesIn(c1, -b) || !shift(subs, d2, c2-b).hasFreeVariablesIn(c1, -b))
-
-      subs match {
-        case BasicType(_) => ()
-        case ArrowType(t1, t2) => {
-          shiftCommutativity3(t1, b, c1, d2, c2)
-          shiftCommutativity3(t2, b, c1, d2, c2)
-        }
-        case VariableType(v) => {
-          ()
-        }
-        case UniversalType(t) => {
-          shiftCommutativity3(t, b, c1+1, d2, c2+1) 
-        }
-      }
-    }.ensuring(
-      !subs.hasFreeVariablesIn(c1, -b) &&
-      !shift(subs, d2, c2-b).hasFreeVariablesIn(c1, -b) &&
-      shift(shift(subs, b, c1), d2, c2) == shift(shift(subs, d2, c2-b), b, c1)
-    )
+        shift(shift(subs, b, c), a, d) == shift(shift(subs, a, d), b, c + a)
+      )
 
     // @opaque @pure
-    // def shiftCommutativity4(subs: Type, d1: BigInt, c1: BigInt, d2: BigInt, c2: BigInt) : Unit ={
-    //   require(c1 >= 0)
-    //   require(c2 >= 0)
-    //   require(d1 < 0)
-    //   require(d2 < 0)
-    //   require(c1 >= c2)
-    //   require(c2 <= c1+d2)
-    //   require(!subs.hasFreeVariablesIn(c1, -d1))
-    //   require(!subs.hasFreeVariablesIn(c2, -d2))
-    //   require(!shift(subs, d1, c1).hasFreeVariablesIn(c2, -d2))
+    // def shiftCommutativity2(subs: Type, b: BigInt, c: BigInt, a: BigInt, d: BigInt) : Unit ={
+    //   require(c >= 0)
+    //   require(d >= 0)
+    //   require(a >= 0)
+    //   require(d <= c)
+    //   require(
+    //     if b < 0 then !subs.hasFreeVariablesIn(c, -b) || 
+    //       (if d <= c then
+    //         !shift(subs, a, d).hasFreeVariablesIn(c + a, -b) 
+    //       else
+    //         !shift(subs, a, d-b).hasFreeVariablesIn(c, -b))
+    //     else true)
 
     //   subs match {
     //     case BasicType(_) => ()
     //     case ArrowType(t1, t2) => {
-    //       shiftCommutativity4(t1, d1, c1, d2, c2)
-    //       shiftCommutativity4(t2, d1, c1, d2, c2)
+    //       shiftCommutativity(t1, b, c, a, d)
+    //       shiftCommutativity(t2, b, c, a, d)
+    //     }
+    //     case AppType(t1, t2) => {
+    //       shiftCommutativity(t1, b, c, a, d)
+    //       shiftCommutativity(t2, b, c, a, d)
     //     }
     //     case VariableType(v) => {
     //       ()
     //     }
-    //     case UniversalType(t) => {
-    //       shiftCommutativity4(t, d1, c1+1, d2, c2+1) 
+    //     case AbsType(_, t) => {
+    //       shiftCommutativity(t, b, c+1, a, d+1) 
     //     }
     //   }
     // }.ensuring(
-    //   !shift(subs, d2, c2).hasFreeVariablesIn(c1+d2, -d1) &&
-    //   shift(shift(subs, d1, c1), d2, c2) == shift(shift(subs, d2, c2), d1, c1+d2)
+    //   if b < 0  && d <= c then 
+    //     !subs.hasFreeVariablesIn(c, -b) && !shift(subs, a, d).hasFreeVariablesIn(c + a, -b) && shift(shift(subs, b, c), a, d) == shift(shift(subs, a, d), b, c+a) else
+    //   if b < 0  && d >= c then 
+    //     !subs.hasFreeVariablesIn(c, -b) && !shift(subs, a, d - b).hasFreeVariablesIn(c, -b) && shift(shift(subs, b, c), a, d) == shift(shift(subs, a, d - b), b, c) else
+    //   if b >= 0 && d <= c then 
+    //     shift(shift(subs, b, c), a, d) == shift(shift(subs, a, d), b, c+a) else 
+    //   true)
+    
+
+    // @opaque @pure
+    // def shiftCommutativity4(subs: Type, b: BigInt, c: BigInt, a: BigInt, d: BigInt) : Unit ={
+    //   require(c >= 0)
+    //   require(d >= 0)
+    //   require(b < 0)
+    //   require(a < 0)
+    //   require(d <= c+a)
+    //   require(!subs.hasFreeVariablesIn(c, -b))
+    //   require(!subs.hasFreeVariablesIn(d, -a))
+    //   require(!shift(subs, b, c).hasFreeVariablesIn(d, -a))
+
+    //   subs match {
+    //     case BasicType(_) => ()
+    //     case ArrowType(t1, t2) => {
+    //       shiftCommutativity4(t1, b, c, a, d)
+    //       shiftCommutativity4(t2, b, c, a, d)
+    //     }
+    //     case AppType(t1, t2) => {
+    //       shiftCommutativity4(t1, b, c, a, d)
+    //       shiftCommutativity4(t2, b, c, a, d)
+    //     }
+    //     case VariableType(v) => {
+    //       ()
+    //     }
+    //     case AbsType(_, t) => {
+    //       shiftCommutativity4(t, b, c+1, a, d+1) 
+    //     }
+    //   }
+    // }.ensuring(
+    //   !shift(subs, a, d).hasFreeVariablesIn(c+a, -b) &&
+    //   shift(shift(subs, b, c), a, d) == shift(shift(subs, a, d), b, c+a)
+    // )
+
+
+    // @opaque @pure
+    // def shiftCommutativity4(subs: Type, d: BigInt, c: BigInt, a0: BigInt, a: BigInt) : Unit ={
+    //   require(c >= 0)
+    //   require(a >= 0)
+    //   require(d < 0)
+    //   require(a0 < 0)
+    //   require(a <= c+a0)
+    //   require(!subs.hasFreeVariablesIn(c, -d))
+    //   require(!subs.hasFreeVariablesIn(a, -a0))
+    //   require(!shift(subs, d, c).hasFreeVariablesIn(a, -a0))
+
+    //   subs match {
+    //     case BasicType(_) => ()
+    //     case ArrowType(t1, t2) => {
+    //       shiftCommutativity4(t1, d, c, a0, a)
+    //       shiftCommutativity4(t2, d, c, a0, a)
+    //     }
+    //     case AppType(t1, t2) => {
+    //       shiftCommutativity4(t1, d, c, a0, a)
+    //       shiftCommutativity4(t2, d, c, a0, a)
+    //     }
+    //     case VariableType(v) => {
+    //       ()
+    //     }
+    //     case AbsType(_, t) => {
+    //       shiftCommutativity4(t, d, c+1, a0, a+1) 
+    //     }
+    //   }
+    // }.ensuring(
+    //   !shift(subs, a0, a).hasFreeVariablesIn(c+a0, -d) &&
+    //   shift(shift(subs, d, c), a0, a) == shift(shift(subs, a0, a), d, c+a0)
     // )
 
     // @opaque @pure
