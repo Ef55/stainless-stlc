@@ -359,32 +359,35 @@ object TransformationsProperties {
     }.ensuring(!substitute(t, j, s).hasFreeVariablesIn(j, 1))
 
     @opaque @pure
-    def shiftCommutativity(subs: Type, b: BigInt, c: BigInt, a: BigInt, d: BigInt, e: BigInt) : Unit ={
+    def shiftCommutativity(subs: Type, b: BigInt, c: BigInt, a: BigInt, d: BigInt) : Unit ={
       require(c >= 0)
       require(d >= 0)
       require(a >= 0)
-      require(d <= c)
       require(b >= 0)
 
       subs match {
         case BasicType(_) => ()
         case ArrowType(t1, t2) => {
-          shiftCommutativity(t1, b, c, a, d, e)
-          shiftCommutativity(t2, b, c, a, d, e)
+          shiftCommutativity(t1, b, c, a, d)
+          shiftCommutativity(t2, b, c, a, d)
         }
         case AppType(t1, t2) => {
-          shiftCommutativity(t1, b, c, a, d, e)
-          shiftCommutativity(t2, b, c, a, d, e)
+          shiftCommutativity(t1, b, c, a, d)
+          shiftCommutativity(t2, b, c, a, d)
         }
         case VariableType(v) => {
           ()
         }
         case AbsType(_, t) => {
-          shiftCommutativity(t, b, c+1, a, d+1, e) 
+          shiftCommutativity(t, b, c+1, a, d+1) 
         }
       }
     }.ensuring(
-        shift(shift(subs, b, c), a, d) == shift(shift(subs, a, d), b, c + a)
+        if d <= c               then shift(shift(subs, b, c), a, d) == shift(shift(subs, a, d), b, c + a) else
+        if d >= c && b - d >= c then shift(shift(subs, b, c), a, d) == shift(shift(subs, a, b - d), b, c) else
+        if d >= c && b - d <= c then shift(shift(subs, b, c), a, d) == shift(shift(subs, a, c), b, c) else
+        true
+
       )
 
     // @opaque @pure
