@@ -358,40 +358,66 @@ object TransformationsProperties {
       }
     }.ensuring(!substitute(t, j, s).hasFreeVariablesIn(j, 1))
 
+
     @opaque @pure
     def shiftCommutativity(subs: Type, b: BigInt, c: BigInt, a: BigInt, d: BigInt) : Unit ={
       require(c >= 0)
       require(d >= 0)
-      require(a >= 0)
-      require(b >= 0)
+      require(if a >= 0 then
+                if b < 0 then 
+                  if d >= c               then !subs.hasFreeVariablesIn(c, -b) || !shift(subs, a, d - b).hasFreeVariablesIn(c, - b) else 
+                  if d <= c && c + b >= d then !subs.hasFreeVariablesIn(c, -b) && !shift(subs, a, d).hasFreeVariablesIn(c + a, - b) else
+                  true
+                else true
+              else
+                if b >= 0 then
+                  if d >= c && d - a >= c then !subs.hasFreeVariablesIn(d, -a) && !shift(subs, b, c).hasFreeVariablesIn(d, - a) else
+                  true
+                else true) 
+        // if d <= c && c + b >= d then !subs.hasFreeVariablesIn(d, -a) && !shift(subs, b, c).hasFreeVariablesIn(d, - a) else
 
       subs match {
         case BasicType(_) => ()
-        case ArrowType(t1, t2) => {
+        case ArrowType(t1, t2) =>
           shiftCommutativity(t1, b, c, a, d)
           shiftCommutativity(t2, b, c, a, d)
-        }
-        case AppType(t1, t2) => {
+        case AppType(t1, t2) => 
           shiftCommutativity(t1, b, c, a, d)
           shiftCommutativity(t2, b, c, a, d)
-        }
-        case VariableType(v) => {
-          ()
-        }
-        case AbsType(_, t) => {
-          shiftCommutativity(t, b, c+1, a, d+1) 
-        }
+        case VariableType(v) => ()
+        case AbsType(_, t) => shiftCommutativity(t, b, c+1, a, d+1) 
+        
       }
     }.ensuring(
-        if d <= c               then shift(shift(subs, b, c), a, d) == shift(shift(subs, a, d), b, c + a) else
-        if d >= c && b - d >= c then shift(shift(subs, b, c), a, d) == shift(shift(subs, a, b - d), b, c) else
-        if d >= c && b - d <= c then shift(shift(subs, b, c), a, d) == shift(shift(subs, a, c), b, c) else
-        true
-
+        if a >= 0 then
+          if b >= 0 then
+            if d <= c               then shift(shift(subs, b, c), a, d) == shift(shift(subs, a, d), b, c + a) else
+            if d >= c && d - b >= c then shift(shift(subs, b, c), a, d) == shift(shift(subs, a, d - b), b, c) else
+            if d >= c && d - b <= c then shift(shift(subs, b, c), a, d) == shift(shift(subs, a, c), b, c) else
+            true
+          else
+            if d >= c               then !subs.hasFreeVariablesIn(c, -b) && !shift(subs, a, d - b).hasFreeVariablesIn(c, - b) && 
+                                        shift(shift(subs, b, c), a, d) == shift(shift(subs, a, d - b), b, c) else
+            if d <= c && c + b >= d then !subs.hasFreeVariablesIn(c, -b) && !shift(subs, a, d).hasFreeVariablesIn(c + a, - b) && 
+                                        shift(shift(subs, b, c), a, d) == shift(shift(subs, a, d), b, c + a) else
+            true //in this case shifts do not trivially commute
+        else
+          if b >= 0 then
+            if d <= c && d - a >= c then !subs.hasFreeVariablesIn(d, -a) && !shift(subs, b, c).hasFreeVariablesIn(d, - a) && 
+                                         shift(shift(subs, b, c), a, d) == shift(shift(subs, a, d), b, c) else
+          //   if d >= c && d - b >= c then shift(shift(subs, b, c), a, d) == shift(shift(subs, a, d - b), b, c) else
+          //   if d >= c && d - b <= c then shift(shift(subs, b, c), a, d) == shift(shift(subs, a, c), b, c) else
+            true
+          else
+          //   if d >= c               then !subs.hasFreeVariablesIn(c, -b) && !shift(subs, a, d - b).hasFreeVariablesIn(c, - b) && 
+          //                               shift(shift(subs, b, c), a, d) == shift(shift(subs, a, d - b), b, c) else
+          //   if d <= c && c + b >= d then !subs.hasFreeVariablesIn(c, -b) && !shift(subs, a, d).hasFreeVariablesIn(c + a, - b) && 
+          //                               shift(shift(subs, b, c), a, d) == shift(shift(subs, a, d), b, c + a) else
+            true
       )
 
     // @opaque @pure
-    // def shiftCommutativity2(subs: Type, b: BigInt, c: BigInt, a: BigInt, d: BigInt) : Unit ={
+    // def shiftCommutativity2(subs: Type, b: BigInt, c: BigInt, a: BigInt§, d: BigInt) : Unit ={
     //   require(c >= 0)
     //   require(d >= 0)
     //   require(a >= 0)
