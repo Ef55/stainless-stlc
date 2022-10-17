@@ -3,6 +3,7 @@ import stainless.collection._
 import stainless.annotation._
 import LambdaOmega._
 import Transformations.Types._
+import TransformationsProperties.Types._
 
 object TypeReduction{
 
@@ -152,46 +153,90 @@ object TypeReduction{
       case AppDerivation(AppType(_, _), AppType(_, _), prd1, prd2) =>
         reducesToCompleteness(prd1)
         reducesToCompleteness(prd2)
-      case AppAbsDerivation(AppType(AbsType(argK, body), t12), t3) => 
-        assert(t3 == absSubstitution(body, t12))
-        ()
+      case AppAbsDerivation(AppType(AbsType(argK, body), t12), t3) => ()
       case _ => ()
   }.ensuring(_ => reducesTo(prd.type1, prd.type2). isDefined)
 
-
-  def reduceReflSust(t: Type, j: BigInt, sd: TypeToTypeDerivation): TypeToTypeDerivation = {
+  def reduceShift(sd: TypeToTypeDerivation, d: BigInt, c: BigInt): TypeToTypeDerivation = {
     require(sd.isParallelReduction)
+    require(d >= 0)
+    require(c >= 0)
+
+    sd match
+      case ReflDerivation(t) => ReflDerivation(shift(t, d, c))
+      case ArrowDerivation(ArrowType(t11, t12), ArrowType(t21, t22), prd1, prd2) =>
+        val res1 = reduceShift(prd1, d, c)
+        val res2 = reduceShift(prd2, d, c)
+        ArrowDerivation(ArrowType(shift(t11, d, c), shift(t12, d, c)), ArrowType(shift(t21, d, c), shift(t22, d, c)), res1, res2)
+      case AbsDerivation(AbsType(k1, b1), AbsType(k2, b2), prd) =>
+        val res1 = reduceShift(prd, d, c + 1)
+        AbsDerivation(AbsType(k1, res1.type1), AbsType(k2, res1.type2), res1)
+      case AppDerivation(AppType(t11, t12), AppType(t21, t22), prd1, prd2) =>
+        val res1 = reduceShift(prd1, d, c)
+        val res2 = reduceShift(prd2, d, c)
+        AppDerivation(AppType(shift(t11, d, c), shift(t12, d, c)), AppType(shift(t21, d, c), shift(t22, d, c)), res1, res2)
+      case AppAbsDerivation(AppType(AbsType(argK, body), t12), t3) => 
+        boundRangeShift(t12, 1, 0, 0, 0)
+        boundRangeSubstitutionLemma(body, 0, shift(t12, 1, 0))
+        shiftCommutativityNegPos(substitute(body, 0, shift(t12, 1, 0)), -1, 0, d, c)
+        shiftSubstitutionCommutativityType(body, d, c + 1, 0, shift(t12, 1, 0))
+        shiftCommutativityPosPos(t12, d, c, 1, 0)
+        assert(shift(absSubstitution(body, t12), d, c) == absSubstitution(shift(body, d, c + 1), shift(t12, d, c)))
+        AppAbsDerivation(AppType(AbsType(argK, shift(body, d, c + 1)), shift(t12, d, c)), absSubstitution(shift(body, d, c + 1), shift(t12, d, c)))
+      case _ => ReflDerivation(shift(sd.type1, d, c))
     
+  }.ensuring(res => 
+    res.type1 == shift(sd.type1, d, c) &&
+    res.type2 == shift(sd.type2, d, c) &&
+    res.isParallelReduction)
+
+  def reduceReflSubst(t: Type, j: BigInt, sd: TypeToTypeDerivation): TypeToTypeDerivation = {
+    require(sd.isParallelReduction)
     t match
       case ArrowType(t1, t2) =>
-        val d1 = reduceReflSust(t1, j, sd)
-        val d2 = reduceReflSust(t2, j, sd)
-        ArrowDerivation(ArrowType(substitute(t1, j, s1), substitute(t2, j, sd.type1)), ArrowType(d1.type2, d2.type2), d1, d2)
+        val d1 = reduceReflSubst(t1, j, sd)
+        val d2 = reduceReflSubst(t2, j, sd)
+        ArrowDerivation(ArrowType(d1.type1, d2.type1), ArrowType(d1.type2, d2.type2), d1, d2)
       case AppType(t1, t2) =>
-        val d1 = reduceReflSust(t1, j, sd)
-        val d2 = reduceReflSust(t2, j, sd)
-        AppDerivation(AppType(substitute(t1, j, s1), substitute(t2, j, sd.type1)), AppType(d1.type2, d2.type2), d1, d2)
-      case AbsType(_, body)
-        //case AbsType(k, b) => AbsType(k, substitute(b, j + 1, shift(s, 1, 0)))
-        val d1 = reduceReflSust(t1, j, sd)
-      
-
+        val d1 = reduceReflSubst(t1, j, sd)
+        val d2 = reduceReflSubst(t2, j, sd)
+        AppDerivation(AppType(d1.type1, d2.type1), AppType(d1.type2, d2.type2), d1, d2)
+      case AbsType(k, body) =>
+        val bd = reduceReflSubst(body, j + 1, reduceShift(sd, 1, 0))
+        AbsDerivation(AbsType(k, bd.type1), AbsType(k, bd.type2), bd)
+      case BasicType(_) => ReflDerivation(t)
+      case VariableType(v) => if j == v then sd else ReflDerivation(t)
   }.ensuring(res => 
     res.isParallelReduction &&
-    res.type1 == substitute(t, j, sd.type1)
+    res.type1 == substitute(t, j, sd.type1) &&
     res.type2 == substitute(t, j, sd.type2))
 
-  // def reduceSubst(td: TypeToTypeDerivation, j: BigInt, sd: TypeToTypeDerivation): TypeToTypeDerivation = {
-  //   require(td.isParallelReduction)
-  //   require(sd.isParallelReduction)
+  def reduceSubst(td: TypeToTypeDerivation, j: BigInt, sd: TypeToTypeDerivation): TypeToTypeDerivation = {
+    require(td.isParallelReduction)
+    require(sd.isParallelReduction)
     
-  //   td match
-  //     case ReflDerivation(t) =>
+    td match
+      case ReflDerivation(t) => reduceReflSubst(td.type1, j, sd)
+      case ArrowDerivation(ArrowType(t11, t12), ArrowType(t21, t22), td1, td2) =>
+        val rs1 = reduceSubst(td1, j, sd)
+        val rs2 = reduceSubst(td2, j, sd)
+        ArrowDerivation(ArrowType(rs1.type1, rs2.type1), ArrowType(rs1.type2, rs2.type2), rs1, rs2)
+      case AppDerivation(AppType(t11, t12), AppType(t21, t22), td1, td2) =>
+        val rs1 = reduceSubst(td1, j, sd)
+        val rs2 = reduceSubst(td2, j, sd)
+        AppDerivation(AppType(rs1.type1, rs2.type1), AppType(rs1.type2, rs2.type2), rs1, rs2)
+      case AbsDerivation(AbsType(k1, b1), AbsType(k2, b2), bd) =>
+        val rs = reduceSubst(bd, j + 1, reduceShift(sd, 1, 0))
+        AbsDerivation(AbsType(k1, rs.type1), AbsType(k2, rs.type2), rs)
+      case AppAbsDerivation(AppType(AbsType(argK, body), t12), t3) => 
+        val rs1 = reduceSubst()
+        ReflDerivation(td.type1)
+      case _ => td
 
-  // }.ensuring(res =>
-  //   res.isParallelReduction &&
-  //   res.type1 == substitute(td.type1, j, sd.type1)
-  //   res.type2 == substitute(td.type2, j, sd.type2))
+  }.ensuring(res =>
+    res.isParallelReduction &&
+    res.type1 == substitute(td.type1, j, sd.type1) &&
+    res.type2 == substitute(td.type2, j, sd.type2))
 
   def diamondProperty(prd1: TypeToTypeDerivation, prd2: TypeToTypeDerivation): (TypeToTypeDerivation, TypeToTypeDerivation) = {
     decreases(prd1.size + prd2.size)

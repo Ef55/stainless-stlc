@@ -425,9 +425,12 @@ object TransformationsProperties {
       require(d >= 0)
       require(b < 0)
       require(a >= 0)
-      require(if d >= c                then !subs.hasFreeVariablesIn(c, -b) || !shift(subs, a, d - b).hasFreeVariablesIn(c, - b) else 
-              if d <= c                then !subs.hasFreeVariablesIn(c, -b) || !shift(subs, a, d).hasFreeVariablesIn(c + a, - b) else
-              true) 
+      require(!subs.hasFreeVariablesIn(c, -b))
+      
+      //Weaker but more complex precond
+      // require(if d >= c                then !subs.hasFreeVariablesIn(c, -b) || !shift(subs, a, d - b).hasFreeVariablesIn(c, - b) else 
+      //         if d <= c                then !subs.hasFreeVariablesIn(c, -b) || !shift(subs, a, d).hasFreeVariablesIn(c + a, - b) else
+      //         true) 
 
       subs match {
         case BasicType(_) => ()
