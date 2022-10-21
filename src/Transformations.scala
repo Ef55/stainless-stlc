@@ -538,6 +538,16 @@ object TransformationsProperties {
              shift(substitute(typ, k, subs), s, c) == substitute(shift(typ, s, c), k, shift(subs, s, c))
     )
 
+    def shiftAbsSubstitutionCommutativity(body: Type, arg: Type, d: BigInt, c: BigInt) = {
+      require(d >= 0)
+      require(c >= 0)
+      boundRangeShift(arg, 1, 0, 0, 0)
+      boundRangeSubstitutionLemma(body, 0, shift(arg, 1, 0))
+      shiftCommutativityNegPos(substitute(body, 0, shift(arg, 1, 0)), -1, 0, d, c)
+      shiftSubstitutionCommutativityType(body, d, c + 1, 0, shift(arg, 1, 0))
+      shiftCommutativityPosPos(arg, d, c, 1, 0)
+    }.ensuring(_ => shift(absSubstitution(body, arg), d, c) == absSubstitution(shift(body, d, c + 1), shift(arg, d, c)))
+
     // @opaque @pure
     // def shiftSubstitutionCommutativityTypeNeg(typ: Type, s: BigInt, c: BigInt, k: BigInt, subs: Type): Unit = {
     //   require(c >= 0 && c <= k)

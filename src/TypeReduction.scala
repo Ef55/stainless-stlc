@@ -9,156 +9,149 @@ object TypeReduction{
 
 
 
-  sealed trait TypeToTypeDerivation{
+  sealed trait ParallelReductionDerivation{
     def type1: Type = {
       this match{
         case ReflDerivation(t) => t 
-        case SymmDerivation(t1, _, _) => t1
-        case TransDerivation(t1, _, _, _) => t1
         case ArrowDerivation(t1, _, _, _) => t1
         case AbsDerivation(t1, _, _) => t1
         case AppDerivation(t1, _, _, _) => t1
-        case AppAbsDerivation(t1, _) => t1
+        case AppAbsDerivation(abs, arg, _, _, _, _) => AppType(abs, arg)
       }
     }
 
     def type2: Type = {
       this match{
         case ReflDerivation(t) => t 
-        case SymmDerivation(_, t2, _) => t2
-        case TransDerivation(_, t2, _, _) => t2
         case ArrowDerivation(_, t2, _, _) => t2
         case AbsDerivation(_, t2, _) => t2
         case AppDerivation(_, t2, _, _) => t2
-        case AppAbsDerivation(_, t2) => t2
+        case AppAbsDerivation(_, _, body2, arg2, _, _) => absSubstitution(body2, arg2)
       }
     }
 
     def size: BigInt = {
       this match
         case ReflDerivation(_) => BigInt(1)
-        case SymmDerivation(_, _, ed) => ed.size + BigInt(1)
-        case TransDerivation(_, _, ed1, ed2) => ed1.size + ed2.size
         case ArrowDerivation(_, _, ed1, ed2) => ed1.size + ed2.size
         case AbsDerivation(_, _, ed) => ed.size + BigInt(1)
         case AppDerivation(_, _, ed1, ed2) => ed1.size + ed2.size
-        case AppAbsDerivation(_, _) => BigInt(1)
+        case AppAbsDerivation(_, _, _, _, tt1, tt2) => tt1.size + tt2.size
     }.ensuring(_ > BigInt(0))
 
-    def isEquivalence: Boolean = {
-      this match {
-        case ReflDerivation(_) => true
-        case SymmDerivation(t1, t2, ed) => ed.isEquivalence && ed.type1 == t2 && ed.type2 == t1
-        case TransDerivation(t1, t2, ed1, ed2) => 
-          ed1.isEquivalence && ed2.isEquivalence && ed1.type1 == t1 &&
-          ed2.type2 == t2 && ed1.type2 == ed2.type1
-        case ArrowDerivation(ArrowType(t11, t12), ArrowType(t21, t22), ed1, ed2) =>
-          ed1.isEquivalence && ed2.isEquivalence && ed1.type1 == t11 &&
-          ed1.type2 == t21 && ed2.type1 == t12 && ed2.type2 == t22
-        case AbsDerivation(AbsType(k1, b1), AbsType(k2, b2), ed) => 
-          ed.isEquivalence && ed.type1 == b1 && ed.type2 == b2 && k1 == k2
-        case AppDerivation(AppType(t11, t12), AppType(t21, t22), ed1, ed2) =>
-          ed1.isEquivalence && ed2.isEquivalence && ed1.type1 == t11 &&
-          ed1.type2 == t21 && ed2.type1 == t12 && ed2.type2 == t22
-        case AppAbsDerivation(AppType(AbsType(argK, body), t2), t3) =>
-          t3 == absSubstitution(body, t2) 
-        case AppAbsDerivation(_, _) => false
-      }
-    }
+    // def isEquivalence: Boolean = {
+    //   this match {
+    //     case ReflDerivation(_) => true
+    //     case SymmDerivation(t1, t2, ed) => ed.isEquivalence && ed.type1 == t2 && ed.type2 == t1
+    //     case TransDerivation(t1, t2, ed1, ed2) => 
+    //       ed1.isEquivalence && ed2.isEquivalence && ed1.type1 == t1 &&
+    //       ed2.type2 == t2 && ed1.type2 == ed2.type1
+    //     case ArrowDerivation(ArrowType(t11, t12), ArrowType(t21, t22), ed1, ed2) =>
+    //       ed1.isEquivalence && ed2.isEquivalence && ed1.type1 == t11 &&
+    //       ed1.type2 == t21 && ed2.type1 == t12 && ed2.type2 == t22
+    //     case AbsDerivation(AbsType(k1, b1), AbsType(k2, b2), ed) => 
+    //       ed.isEquivalence && ed.type1 == b1 && ed.type2 == b2 && k1 == k2
+    //     case AppDerivation(AppType(t11, t12), AppType(t21, t22), ed1, ed2) =>
+    //       ed1.isEquivalence && ed2.isEquivalence && ed1.type1 == t11 &&
+    //       ed1.type2 == t21 && ed2.type1 == t12 && ed2.type2 == t22
+    //     case AppAbsDerivation(AppType(AbsType(argK, body), t2), t3) =>
+    //       t3 == absSubstitution(body, t2) 
+    //     case AppAbsDerivation(_, _) => false
+    //   }
+    // }
 
-    def isParallelReduction: Boolean = {
+    def isValid: Boolean = {
       this match {
         case ReflDerivation(_) => true
         case ArrowDerivation(ArrowType(t11, t12), ArrowType(t21, t22), prd1, prd2) =>
-          prd1.isParallelReduction && prd2.isParallelReduction && prd1.type1 == t11 &&
+          prd1.isValid && prd2.isValid && prd1.type1 == t11 &&
           prd1.type2 == t21 && prd2.type1 == t12 && prd2.type2 == t22
         case AbsDerivation(AbsType(k1, b1), AbsType(k2, b2), prd) => 
-          prd.isParallelReduction && prd.type1 == b1 && prd.type2 == b2 && k1 == k2
+          prd.isValid && prd.type1 == b1 && prd.type2 == b2 && k1 == k2
         case AppDerivation(AppType(t11, t12), AppType(t21, t22), prd1, prd2) =>
-          prd1.isParallelReduction && prd2.isParallelReduction && prd1.type1 == t11 &&
+          prd1.isValid && prd2.isValid && prd1.type1 == t11 &&
           prd1.type2 == t21 && prd2.type1 == t12 && prd2.type2 == t22
-        case AppAbsDerivation(AppType(AbsType(argK, body), t12), t3) => t3 == absSubstitution(body, t12) 
-        case _ => false
+        case AppAbsDerivation(AbsType(argK, body1), arg1, body2, arg2, tt1, tt2) => 
+          tt1.isValid && tt2.isValid && tt1.type1 == body1 && tt1.type2 == body2 &&
+          tt2.type1 == arg1 && tt2.type2 == arg2 
       }
     }
   }
-  case class ReflDerivation(t: Type) extends TypeToTypeDerivation
-  case class SymmDerivation(t1: Type, t2: Type, ed: TypeToTypeDerivation) extends TypeToTypeDerivation
-  case class TransDerivation(t1: Type, t2: Type, ed1: TypeToTypeDerivation, ed2: TypeToTypeDerivation) extends TypeToTypeDerivation
-  case class ArrowDerivation(t1: ArrowType, t2: ArrowType, ed1: TypeToTypeDerivation, ed2: TypeToTypeDerivation) extends TypeToTypeDerivation
-  case class AbsDerivation(t1: AbsType, t2: AbsType, ed: TypeToTypeDerivation) extends TypeToTypeDerivation
-  case class AppDerivation(t1: AppType, t2: AppType, ed: TypeToTypeDerivation, ed2: TypeToTypeDerivation) extends TypeToTypeDerivation
-  case class AppAbsDerivation(t1: AppType, t2: Type) extends TypeToTypeDerivation
+  case class ReflDerivation(t: Type) extends ParallelReductionDerivation
+  case class ArrowDerivation(t1: ArrowType, t2: ArrowType, ed1: ParallelReductionDerivation, ed2: ParallelReductionDerivation) extends ParallelReductionDerivation
+  case class AbsDerivation(t1: AbsType, t2: AbsType, ed: ParallelReductionDerivation) extends ParallelReductionDerivation
+  case class AppDerivation(t1: AppType, t2: AppType, ed: ParallelReductionDerivation, ed2: ParallelReductionDerivation) extends ParallelReductionDerivation
+  case class AppAbsDerivation(abs1: AbsType, arg1: Type, body2: Type, arg2: Type , tt1: ParallelReductionDerivation, tt2: ParallelReductionDerivation) extends ParallelReductionDerivation
 
-  def reducesTo(t1: Type, t2: Type): Option[TypeToTypeDerivation] = {
-    decreases(t1.size + t2.size)
-    if(t1 == t2){
-      Some(ReflDerivation(t1))
-    }
-    else{
-      (t1, t2) match{
-        case (at1@ArrowType(t11, t12), at2@ArrowType(t21, t22)) =>
-          (reducesTo(t11, t21), reducesTo(t12, t22)) match {
-              case (Some(prd1), Some(prd2)) => Some(ArrowDerivation(at1, at2, prd1, prd2))
-              case _ => None()
-          }
-        case (at1@AbsType(k1, body1), at2@AbsType(k2, body2)) =>
-          reducesTo(body1, body2) match {
-              case Some(prd) if k1 == k2 => Some(AbsDerivation(at1, at2, prd))
-              case _ => None()
-          }
+  // def reducesTo(t1: Type, t2: Type): Option[ParallelReductionDerivation] = {
+  //   decreases(t1.size + t2.size)
+  //   if(t1 == t2){
+  //     Some(ReflDerivation(t1))
+  //   }
+  //   else{
+  //     (t1, t2) match{
+  //       case (at1@ArrowType(t11, t12), at2@ArrowType(t21, t22)) =>
+  //         (reducesTo(t11, t21), reducesTo(t12, t22)) match {
+  //             case (Some(prd1), Some(prd2)) => Some(ArrowDerivation(at1, at2, prd1, prd2))
+  //             case _ => None()
+  //         }
+  //       case (at1@AbsType(k1, body1), at2@AbsType(k2, body2)) =>
+  //         reducesTo(body1, body2) match {
+  //             case Some(prd) if k1 == k2 => Some(AbsDerivation(at1, at2, prd))
+  //             case _ => None()
+  //         }
         
-        case (at1@AppType(AbsType(argK, body), t12), t3) if t3 == absSubstitution(body, t12) => Some(AppAbsDerivation(at1, t3))
-        case (at1@AppType(t11, t12), at2@AppType(t21, t22)) =>
-          (reducesTo(t11, t21), reducesTo(t12, t22)) match {
-              case (Some(prd1), Some(prd2)) => Some(AppDerivation(at1, at2, prd1, prd2))
-              case _ => None()
-          }
-        case (_, _) => None()
-      }
-    }
-  }
+  //       case (at1@AppType(AbsType(argK, body), t12), t3) if t3 == absSubstitution(body, t12) => Some(AppAbsDerivation(at1, t3))
+  //       case (at1@AppType(t11, t12), at2@AppType(t21, t22)) =>
+  //         (reducesTo(t11, t21), reducesTo(t12, t22)) match {
+  //             case (Some(prd1), Some(prd2)) => Some(AppDerivation(at1, at2, prd1, prd2))
+  //             case _ => None()
+  //         }
+  //       case (_, _) => None()
+  //     }
+  //   }
+  // }
 
-  def reducesToSoundness(t1: Type, t2: Type): Unit = {
-    require(reducesTo(t1, t2).isDefined)
-    decreases(t1.size + t2.size)
-    if(t1 == t2){
-      ()
-    }
-    else{
-      (t1, t2) match{
-        case (at1@ArrowType(t11, t12), at2@ArrowType(t21, t22)) =>
-          reducesToSoundness(t11, t21)
-          reducesToSoundness(t12, t22)
-        case (at1@AbsType(k1, body1), at2@AbsType(k2, body2)) =>
-          reducesToSoundness(body1, body2)
-        case (at1@AppType(AbsType(argK, body), t12), t3) if t3 == absSubstitution(body, t12) => ()
-        case (at1@AppType(t11, t12), at2@AppType(t21, t22)) =>
-          reducesToSoundness(t11, t21)
-          reducesToSoundness(t12, t22)
-        case (_, _) => ()
-        }
-      }
-  }.ensuring(_ => reducesTo(t1, t2).get.isParallelReduction)
+  // def reducesToSoundness(t1: Type, t2: Type): Unit = {
+  //   require(reducesTo(t1, t2).isDefined)
+  //   decreases(t1.size + t2.size)
+  //   if(t1 == t2){
+  //     ()
+  //   }
+  //   else{
+  //     (t1, t2) match{
+  //       case (at1@ArrowType(t11, t12), at2@ArrowType(t21, t22)) =>
+  //         reducesToSoundness(t11, t21)
+  //         reducesToSoundness(t12, t22)
+  //       case (at1@AbsType(k1, body1), at2@AbsType(k2, body2)) =>
+  //         reducesToSoundness(body1, body2)
+  //       case (at1@AppType(AbsType(argK, body), t12), t3) if t3 == absSubstitution(body, t12) => ()
+  //       case (at1@AppType(t11, t12), at2@AppType(t21, t22)) =>
+  //         reducesToSoundness(t11, t21)
+  //         reducesToSoundness(t12, t22)
+  //       case (_, _) => ()
+  //       }
+  //     }
+  // }.ensuring(_ => reducesTo(t1, t2).get.isValid)
 
-  def reducesToCompleteness(prd: TypeToTypeDerivation): Unit = {
-    require(prd.isParallelReduction)
-    prd match
-      case ReflDerivation(t) => ()
-      case ArrowDerivation(ArrowType(_, _), ArrowType(_, _), prd1, prd2) =>
-        reducesToCompleteness(prd1)
-        reducesToCompleteness(prd2)
-      case AbsDerivation(AbsType(_, _), AbsType(_, _), prd1) =>
-        reducesToCompleteness(prd1)
-      case AppDerivation(AppType(_, _), AppType(_, _), prd1, prd2) =>
-        reducesToCompleteness(prd1)
-        reducesToCompleteness(prd2)
-      case AppAbsDerivation(AppType(AbsType(argK, body), t12), t3) => ()
-      case _ => ()
-  }.ensuring(_ => reducesTo(prd.type1, prd.type2). isDefined)
+  // def reducesToCompleteness(prd: ParallelReductionDerivation): Unit = {
+  //   require(prd.isValid)
+  //   prd match
+  //     case ReflDerivation(t) => ()
+  //     case ArrowDerivation(ArrowType(_, _), ArrowType(_, _), prd1, prd2) =>
+  //       reducesToCompleteness(prd1)
+  //       reducesToCompleteness(prd2)
+  //     case AbsDerivation(AbsType(_, _), AbsType(_, _), prd1) =>
+  //       reducesToCompleteness(prd1)
+  //     case AppDerivation(AppType(_, _), AppType(_, _), prd1, prd2) =>
+  //       reducesToCompleteness(prd1)
+  //       reducesToCompleteness(prd2)
+  //     case AppAbsDerivation(AppType(AbsType(argK, body), t12), t3) => ()
+  //     case _ => ()
+  // }.ensuring(_ => reducesTo(prd.type1, prd.type2). isDefined)
 
-  def reduceShift(sd: TypeToTypeDerivation, d: BigInt, c: BigInt): TypeToTypeDerivation = {
-    require(sd.isParallelReduction)
+  def reduceShift(sd: ParallelReductionDerivation, d: BigInt, c: BigInt): ParallelReductionDerivation = {
+    require(sd.isValid)
     require(d >= 0)
     require(c >= 0)
 
@@ -175,23 +168,20 @@ object TypeReduction{
         val res1 = reduceShift(prd1, d, c)
         val res2 = reduceShift(prd2, d, c)
         AppDerivation(AppType(shift(t11, d, c), shift(t12, d, c)), AppType(shift(t21, d, c), shift(t22, d, c)), res1, res2)
-      case AppAbsDerivation(AppType(AbsType(argK, body), t12), t3) => 
-        boundRangeShift(t12, 1, 0, 0, 0)
-        boundRangeSubstitutionLemma(body, 0, shift(t12, 1, 0))
-        shiftCommutativityNegPos(substitute(body, 0, shift(t12, 1, 0)), -1, 0, d, c)
-        shiftSubstitutionCommutativityType(body, d, c + 1, 0, shift(t12, 1, 0))
-        shiftCommutativityPosPos(t12, d, c, 1, 0)
-        assert(shift(absSubstitution(body, t12), d, c) == absSubstitution(shift(body, d, c + 1), shift(t12, d, c)))
-        AppAbsDerivation(AppType(AbsType(argK, shift(body, d, c + 1)), shift(t12, d, c)), absSubstitution(shift(body, d, c + 1), shift(t12, d, c)))
+      case AppAbsDerivation(AbsType(argK, body1), arg1, body2, arg2, prd1, prd2) =>
+        val resBody = reduceShift(prd1, d, c + 1)
+        val resArg = reduceShift(prd2, d, c)
+        shiftAbsSubstitutionCommutativity(body2, arg2, d, c)
+        AppAbsDerivation(AbsType(argK, shift(body1, d, c + 1)), shift(arg1, d, c), shift(body2, d, c + 1), shift(arg2, d, c), resBody, resArg)
       case _ => ReflDerivation(shift(sd.type1, d, c))
     
   }.ensuring(res => 
     res.type1 == shift(sd.type1, d, c) &&
     res.type2 == shift(sd.type2, d, c) &&
-    res.isParallelReduction)
+    res.isValid)
 
-  def reduceReflSubst(t: Type, j: BigInt, sd: TypeToTypeDerivation): TypeToTypeDerivation = {
-    require(sd.isParallelReduction)
+  def reduceReflSubst(t: Type, j: BigInt, sd: ParallelReductionDerivation): ParallelReductionDerivation = {
+    require(sd.isValid)
     t match
       case ArrowType(t1, t2) =>
         val d1 = reduceReflSubst(t1, j, sd)
@@ -207,13 +197,13 @@ object TypeReduction{
       case BasicType(_) => ReflDerivation(t)
       case VariableType(v) => if j == v then sd else ReflDerivation(t)
   }.ensuring(res => 
-    res.isParallelReduction &&
+    res.isValid &&
     res.type1 == substitute(t, j, sd.type1) &&
     res.type2 == substitute(t, j, sd.type2))
 
-  def reduceSubst(td: TypeToTypeDerivation, j: BigInt, sd: TypeToTypeDerivation): TypeToTypeDerivation = {
-    require(td.isParallelReduction)
-    require(sd.isParallelReduction)
+  def reduceSubst(td: ParallelReductionDerivation, j: BigInt, sd: ParallelReductionDerivation): ParallelReductionDerivation = {
+    require(td.isValid)
+    require(sd.isValid)
     
     td match
       case ReflDerivation(t) => reduceReflSubst(td.type1, j, sd)
@@ -228,46 +218,50 @@ object TypeReduction{
       case AbsDerivation(AbsType(k1, b1), AbsType(k2, b2), bd) =>
         val rs = reduceSubst(bd, j + 1, reduceShift(sd, 1, 0))
         AbsDerivation(AbsType(k1, rs.type1), AbsType(k2, rs.type2), rs)
-      case AppAbsDerivation(AppType(AbsType(argK, body), t12), t3) => 
-        val rs1 = reduceSubst()
+      case AppAbsDerivation(AbsType(argK, body), arg1, body2, arg2, td1, td2) => 
+        val rs1 = reduceSubst(td1, j + 1, reduceShift(sd, 1, 0))
+        val rs2 = reduceSubst(td2, j, sd)
         ReflDerivation(td.type1)
       case _ => td
 
-  }.ensuring(res =>
-    res.isParallelReduction &&
-    res.type1 == substitute(td.type1, j, sd.type1) &&
-    res.type2 == substitute(td.type2, j, sd.type2))
+  // }.ensuring(res =>
+  //   res.isValid &&
+  //   res.type1 == substitute(td.type1, j, sd.type1) &&
+  //   res.type2 == substitute(td.type2, j, sd.type2))
 
-  def diamondProperty(prd1: TypeToTypeDerivation, prd2: TypeToTypeDerivation): (TypeToTypeDerivation, TypeToTypeDerivation) = {
-    decreases(prd1.size + prd2.size)
-    require(prd1.type1 == prd2.type1)
-    require(prd1.isParallelReduction)
-    require(prd2.isParallelReduction)
-    if prd1.type2 == prd2.type2 then
-      (ReflDerivation(prd1.type2), ReflDerivation(prd2.type2))
-    else
-      (prd1, prd2) match 
-        case (ReflDerivation(t), _) => (prd2, ReflDerivation(prd2.type2))
-        case (_, ReflDerivation(t)) => (ReflDerivation(prd1.type2), prd1)
-        case (ArrowDerivation(ArrowType(t11, t12), ArrowType(t21, t22), prd11, prd12), ArrowDerivation(ArrowType(t31, t32), ArrowType(t41, t42), prd21, prd22)) =>
-          val (dP11, dP12) = diamondProperty(prd11, prd21)
-          val (dP21, dP22) = diamondProperty(prd12, prd22)
-          (ArrowDerivation(ArrowType(dP11.type1, dP21.type1), ArrowType(dP11.type2, dP21.type2), dP11, dP21), ArrowDerivation(ArrowType(dP12.type1, dP22.type1), ArrowType(dP12.type2, dP22.type2), dP12, dP22))
-        case (AbsDerivation(AbsType(k1, b1), AbsType(k2, b2), prd11), AbsDerivation(AbsType(k3, b3), AbsType(k4, b4), prd12)) =>
-          val (dP1, dP2) = diamondProperty(prd11, prd12)
-          (AbsDerivation(AbsType(k2, dP1.type1), AbsType(k2, dP1.type2), dP1), AbsDerivation(AbsType(k2, dP2.type1), AbsType(k2, dP2.type2), dP2))
-        case (AppDerivation(AppType(t11, t12), AppType(t21, t22), prd11, prd12), AppDerivation(AppType(t31, t32), AppType(t41, t42), prd21, prd22)) =>
-          val (dP11, dP12) = diamondProperty(prd11, prd21)
-          val (dP21, dP22) = diamondProperty(prd12, prd22)
-          (AppDerivation(AppType(dP11.type1, dP21.type1), AppType(dP11.type2, dP21.type2), dP11, dP21), AppDerivation(AppType(dP12.type1, dP22.type1), AppType(dP12.type2, dP22.type2), dP12, dP22))
-        case (AppAbsDerivation(_, _), AppAbsDerivation(_, _)) => (ReflDerivation(prd1.type2), ReflDerivation(prd2.type2))
-        case (AppAbsDerivation(_, _), AppDerivation(AppType(t11, t12), AppType(t21, t22), prd11, prd12)) => (ReflDerivation(prd1.type2), ReflDerivation(prd2.type2))
-        case (AppDerivation(AppType(t11, t12), AppType(t21, t22), prd11, prd12), AppAbsDerivation(_, _)) => (ReflDerivation(prd1.type2), ReflDerivation(prd2.type2))
-        case _ => (ReflDerivation(prd1.type2), ReflDerivation(prd2.type2))
-  }.ensuring(res => res._1.type1 == prd1.type2 &&
-                    res._2.type1 == prd2.type2 &&
-                    res._1.type2 == res._2.type2 &&
-                    res._1.isParallelReduction && res._2.isParallelReduction)
+  // def diamondProperty(prd1: ParallelReductionDerivation, prd2: ParallelReductionDerivation): (ParallelReductionDerivation, ParallelReductionDerivation) = {
+  //   decreases(prd1.size + prd2.size)
+  //   require(prd1.type1 == prd2.type1)
+  //   require(prd1.isValid)
+  //   require(prd2.isValid)
+  //   if prd1.type2 == prd2.type2 then
+  //     (ReflDerivation(prd1.type2), ReflDerivation(prd2.type2))
+  //   else
+  //     (prd1, prd2) match 
+  //       case (ReflDerivation(t), _) => (prd2, ReflDerivation(prd2.type2))
+  //       case (_, ReflDerivation(t)) => (ReflDerivation(prd1.type2), prd1)
+  //       case (ArrowDerivation(ArrowType(t11, t12), ArrowType(t21, t22), prd11, prd12), ArrowDerivation(ArrowType(t31, t32), ArrowType(t41, t42), prd21, prd22)) =>
+  //         val (dP11, dP12) = diamondProperty(prd11, prd21)
+  //         val (dP21, dP22) = diamondProperty(prd12, prd22)
+  //         (ArrowDerivation(ArrowType(dP11.type1, dP21.type1), ArrowType(dP11.type2, dP21.type2), dP11, dP21), ArrowDerivation(ArrowType(dP12.type1, dP22.type1), ArrowType(dP12.type2, dP22.type2), dP12, dP22))
+  //       case (AbsDerivation(AbsType(k1, b1), AbsType(k2, b2), prd11), AbsDerivation(AbsType(k3, b3), AbsType(k4, b4), prd12)) =>
+  //         val (dP1, dP2) = diamondProperty(prd11, prd12)
+  //         (AbsDerivation(AbsType(k2, dP1.type1), AbsType(k2, dP1.type2), dP1), AbsDerivation(AbsType(k2, dP2.type1), AbsType(k2, dP2.type2), dP2))
+  //       case (AppDerivation(AppType(t11, t12), AppType(t21, t22), prd11, prd12), AppDerivation(AppType(t31, t32), AppType(t41, t42), prd21, prd22)) =>
+  //         val (dP11, dP12) = diamondProperty(prd11, prd21)
+  //         val (dP21, dP22) = diamondProperty(prd12, prd22)
+  //         (AppDerivation(AppType(dP11.type1, dP21.type1), AppType(dP11.type2, dP21.type2), dP11, dP21), AppDerivation(AppType(dP12.type1, dP22.type1), AppType(dP12.type2, dP22.type2), dP12, dP22))
+  //       case (AppAbsDerivation(_, _), AppAbsDerivation(_, _)) => (ReflDerivation(prd1.type2), ReflDerivation(prd2.type2))
+  //       case (AppAbsDerivation(_, _), AppDerivation(AppType(t11, t12), AppType(t21, t22), prd11, prd12)) => (ReflDerivation(prd1.type2), ReflDerivation(prd2.type2))
+  //       case (AppDerivation(AppType(t11, t12), AppType(t21, t22), prd11, prd12), AppAbsDerivation(_, _)) => (ReflDerivation(prd1.type2), ReflDerivation(prd2.type2))
+  //       case _ => (ReflDerivation(prd1.type2), ReflDerivation(prd2.type2))
+  // }.ensuring(res => res._1.type1 == prd1.type2 &&
+  //                   res._2.type1 == prd2.type2 &&
+  //                   res._1.type2 == res._2.type2 &&
+  //                   res._1.isValid && res._2.isValid)
+
+
+
   // sealed trait MultiStepParallelReduction{
   //   def type1: Type = {
   //     this match{
@@ -293,7 +287,7 @@ object TypeReduction{
   //   }
 
   // }
-  // case class SimpleStepDerivation(prd: TypeToTypeDerivation) extends MultiStepParallelReduction
+  // case class SimpleStepDerivation(prd: ParallelReductionDerivation) extends MultiStepParallelReduction
   // case class TransitiveStepDerivation(t1: Type, t2: Type, strd1: MultiStepParallelReduction, strd2: MultiStepParallelReduction) extends MultiStepParallelReduction
   
   sealed trait DetReductionDerivation{
@@ -485,9 +479,9 @@ object TypeReduction{
       }
   }.ensuring(_ => detReducesTo(t, detReduce(t).get.type2).isDefined)
 
-  // def reduceSubst(td: TypeToTypeDerivation, j: BigInt, sd: TypeToTypeDerivation): TypeToTypeDerivation = {
-  //   require(td.isParallelReduction)
-  //   require(sd.isParallelReduction)
+  // def reduceSubst(td: ParallelReductionDerivation, j: BigInt, sd: ParallelReductionDerivation): ParallelReductionDerivation = {
+  //   require(td.isValid)
+  //   require(sd.isValid)
     
   //   td match
   //     case ReflDerivation(t) =>
@@ -501,12 +495,12 @@ object TypeReduction{
   //     case _ => ReflDerivation(td.type1)
 
   // }.ensuring(res =>
-  //   res.isParallelReduction &&
+  //   res.isValid &&
   //   res.type1 == substitute(td.type1, j, sd.type1)
   //   res.type2 == substitute(td.type2, j, sd.type2))
 
 
-  // def properNormalFormsAreEquivalent(eq: TypeToTypeDerivation){
+  // def properNormalFormsAreEquivalent(eq: ParallelReductionDerivation){
   //   require(eq.isValid)
   //   require(deriveKind(eq).isDefined)
   //   require(deriveKind().isDefined)
