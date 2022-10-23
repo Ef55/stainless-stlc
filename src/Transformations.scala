@@ -172,6 +172,7 @@ object TransformationsProperties {
         (if(a >= -d + c)                    {!shift(t, d, c).hasFreeVariablesIn(a + d, b)} else true) 
       })
 
+    @opaque @pure
     def boundRangeSubstitutionLemma(t: Term, j: BigInt, s: Term): Unit = {
       require(j >= 0)
       require(!s.hasFreeVariablesIn(0, j+1))
@@ -333,6 +334,7 @@ object TransformationsProperties {
         } 
       )
 
+    @opaque @pure
     def boundRangeSubstitutionLemma(t: Type, j: BigInt, s: Type): Unit = {
       require(j >= 0)
       require(!s.hasFreeVariablesIn(0, j+1))
@@ -538,57 +540,9 @@ object TransformationsProperties {
              shift(substitute(typ, k, subs), s, c) == substitute(shift(typ, s, c), k, shift(subs, s, c))
     )
 
-    def shiftAbsSubstitutionCommutativity(body: Type, arg: Type, d: BigInt, c: BigInt) = {
-      require(d >= 0)
-      require(c >= 0)
-      boundRangeShift(arg, 1, 0, 0, 0)
-      boundRangeSubstitutionLemma(body, 0, shift(arg, 1, 0))
-      shiftCommutativityNegPos(substitute(body, 0, shift(arg, 1, 0)), -1, 0, d, c)
-      shiftSubstitutionCommutativityType(body, d, c + 1, 0, shift(arg, 1, 0))
-      shiftCommutativityPosPos(arg, d, c, 1, 0)
-    }.ensuring(_ => shift(absSubstitution(body, arg), d, c) == absSubstitution(shift(body, d, c + 1), shift(arg, d, c)))
-
-    // @opaque @pure
-    // def shiftSubstitutionCommutativityTypeNeg(typ: Type, s: BigInt, c: BigInt, k: BigInt, subs: Type): Unit = {
-    //   require(c >= 0 && c <= k)
-    //   require(s < 0)
-    //   require(!typ.hasFreeVariablesIn(c, -s))
-    //   require(!subs.hasFreeVariablesIn(c, -s))
-    //   require(k + s >= 0) 
-    //   // boundRangeShift(subs, -s, c, c, 0)
-    //   // boundRangeSubstitutionLemma(typ, k - s, shift(subs, -s, c), -s, -s, c, c)
 
 
-    //   typ match
-    //     case BasicType(_) => ()
-    //     case ArrowType(t1, t2) => 
-    //       shiftSubstitutionCommutativityTypeNeg(t1, s, c, k, subs)
-    //       shiftSubstitutionCommutativityTypeNeg(t2, s, c, k, subs)
-    //     case AppType(t1, t2) => 
-    //       shiftSubstitutionCommutativityTypeNeg(t1, s, c, k, subs)
-    //       shiftSubstitutionCommutativityTypeNeg(t2, s, c, k, subs)
 
-    //     case VariableType(v) => 
-    //       assert(!substitute(typ, k, subs).hasFreeVariablesIn(c, -s))
-    //       assert(shift(substitute(VariableType(BigInt("8856")), BigInt("11296"), BasicType("")), BigInt("-2440"), BigInt("8859"))
-    //           == VariableType(BigInt("8856")))
-    //       assert(substitute(shift(typ, s, c), k+s, BasicType("")))
-    //       assert(shift(substitute(typ, k, subs), s, c) == substitute(shift(typ, s, c), k+s, shift(subs, s, c)))
-          
-          
-    //       // boundRangeShiftComposition(subs, -s, s, c, c)
-    //       // if (v >= c && k == v + s){
-    //       //     boundRangeShiftComposition(subs, -s, s, c, c)
-    //       //     shift0Identity(subs, c)          
-    //       // }
-    //     case AbsType(argK, t) => 
-    //       boundRangeShift(subs, 1, 0, c, -s)
-    //       shiftSubstitutionCommutativityTypeNeg(t, s, c + 1, k + 1, shift(subs, 1, 0))
-    //       // shiftCommutativityPosPos(subs, -s, c, 1, 0)          
-    // }.ensuring(
-    //   !substitute(typ, k, subs).hasFreeVariablesIn(c, -s) &&
-    //   (shift(substitute(typ, k, subs), s, c) == substitute(shift(typ, s, c), k+s, shift(subs, s, c)))
-    // )
 
     @opaque @pure
     def boundRangeSubstitutionLemma(t: Type, j: BigInt, s: Type, a: BigInt, b: BigInt, c: BigInt, d: BigInt): Unit = {
@@ -642,6 +596,10 @@ object TransformationsProperties {
         if c + a >= d + b && c <= d + b then !substitute(t, j, s).hasFreeVariablesIn(c, b - (c - d))
         else true /*non trivial range*/)
 
+
+
+
+    
     @opaque @pure
     def substitutionCommutativity(t: Type, j: BigInt, s: Type, k: BigInt, u: Type): Unit = {
       require(j >= 0)
@@ -649,32 +607,127 @@ object TransformationsProperties {
       require(j != k)
       require(!u.hasFreeVariablesIn(j, 1))
 
-      t match {
-        case VariableType(i) => {
+      t match 
+        case VariableType(i) => 
           if(i == k) {
             boundRangeSubstitutionIdentity(u, j, substitute(s, k, u))
           }
-        }
+        
         case BasicType(_) => ()
-        case ArrowType(t1, t2) => {
+        case ArrowType(t1, t2) => 
           substitutionCommutativity(t1, j, s, k, u)
           substitutionCommutativity(t2, j, s, k, u)
-        }
-        case AppType(t1, t2) => {
+        
+        case AppType(t1, t2) => 
           substitutionCommutativity(t1, j, s, k, u)
           substitutionCommutativity(t2, j, s, k, u)
-        }
-        case AbsType(_, b) => {
+        
+        case AbsType(_, b) => 
           shiftSubstitutionCommutativityType(s, 1, 0, k, u)
           boundRangeShift(u, 1, 0, j, 1)
           substitutionCommutativity(b, j+1, shift(s, 1, 0), k+1, shift(u, 1, 0))
-        }
-      }
     }.ensuring(
       substitute(substitute(t, j, s), k, u)
       ==
       substitute(substitute(t, k, u), j, substitute(s, k, u))
+    )
+
+    //absSubst
+
+    @opaque @pure
+    def boundRangeAbsSubst(body: Type, arg: Type, c: BigInt, d: BigInt) = {
+      require(c >= 0)
+      require(d >= 0)
+      require(!arg.hasFreeVariablesIn(c, d))
+      require(!body.hasFreeVariablesIn(c + 1, d))
+
+      boundRangeShift(arg, 1, 0, c, d)
+      boundRangeSubstitutionLemma(body, 0, shift(arg, 1, 0), d, d, c + 1, c + 1)
+      boundRangeShift(arg, 1, 0, 0, 0)
+      boundRangeSubstitutionLemma(body, 0, shift(arg, 1, 0))
+      boundRangeShift(substitute(body, 0, shift(arg, 1, 0)), -1, 0, c + 1, d)
+    }.ensuring(!absSubstitution(body, arg).hasFreeVariablesIn(c, d))
+
+    @opaque @pure
+    def shiftAbsSubstitutionCommutativity(body: Type, arg: Type, d: BigInt, c: BigInt) = {
+      require(c >= 0)
+      require(if d < 0 then !arg.hasFreeVariablesIn(c, -d) && !body.hasFreeVariablesIn(c + 1, -d) else true)
+
+      boundRangeShift(arg, 1, 0, 0, 0)
+      boundRangeSubstitutionLemma(body, 0, shift(arg, 1, 0))
+
+      if d < 0 then
+        boundRangeShift(arg, 1, 0, c, -d)
+        boundRangeSubstitutionLemma(body, 0, shift(arg, 1, 0), -d, -d, c + 1, c + 1)
+        boundRangeShift(substitute(body, 0, shift(arg, 1, 0)), -1, 0, c + 1, -d)
+        shiftCommutativityNegNeg(substitute(body, 0, shift(arg, 1, 0)), -1, 0, d, c)
+        shiftSubstitutionCommutativityType(body, d, c + 1, 0, shift(arg, 1, 0))
+        shiftCommutativityPosNeg(arg, 1, 0, d, c + 1)
+      else
+        shiftCommutativityNegPos(substitute(body, 0, shift(arg, 1, 0)), -1, 0, d, c)
+        shiftSubstitutionCommutativityType(body, d, c + 1, 0, shift(arg, 1, 0))
+        shiftCommutativityPosPos(arg, d, c, 1, 0)
+    }.ensuring(_ => shift(absSubstitution(body, arg), d, c) == absSubstitution(shift(body, d, c + 1), shift(arg, d, c)))
+
+    @opaque @pure
+    def absSubstSubstCommutativity(body: Type, arg: Type, j: BigInt, s: Type): Unit = {
+      require(j >= 0)
+      require(!s.hasFreeVariablesIn(0, 1))
+
+      boundRangeShift(arg, 1, 0, 0, 0)
+      boundRangeSubstitutionLemma(body, 0, shift(arg, 1, 0))
+      shiftSubstitutionCommutativityType(substitute(body, 0, shift(arg, 1, 0)), -1, 0, j, s)
+      boundRangeShift(s, 1, 0, 0, 0)
+      substitutionCommutativity(body, 0, shift(arg, 1, 0), j + 1, shift(s, 1, 0))
+      shiftSubstitutionCommutativityType(arg, 1, 0, j, s)
+
+    }.ensuring(
+      substitute(absSubstitution(body, arg), j, s)
+      ==
+      absSubstitution(substitute(body, j + 1, shift(s, 1, 0)), substitute(arg, j, s))
     )    
   }
+
+    // @opaque @pure
+  // def shiftSubstitutionCommutativityTypeNeg(typ: Type, s: BigInt, c: BigInt, k: BigInt, subs: Type): Unit = {
+  //   require(c >= 0 && c <= k)
+  //   require(s < 0)
+  //   require(!typ.hasFreeVariablesIn(c, -s))
+  //   require(!subs.hasFreeVariablesIn(c, -s))
+  //   require(k + s >= 0) 
+  //   // boundRangeShift(subs, -s, c, c, 0)
+  //   // boundRangeSubstitutionLemma(typ, k - s, shift(subs, -s, c), -s, -s, c, c)
+
+
+  //   typ match
+  //     case BasicType(_) => ()
+  //     case ArrowType(t1, t2) => 
+  //       shiftSubstitutionCommutativityTypeNeg(t1, s, c, k, subs)
+  //       shiftSubstitutionCommutativityTypeNeg(t2, s, c, k, subs)
+  //     case AppType(t1, t2) => 
+  //       shiftSubstitutionCommutativityTypeNeg(t1, s, c, k, subs)
+  //       shiftSubstitutionCommutativityTypeNeg(t2, s, c, k, subs)
+
+  //     case VariableType(v) => 
+  //       assert(!substitute(typ, k, subs).hasFreeVariablesIn(c, -s))
+  //       assert(shift(substitute(VariableType(BigInt("8856")), BigInt("11296"), BasicType("")), BigInt("-2440"), BigInt("8859"))
+  //           == VariableType(BigInt("8856")))
+  //       assert(substitute(shift(typ, s, c), k+s, BasicType("")))
+  //       assert(shift(substitute(typ, k, subs), s, c) == substitute(shift(typ, s, c), k+s, shift(subs, s, c)))
+        
+        
+  //       // boundRangeShiftComposition(subs, -s, s, c, c)
+  //       // if (v >= c && k == v + s){
+  //       //     boundRangeShiftComposition(subs, -s, s, c, c)
+  //       //     shift0Identity(subs, c)          
+  //       // }
+  //     case AbsType(argK, t) => 
+  //       boundRangeShift(subs, 1, 0, c, -s)
+  //       shiftSubstitutionCommutativityTypeNeg(t, s, c + 1, k + 1, shift(subs, 1, 0))
+  //       // shiftCommutativityPosPos(subs, -s, c, 1, 0)          
+  // }.ensuring(
+  //   !substitute(typ, k, subs).hasFreeVariablesIn(c, -s) &&
+  //   (shift(substitute(typ, k, subs), s, c) == substitute(shift(typ, s, c), k+s, shift(subs, s, c)))
+  // )
 
 }

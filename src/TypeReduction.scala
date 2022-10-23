@@ -150,10 +150,40 @@ object TypeReduction{
   //     case _ => ()
   // }.ensuring(_ => reducesTo(prd.type1, prd.type2). isDefined)
 
+  @opaque @pure
+  def reduceBoundRange(sd: ParallelReductionDerivation, a: BigInt, b: BigInt): Unit = {
+    require(sd.isValid)
+    require(a >= 0)
+    require(b >= 0)
+    require(!sd.type1.hasFreeVariablesIn(a, b))
+
+    sd match
+      case ReflDerivation(t) => ()
+      case ArrowDerivation(_, _, prd1, prd2) => 
+        reduceBoundRange(prd1, a, b)
+        reduceBoundRange(prd2, a, b)
+      case AppDerivation(_, _, prd1, prd2) => 
+        reduceBoundRange(prd1, a, b)
+        reduceBoundRange(prd2, a, b)
+      case AbsDerivation(_, _, prd) =>
+        reduceBoundRange(prd, a + 1, b)
+      case AppAbsDerivation(_, _, _, _, prd1, prd2) =>
+        reduceBoundRange(prd1, a + 1, b)
+        reduceBoundRange(prd2, a, b)  
+        boundRangeAbsSubst(prd1.type2, prd2.type2, a, b)
+    
+  }.ensuring(_ => !sd.type2.hasFreeVariablesIn(a, b))
+
+  @opaque @pure
   def reduceShift(sd: ParallelReductionDerivation, d: BigInt, c: BigInt): ParallelReductionDerivation = {
     require(sd.isValid)
-    require(d >= 0)
     require(c >= 0)
+    require(if d < 0 then !sd.type1.hasFreeVariablesIn(c, -d) else true)
+
+    if d < 0 then 
+      reduceBoundRange(sd, c, -d) 
+    else 
+      true
 
     sd match
       case ReflDerivation(t) => ReflDerivation(shift(t, d, c))
@@ -169,6 +199,11 @@ object TypeReduction{
         val res2 = reduceShift(prd2, d, c)
         AppDerivation(AppType(shift(t11, d, c), shift(t12, d, c)), AppType(shift(t21, d, c), shift(t22, d, c)), res1, res2)
       case AppAbsDerivation(AbsType(argK, body1), arg1, body2, arg2, prd1, prd2) =>
+        if d < 0 then 
+          reduceBoundRange(prd1, c + 1, -d)
+          reduceBoundRange(prd2, c, -d)  
+        else 
+          true
         val resBody = reduceShift(prd1, d, c + 1)
         val resArg = reduceShift(prd2, d, c)
         shiftAbsSubstitutionCommutativity(body2, arg2, d, c)
@@ -180,6 +215,7 @@ object TypeReduction{
     res.type2 == shift(sd.type2, d, c) &&
     res.isValid)
 
+  @opaque @pure
   def reduceReflSubst(t: Type, j: BigInt, sd: ParallelReductionDerivation): ParallelReductionDerivation = {
     require(sd.isValid)
     t match
@@ -201,10 +237,17 @@ object TypeReduction{
     res.type1 == substitute(t, j, sd.type1) &&
     res.type2 == substitute(t, j, sd.type2))
 
+  @opaque @pure
   def reduceSubst(td: ParallelReductionDerivation, j: BigInt, sd: ParallelReductionDerivation): ParallelReductionDerivation = {
     require(td.isValid)
     require(sd.isValid)
+    require(j >= 0)
+    require(!sd.type1.hasFreeVariablesIn(0, 1))
     
+    reduceBoundRange(sd, 0, 1)
+    boundRangeShift(sd.type1, 1, 0, 0, 0)
+    boundRangeShift(sd.type2, 1, 0, 0, 0)
+
     td match
       case ReflDerivation(t) => reduceReflSubst(td.type1, j, sd)
       case ArrowDerivation(ArrowType(t11, t12), ArrowType(t21, t22), td1, td2) =>
@@ -219,46 +262,88 @@ object TypeReduction{
         val rs = reduceSubst(bd, j + 1, reduceShift(sd, 1, 0))
         AbsDerivation(AbsType(k1, rs.type1), AbsType(k2, rs.type2), rs)
       case AppAbsDerivation(AbsType(argK, body), arg1, body2, arg2, td1, td2) => 
-        val rs1 = reduceSubst(td1, j + 1, reduceShift(sd, 1, 0))
+        val rsh = reduceShift(sd, 1, 0)
+        val rs1 = reduceSubst(td1, j + 1, rsh)
         val rs2 = reduceSubst(td2, j, sd)
-        ReflDerivation(td.type1)
+        absSubstSubstCommutativity(body2, arg2, j, sd.type2)
+        AppAbsDerivation(AbsType(argK, rs1.type1), rs2.type1, rs1.type2, rs2.type2, rs1, rs2)
       case _ => td
 
-  // }.ensuring(res =>
-  //   res.isValid &&
-  //   res.type1 == substitute(td.type1, j, sd.type1) &&
-  //   res.type2 == substitute(td.type2, j, sd.type2))
+  }.ensuring(res =>
+    res.isValid &&
+    res.type1 == substitute(td.type1, j, sd.type1) &&
+    res.type2 == substitute(td.type2, j, sd.type2))
+  
+  @opaque @pure
+  def reduceAbsSubst(bd: ParallelReductionDerivation, ad: ParallelReductionDerivation): ParallelReductionDerivation = {
+    require(bd.isValid)
+    require(ad.isValid)
 
-  // def diamondProperty(prd1: ParallelReductionDerivation, prd2: ParallelReductionDerivation): (ParallelReductionDerivation, ParallelReductionDerivation) = {
-  //   decreases(prd1.size + prd2.size)
-  //   require(prd1.type1 == prd2.type1)
-  //   require(prd1.isValid)
-  //   require(prd2.isValid)
-  //   if prd1.type2 == prd2.type2 then
-  //     (ReflDerivation(prd1.type2), ReflDerivation(prd2.type2))
-  //   else
-  //     (prd1, prd2) match 
-  //       case (ReflDerivation(t), _) => (prd2, ReflDerivation(prd2.type2))
-  //       case (_, ReflDerivation(t)) => (ReflDerivation(prd1.type2), prd1)
-  //       case (ArrowDerivation(ArrowType(t11, t12), ArrowType(t21, t22), prd11, prd12), ArrowDerivation(ArrowType(t31, t32), ArrowType(t41, t42), prd21, prd22)) =>
-  //         val (dP11, dP12) = diamondProperty(prd11, prd21)
-  //         val (dP21, dP22) = diamondProperty(prd12, prd22)
-  //         (ArrowDerivation(ArrowType(dP11.type1, dP21.type1), ArrowType(dP11.type2, dP21.type2), dP11, dP21), ArrowDerivation(ArrowType(dP12.type1, dP22.type1), ArrowType(dP12.type2, dP22.type2), dP12, dP22))
-  //       case (AbsDerivation(AbsType(k1, b1), AbsType(k2, b2), prd11), AbsDerivation(AbsType(k3, b3), AbsType(k4, b4), prd12)) =>
-  //         val (dP1, dP2) = diamondProperty(prd11, prd12)
-  //         (AbsDerivation(AbsType(k2, dP1.type1), AbsType(k2, dP1.type2), dP1), AbsDerivation(AbsType(k2, dP2.type1), AbsType(k2, dP2.type2), dP2))
-  //       case (AppDerivation(AppType(t11, t12), AppType(t21, t22), prd11, prd12), AppDerivation(AppType(t31, t32), AppType(t41, t42), prd21, prd22)) =>
-  //         val (dP11, dP12) = diamondProperty(prd11, prd21)
-  //         val (dP21, dP22) = diamondProperty(prd12, prd22)
-  //         (AppDerivation(AppType(dP11.type1, dP21.type1), AppType(dP11.type2, dP21.type2), dP11, dP21), AppDerivation(AppType(dP12.type1, dP22.type1), AppType(dP12.type2, dP22.type2), dP12, dP22))
-  //       case (AppAbsDerivation(_, _), AppAbsDerivation(_, _)) => (ReflDerivation(prd1.type2), ReflDerivation(prd2.type2))
-  //       case (AppAbsDerivation(_, _), AppDerivation(AppType(t11, t12), AppType(t21, t22), prd11, prd12)) => (ReflDerivation(prd1.type2), ReflDerivation(prd2.type2))
-  //       case (AppDerivation(AppType(t11, t12), AppType(t21, t22), prd11, prd12), AppAbsDerivation(_, _)) => (ReflDerivation(prd1.type2), ReflDerivation(prd2.type2))
-  //       case _ => (ReflDerivation(prd1.type2), ReflDerivation(prd2.type2))
-  // }.ensuring(res => res._1.type1 == prd1.type2 &&
-  //                   res._2.type1 == prd2.type2 &&
-  //                   res._1.type2 == res._2.type2 &&
-  //                   res._1.isValid && res._2.isValid)
+    boundRangeShift(ad.type1, 1, 0, 0, 0)
+    val shiftArg = reduceShift(ad, 1, 0)
+    reduceBoundRange(shiftArg, 0, 1)
+    val subst = reduceSubst(bd, 0, shiftArg)
+    boundRangeSubstitutionLemma(bd.type1, 0, shift(ad.type1, 1, 0))
+    reduceShift(subst, -1, 0)
+
+  }.ensuring(res =>
+    res.isValid &&
+    res.type1 == absSubstitution(bd.type1, ad.type1) &&
+    res.type2 == absSubstitution(bd.type2, ad.type2))
+
+  def diamondProperty(prd1: ParallelReductionDerivation, prd2: ParallelReductionDerivation): (ParallelReductionDerivation, ParallelReductionDerivation) = {
+    decreases(prd1.size + prd2.size)
+    require(prd1.type1 == prd2.type1)
+    require(prd1.isValid)
+    require(prd2.isValid)
+    if prd1.type2 == prd2.type2 then
+      (ReflDerivation(prd1.type2), ReflDerivation(prd2.type2))
+    else
+      (prd1, prd2) match 
+        case (ReflDerivation(t), _) => (prd2, ReflDerivation(prd2.type2))
+        case (_, ReflDerivation(t)) => (ReflDerivation(prd1.type2), prd1)
+        case (ArrowDerivation(ArrowType(t11, t12), ArrowType(t21, t22), prd11, prd12), ArrowDerivation(ArrowType(t31, t32), ArrowType(t41, t42), prd21, prd22)) =>
+          val (dP11, dP12) = diamondProperty(prd11, prd21)
+          val (dP21, dP22) = diamondProperty(prd12, prd22)
+          (ArrowDerivation(ArrowType(dP11.type1, dP21.type1), ArrowType(dP11.type2, dP21.type2), dP11, dP21), ArrowDerivation(ArrowType(dP12.type1, dP22.type1), ArrowType(dP12.type2, dP22.type2), dP12, dP22))
+        case (AbsDerivation(AbsType(k1, b1), AbsType(k2, b2), prd11), AbsDerivation(AbsType(k3, b3), AbsType(k4, b4), prd12)) =>
+          val (dP1, dP2) = diamondProperty(prd11, prd12)
+          (AbsDerivation(AbsType(k2, dP1.type1), AbsType(k2, dP1.type2), dP1), AbsDerivation(AbsType(k2, dP2.type1), AbsType(k2, dP2.type2), dP2))
+        case (AppDerivation(AppType(t11, t12), AppType(t21, t22), prd11, prd12), AppDerivation(AppType(t31, t32), AppType(t41, t42), prd21, prd22)) =>
+          val (dP11, dP12) = diamondProperty(prd11, prd21)
+          val (dP21, dP22) = diamondProperty(prd12, prd22)
+          (AppDerivation(AppType(dP11.type1, dP21.type1), AppType(dP11.type2, dP21.type2), dP11, dP21), AppDerivation(AppType(dP12.type1, dP22.type1), AppType(dP12.type2, dP22.type2), dP12, dP22))
+        case (AppAbsDerivation(AbsType(k, body11), arg11, body12, arg12, prd11, prd12), AppAbsDerivation(AbsType(_, body21), arg21, body22, arg22, prd21, prd22)) => 
+          val (dP11, dP12) = diamondProperty(prd11, prd21)
+          val (dP21, dP22) = diamondProperty(prd12, prd22)
+          (reduceAbsSubst(dP11, dP21), reduceAbsSubst(dP12, dP22))
+        case (AppAbsDerivation(AbsType(k, body1), arg1, body2, arg2, prd11, prd12), AppDerivation(AppType(AbsType(_, t11), t12), AppType(AbsType(_, t21), t22), prd, prd22)) => 
+          prd match
+            case AbsDerivation(_, _, prd21) => 
+              val (dP11, dP12) = diamondProperty(prd11, prd21)
+              val (dP21, dP22) = diamondProperty(prd12, prd22)
+              (reduceAbsSubst(dP11, dP21), AppAbsDerivation(AbsType(k, dP12.type1), dP22.type1, dP12.type2, dP22.type2, dP12, dP22))
+            case ReflDerivation(body) => 
+              val (dP21, dP22) = diamondProperty(prd12, prd22)
+              (reduceAbsSubst(ReflDerivation(body2), dP21), AppAbsDerivation(AbsType(k, body1), dP22.type1, body2, dP22.type2, prd11, dP22))
+            case _ => (ReflDerivation(prd1.type2), ReflDerivation(prd2.type2))
+          
+        case (AppDerivation(AppType(AbsType(_, t11), t12), AppType(AbsType(_, t21), t22), prd, prd12), AppAbsDerivation(AbsType(k, body1), arg1, body2, arg2, prd21, prd22)) => 
+          prd match
+            case AbsDerivation(_, _, prd11) => 
+              val (dP11, dP12) = diamondProperty(prd11, prd21)
+              val (dP21, dP22) = diamondProperty(prd12, prd22)
+              (AppAbsDerivation(AbsType(k, dP11.type1), dP21.type1, dP11.type2, dP21.type2, dP11, dP21), reduceAbsSubst(dP12, dP22))
+            case ReflDerivation(body) => 
+              val (dP21, dP22) = diamondProperty(prd12, prd22)
+              (AppAbsDerivation(AbsType(k, body1), dP21.type1, body2, dP21.type2, prd21, dP21), reduceAbsSubst(ReflDerivation(body2), dP22))
+            case _ => (ReflDerivation(prd1.type2), ReflDerivation(prd2.type2))
+          
+        case _ => (ReflDerivation(prd1.type2), ReflDerivation(prd2.type2))
+  }.ensuring(res => res._1.type1 == prd1.type2 &&
+                    res._2.type1 == prd2.type2 &&
+                    res._1.type2 == res._2.type2 &&
+                    res._1.isValid && res._2.isValid)
 
 
 
@@ -357,7 +442,7 @@ object TypeReduction{
       case (_, _) => None()
       }
     }
-  
+
   def detReduce(t: Type): Option[DetReductionDerivation] = {
     t match{
       case at@ArrowType(t11, t12) =>
@@ -410,6 +495,7 @@ object TypeReduction{
     }
   }.ensuring(_ => detReducesTo(t1, t2).get.isValid)
 
+  @opaque @pure
   def detReducesToCompleteness(drd: DetReductionDerivation): Unit = {
     require(drd.isValid)
     drd match {
@@ -426,6 +512,7 @@ object TypeReduction{
     }
   }.ensuring(_ => detReducesTo(drd.type1, drd.type2).isDefined)
 
+  @opaque @pure
   def detReduceSoundness(t: Type): Unit = {
     require(detReduce(t).isDefined)
     t match{
@@ -452,6 +539,7 @@ object TypeReduction{
       }
   }.ensuring(_ => detReduce(t).get.isValid)
 
+  @opaque @pure
   def detReducesToReduce(t: Type): Unit = {
     require(detReduce(t).isDefined)
     t match{
