@@ -345,6 +345,81 @@ object TypeReduction{
                     res._1.type2 == res._2.type2 &&
                     res._1.isValid && res._2.isValid)
 
+  sealed trait MultiStepParallelReduction{
+
+    def n: BigInt = {
+      this match 
+        case SingleStepParalellReduction(_) => BigInt(1)
+        case SeveralStepParallelReduction(_, tail) => tail.n + 1
+    }.ensuring(_ > BigInt(0))    
+
+    def last: ParallelReductionDerivation =
+      this match
+        case SingleStepParalellReduction(red) => red
+        case SeveralStepParallelReduction(last, _) => last
+    
+    def type1: Type = 
+      this match
+        case SingleStepParalellReduction(red) => red.type1
+        case SeveralStepParallelReduction(_, tail) => tail.type1
+
+    def type2: Type = 
+      this match
+        case SingleStepParalellReduction(red) => red.type2
+        case SeveralStepParallelReduction(last, _) => last.type2
+
+    def isValid: Boolean = 
+      this match
+        case SingleStepParalellReduction(red) => red.isValid
+        case SeveralStepParallelReduction(last, tail) => 
+          last.isValid && tail.isValid && last.type1 == tail.type2
+  }
+
+  case class SingleStepParalellReduction(red: ParallelReductionDerivation) extends MultiStepParallelReduction
+  case class SeveralStepParallelReduction(last: ParallelReductionDerivation, tail: MultiStepParallelReduction) extends MultiStepParallelReduction
+
+  def confluence(prd1: MultiStepParallelReduction, prd2: MultiStepParallelReduction): (MultiStepParallelReduction, MultiStepParallelReduction) = {
+    decreases(prd1.n + prd2.n)
+    require(prd1.type1 == prd2.type1)
+    require(prd1.isValid)
+    require(prd2.isValid)
+
+    (prd1, prd2) match
+      case (SingleStepParalellReduction(red1), SingleStepParalellReduction(red2)) => 
+        val (dP1, dP2) = diamondProperty(red1, red2)
+        (SingleStepParalellReduction(dP1), SingleStepParalellReduction(dP2))
+      case (SingleStepParalellReduction(red1), SeveralStepParallelReduction(last, tail)) =>
+        val (conf1, conf2) = confluence(prd1, tail)
+        conf2 match 
+          case SingleStepParalellReduction(red) => 
+              val (dP1, dP2) = diamondProperty(red, last)
+              (SeveralStepParallelReduction(dP1, conf1), SingleStepParalellReduction(dP2))
+          case _ => //never happens
+            (prd1, prd2)
+      case (SeveralStepParallelReduction(last, tail), SingleStepParalellReduction(red2)) =>
+        val (conf1, conf2) = confluence(tail, prd2)
+        conf1 match 
+          case SingleStepParalellReduction(red) => 
+              val (dP1, dP2) = diamondProperty(last, red)
+              (SingleStepParalellReduction(dP1), SeveralStepParallelReduction(dP2, conf2))
+          case _ => //never happens
+            (prd1, prd2)
+      case (SeveralStepParallelReduction(last1, tail1), SeveralStepParallelReduction(last2, tail2)) =>
+        val (conf11, conf12) = confluence(prd1, tail2)
+        val (conf21, conf22) = confluence(tail1, prd2)
+        val (dP1, dP2) = diamondProperty(conf12.last, conf21.last)
+        (SeveralStepParallelReduction(dP1, conf11), SeveralStepParallelReduction(dP2, conf22))
+  }.ensuring(res => 
+    res._1.type2 == res._2.type2 &&
+    res._1.type1 == prd1.type2 &&
+    res._2.type1 == prd2.type2 &&
+    res._1.isValid && res._2.isValid &&
+    res._2.n == prd1.n && res._1.n == prd2.n
+  )
+
+
+       
+
 
 
   // sealed trait MultiStepParallelReduction{
