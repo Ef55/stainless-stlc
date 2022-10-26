@@ -184,7 +184,7 @@ object TypeReduction{
     * Long version:
     * 
     * Preconditions:
-    *   - sd the derivation tree witnessing T1 => T2 is sound
+    *   - sd, the derivation tree witnessing T1 => T2, is sound
     *   - a and b are both non negative
     *   - FV(T1) ∩ [a, a + b] = ∅
     * 
@@ -222,7 +222,7 @@ object TypeReduction{
     * Long version:
     * 
     * Preconditions:
-    *   - sd the derivation tree witnessing T1 => T2 is sound
+    *   - sd, the derivation tree witnessing T1 => T2, is sound
     *   - c is non negative
     *   - in case d is negative then FV(T1) ∩ [c, c - d] = ∅ (cf. negative shifts definition)
     * 
@@ -278,7 +278,7 @@ object TypeReduction{
     * Long version:
     * 
     * Preconditions:
-    *   - sd the derivation tree witnessing S1 => S2 is sound
+    *   - sd, the derivation tree witnessing S1 => S2, is sound
     *   - j is non negative
     * 
     * Postcondition:
@@ -315,10 +315,10 @@ object TypeReduction{
     * Long version:
     * 
     * Preconditions:
-    *   - sd and td the derivation trees respectively witnessing S1 => S2 and T1 => T2 are sound
+    *   - sd and td, the derivation trees respectively witnessing S1 => S2 and T1 => T2, are sound
     *   - j is non negative
     * ! - all occurences of the variable 0 inside S1 need to be bound
-    * 
+    *
     * Postcondition:
     *   There exists a sound derivation tree witnessing T1[j := S1] => T2[j := S2]
     * * The proof is constructive and returns this derivation tree
@@ -377,11 +377,30 @@ object TypeReduction{
     res.type1 == absSubstitution(bd.type1, ad.type1) &&
     res.type2 == absSubstitution(bd.type2, ad.type2))
 
+  /**
+    * Diamond Property - TAPL Lemma 30.3.8
+    * * Short version: If T1 => T2 and T1 => T3 then there exits a type T4 such that T2 => T4 and T3 => T4
+    * 
+    * Long version:
+    * 
+    * Preconditions:
+    *   - prd1, the derivation tree witnessing T11 => T2 is sound
+    *   - prd2, the derivation tree witnessing T12 => T3 is sound
+    *   - T11 = T12 (= T1 in the above theorem statement)
+    *
+    * Postcondition:
+    *   There exists two sound derivation trees respectevely witnessing T => T41 and T' => T42 such that:
+    *     - T = T2
+    *     - T'= T3
+    *     - T41 = T42
+    * * The proof is constructive and returns this pair of derivations trees
+    */
   def diamondProperty(prd1: ParallelReductionDerivation, prd2: ParallelReductionDerivation): (ParallelReductionDerivation, ParallelReductionDerivation) = {
     decreases(prd1.size + prd2.size)
-    require(prd1.type1 == prd2.type1)
     require(prd1.isValid)
     require(prd2.isValid)
+    require(prd1.type1 == prd2.type1)
+
     if prd1.type2 == prd2.type2 then
       (ReflDerivation(prd1.type2), ReflDerivation(prd2.type2))
     else
