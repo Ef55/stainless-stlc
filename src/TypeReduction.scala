@@ -450,14 +450,29 @@ object TypeReduction{
                     res._1.type2 == res._2.type2 &&
                     res._1.isValid && res._2.isValid)
 
+  /**
+    * Transitive closure of parallel reduction relation also noted type1 =>* type2 (TAPL Chapter 30.3).
+    * Since single step parallel reduction is already reflexive, doing the reflexive closure does not change the result.
+    * ! In this implementation multistep reduction is represented as a non-empty list of parallel reduction steps and
+    * ! not as the closure of a relation. Moreover the list is reversed: the tail of the list consists in the n - 1 first
+    * ! steps and the head of the list is the last step of the reduction.
+    * TODO Show the equivalence between the two representations.
+    * TODO Change the representation so that the list is not reversed
+    */
   sealed trait MultiStepParallelReduction{
 
+    /**
+      * Number of reduction steps in the list
+      */
     def size: BigInt = {
       this match 
         case SingleStepParalellReduction(_) => BigInt(1)
         case SeveralStepParallelReduction(_, tail) => tail.size + 1
     }.ensuring(_ > BigInt(0))    
 
+    /**
+      * Head of the list
+      */
     def last: ParallelReductionDerivation =
       this match
         case SingleStepParalellReduction(red) => red
@@ -473,6 +488,11 @@ object TypeReduction{
         case SingleStepParalellReduction(red) => red.type2
         case SeveralStepParallelReduction(last, _) => last.type2
 
+    /**
+      * Returns whether the reduction is sound.
+      * Each step must be sound and the types of the reduction steps must coincide i.e. the list has to be of the form
+      * (Tn-1 => type2, Tn-2 => Tn-1, ..., T1 => T2, type1 => T1)
+      */
     def isValid: Boolean = 
       this match
         case SingleStepParalellReduction(red) => red.isValid
@@ -480,14 +500,36 @@ object TypeReduction{
           last.isValid && tail.isValid && last.type1 == tail.type2
   }
 
+  /**
+    * Singleton list and cons
+    */
   case class SingleStepParalellReduction(red: ParallelReductionDerivation) extends MultiStepParallelReduction
   case class SeveralStepParallelReduction(last: ParallelReductionDerivation, tail: MultiStepParallelReduction) extends MultiStepParallelReduction
 
+  /**
+    * Confluence - TAPL Lemma 30.3.9
+    * 
+    * * Short version: If T1 =>* T2 and T1 =>* T3 then there exits a type T4 such that T2 =>* T4 and T3 =>* T4
+    * 
+    * Long version:
+    * 
+    * Preconditions:
+    *   - prd1, the list of derivation trees witnessing T11 =>* T2 is sound
+    *   - prd2, the list of derivation trees witnessing T12 =>* T3 is sound
+    *   - T11 = T12 (= T1 in the above theorem statement)
+    *
+    * Postcondition:
+    *   There exists two sound list of derivation trees respectevely witnessing T =>* T41 and T' =>* T42 such that:
+    *     - T = T2
+    *     - T'= T3
+    *     - T41 = T42
+    * * The proof is constructive and returns this pair of list
+    */
   def confluence(prd1: MultiStepParallelReduction, prd2: MultiStepParallelReduction): (MultiStepParallelReduction, MultiStepParallelReduction) = {
     decreases(prd1.size + prd2.size)
-    require(prd1.type1 == prd2.type1)
     require(prd1.isValid)
     require(prd2.isValid)
+    require(prd1.type1 == prd2.type1)
 
     (prd1, prd2) match
       case (SingleStepParalellReduction(red1), SingleStepParalellReduction(red2)) => 
