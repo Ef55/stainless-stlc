@@ -1,3 +1,15 @@
+/**
+  *  References: 
+  *    - [TAPL] Types and Programming Languages, Benjamin C. Pierce, 2002, The MIT Press
+  * 
+  *  This file defines type equivalence and its properties (TAPL Chap 30.3)
+  *  One of the main results of the file is the proof of confluence for parallel type reduction.
+  * 
+  * 
+  */
+
+
+
 import stainless.lang._
 import stainless.collection._
 import stainless.annotation._
@@ -8,28 +20,35 @@ import TransformationsProperties.Types._
 object TypeReduction{
 
 
-
+  /**
+    * Derivation tree for a parallel type reduction step of the form type1 => type2, as defined in Figure 30-3 of TAPL
+    */
   sealed trait ParallelReductionDerivation{
-    def type1: Type = {
-      this match{
+
+    @pure
+    def type1: Type = 
+      this match
         case ReflDerivation(t) => t 
         case ArrowDerivation(t1, _, _, _) => t1
         case AbsDerivation(t1, _, _) => t1
         case AppDerivation(t1, _, _, _) => t1
         case AppAbsDerivation(abs, arg, _, _, _, _) => AppType(abs, arg)
-      }
-    }
 
-    def type2: Type = {
-      this match{
+    @pure
+    def type2: Type = 
+      this match
         case ReflDerivation(t) => t 
         case ArrowDerivation(_, t2, _, _) => t2
         case AbsDerivation(_, t2, _) => t2
         case AppDerivation(_, t2, _, _) => t2
         case AppAbsDerivation(_, _, body2, arg2, _, _) => absSubstitution(body2, arg2)
-      }
-    }
 
+
+    /**
+      * Measure for parallel reduction derivation trees
+      * ! This is not a formal definition, its only purpose is to ensure measure decreaseness
+      */
+    @opaque @pure
     def size: BigInt = {
       this match
         case ReflDerivation(_) => BigInt(1)
@@ -60,8 +79,15 @@ object TypeReduction{
     //   }
     // }
 
-    def isValid: Boolean = {
-      this match {
+    /**
+      * Returns whether the derivation tree is sound.
+      * For each derivation rule checks whether:
+      * - each subtree is also sound
+      * - the conclusions of the subtrees are the premises of the rule.
+      */
+    @pure
+    def isValid: Boolean = 
+      this match 
         case ReflDerivation(_) => true
         case ArrowDerivation(ArrowType(t11, t12), ArrowType(t21, t22), prd1, prd2) =>
           prd1.isValid && prd2.isValid && prd1.type1 == t11 &&
@@ -74,9 +100,10 @@ object TypeReduction{
         case AppAbsDerivation(AbsType(argK, body1), arg1, body2, arg2, tt1, tt2) => 
           tt1.isValid && tt2.isValid && tt1.type1 == body1 && tt1.type2 == body2 &&
           tt2.type1 == arg1 && tt2.type2 == arg2 
-      }
-    }
   }
+  /**
+    * Parallel reduction rules as listed in TAPL Figure 30-3
+    */
   case class ReflDerivation(t: Type) extends ParallelReductionDerivation
   case class ArrowDerivation(t1: ArrowType, t2: ArrowType, ed1: ParallelReductionDerivation, ed2: ParallelReductionDerivation) extends ParallelReductionDerivation
   case class AbsDerivation(t1: AbsType, t2: AbsType, ed: ParallelReductionDerivation) extends ParallelReductionDerivation
@@ -150,6 +177,21 @@ object TypeReduction{
   //     case _ => ()
   // }.ensuring(_ => reducesTo(prd.type1, prd.type2). isDefined)
 
+
+  /**
+    * * Short version: If T1 => T2 and FV(T1) ∩ [a, a + b] = ∅ then FV(T2) ∩ [a, a + b] = ∅
+    * 
+    * Long version:
+    * 
+    * Preconditions:
+    *   - sd the derivation tree witnessing T1 => T2 is sound
+    *   - a and b are both non negative
+    *   - FV(T1) ∩ [a, a + b] = ∅
+    * 
+    * Postcondition:
+    *   - FV(T2) ∩ [a, a + b] = ∅
+    * 
+    */
   @opaque @pure
   def reduceBoundRange(sd: ParallelReductionDerivation, a: BigInt, b: BigInt): Unit = {
     require(sd.isValid)
@@ -174,6 +216,20 @@ object TypeReduction{
     
   }.ensuring(_ => !sd.type2.hasFreeVariablesIn(a, b))
 
+  /**
+    * * Short version: If T1 => T2 then shift(T1, d, c) => shift(T1, d, c)
+    * 
+    * Long version:
+    * 
+    * Preconditions:
+    *   - sd the derivation tree witnessing T1 => T2 is sound
+    *   - c is non negative
+    *   - in case d is negative then FV(T1) ∩ [c, c - d] = ∅ (cf. negative shifts definition)
+    * 
+    * Postcondition:
+    *   There exists a sound derivation tree witnessing shift(T1, d, c) => shift(T2, d, c)
+    * * The proof is constructive and returns this derivation tree
+    */
   @opaque @pure
   def reduceShift(sd: ParallelReductionDerivation, d: BigInt, c: BigInt): ParallelReductionDerivation = {
     require(sd.isValid)
@@ -215,9 +271,24 @@ object TypeReduction{
     res.type2 == shift(sd.type2, d, c) &&
     res.isValid)
 
+  /**
+    * TAPL Lemma 30.3.6
+    * * Short version: If S1 => S2 then T[j := S1] => T[j := S2]
+    * 
+    * Long version:
+    * 
+    * Preconditions:
+    *   - sd the derivation tree witnessing S1 => S2 is sound
+    *   - j is non negative
+    * 
+    * Postcondition:
+    *   There exists a sound derivation tree witnessing T[j := S1] => T[j := S2]
+    * * The proof is constructive and returns this derivation tree
+    */
   @opaque @pure
   def reduceReflSubst(t: Type, j: BigInt, sd: ParallelReductionDerivation): ParallelReductionDerivation = {
     require(sd.isValid)
+    require(j >= 0)
     t match
       case ArrowType(t1, t2) =>
         val d1 = reduceReflSubst(t1, j, sd)
@@ -237,6 +308,21 @@ object TypeReduction{
     res.type1 == substitute(t, j, sd.type1) &&
     res.type2 == substitute(t, j, sd.type2))
 
+  /**
+    * TAPL Lemma 30.3.7
+    * * Short version: If T1 => T2 and S1 => S2 then T1[j := S1] => T2[j := S2]
+    * 
+    * Long version:
+    * 
+    * Preconditions:
+    *   - sd and td the derivation trees respectively witnessing S1 => S2 and T1 => T2 are sound
+    *   - j is non negative
+    * ! - all occurences of the variable 0 inside S1 need to be bound
+    * 
+    * Postcondition:
+    *   There exists a sound derivation tree witnessing T1[j := S1] => T2[j := S2]
+    * * The proof is constructive and returns this derivation tree
+    */
   @opaque @pure
   def reduceSubst(td: ParallelReductionDerivation, j: BigInt, sd: ParallelReductionDerivation): ParallelReductionDerivation = {
     require(td.isValid)
@@ -347,10 +433,10 @@ object TypeReduction{
 
   sealed trait MultiStepParallelReduction{
 
-    def n: BigInt = {
+    def size: BigInt = {
       this match 
         case SingleStepParalellReduction(_) => BigInt(1)
-        case SeveralStepParallelReduction(_, tail) => tail.n + 1
+        case SeveralStepParallelReduction(_, tail) => tail.size + 1
     }.ensuring(_ > BigInt(0))    
 
     def last: ParallelReductionDerivation =
@@ -379,7 +465,7 @@ object TypeReduction{
   case class SeveralStepParallelReduction(last: ParallelReductionDerivation, tail: MultiStepParallelReduction) extends MultiStepParallelReduction
 
   def confluence(prd1: MultiStepParallelReduction, prd2: MultiStepParallelReduction): (MultiStepParallelReduction, MultiStepParallelReduction) = {
-    decreases(prd1.n + prd2.n)
+    decreases(prd1.size + prd2.size)
     require(prd1.type1 == prd2.type1)
     require(prd1.isValid)
     require(prd2.isValid)
@@ -414,42 +500,9 @@ object TypeReduction{
     res._1.type1 == prd1.type2 &&
     res._2.type1 == prd2.type2 &&
     res._1.isValid && res._2.isValid &&
-    res._2.n == prd1.n && res._1.n == prd2.n
+    res._2.size == prd1.size && res._1.size == prd2.size
   )
 
-
-       
-
-
-
-  // sealed trait MultiStepParallelReduction{
-  //   def type1: Type = {
-  //     this match{
-  //       case SimpleStepDerivation(ssr) => ssr.type1
-  //       case TransitiveStepDerivation(t1, _, _, _) => t1
-  //     }
-  //   }
-
-  //   def type2: Type = {
-  //     this match{
-  //       case SimpleStepDerivation(ssr) => ssr.type2
-  //       case TransitiveStepDerivation(_, t2, _, _) => t2
-  //     }
-  //   }
-
-  //   def isValid: Boolean = {
-  //     this match{
-  //       case SimpleStepDerivation(strd) => strd.isValid
-  //       case TransitiveStepDerivation(t1, t2, strd1, strd2) => 
-  //         t1 == strd1.type1 && t2 == strd2.type2 && strd1.type2 == strd2.type1 &&
-  //         strd1.isValid && strd2.isValid
-  //     }
-  //   }
-
-  // }
-  // case class SimpleStepDerivation(prd: ParallelReductionDerivation) extends MultiStepParallelReduction
-  // case class TransitiveStepDerivation(t1: Type, t2: Type, strd1: MultiStepParallelReduction, strd2: MultiStepParallelReduction) extends MultiStepParallelReduction
-  
   sealed trait DetReductionDerivation{
     def type1: Type = {
       this match{
