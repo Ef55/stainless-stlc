@@ -41,6 +41,27 @@ object LambdaOmega {
         case BasicType(_) => true
         case ArrowType(t1, t2) => t1.isValue && t2.isValue
         case _ => false
+
+    /**
+      * Set of free variables of a type also noted FV(T).
+      * The set of free variables of a lambda is described in TAPL Chap 6.1
+      * ! For practical reasons, in this implementation a list is used instead of a set.
+      * ! Moreover, this function will never be used in proofs and exists to ensure the
+      * ! corectness of alternative definitions below
+      * 
+      * TODO convert it to a set
+      * 
+      * Basic property: all free variables are greater or equal than 0
+      */
+    @pure
+    def freeVars: List[BigInt] = {
+      this match
+        case BasicType(_) => Nil()
+        case ArrowType(t1, t2) => t1.freeVars ++ t2.freeVars
+        case AppType(t1, t2) => t1.freeVars ++ t2.freeVars
+        case AbsType(_, b) => b.freeVars.filter(x => x > 0).map(x => x - 1)
+        case VariableType(j) => Cons(j, Nil())
+    }.ensuring(_.forall(_ >= 0))
     
     /**
       * Checks whether there are free variable occurences in the range [c, c + d].
@@ -50,7 +71,7 @@ object LambdaOmega {
       * ! This choice of implementation is due to the fact that inductive definitions are way easier to deal with
       * ! in Stainless than data structures.
       * 
-      * TODO show the equivalence of the two definitions
+      * TODO show the equivalence between the two definitions
       * 
       * Basic property: Always false when d = 0
       */
@@ -67,19 +88,25 @@ object LambdaOmega {
     }.ensuring(res => (d == 0) ==> !res)
 
     /**
-      * Checks whether FV(T) = ∅
+      * Checks whether there are free variable greater or equal to c in the type.
+      * Formally the function returns whether FV(T) ∩ [c, ∞[ ≠ ∅
       * ! This is an inductive definition and not a set based one, for the same reasons as above.
       */
+    def hasFreeVariablesAbove(c: BigInt): Boolean = {
+      require(c >= 0)
+      this match 
+        case BasicType(_)         => false 
+        case ArrowType(t1, t2)    => t1.hasFreeVariablesAbove(c) || t2.hasFreeVariablesAbove(c)
+        case VariableType(v)      => v >= c
+        case AbsType(_, body)     => body.hasFreeVariablesAbove(c+1)
+        case AppType(t1, t2)      => t1.hasFreeVariablesAbove(c) || t2.hasFreeVariablesAbove(c)
+    }
+
+    /**
+      * Checks whether FV(T) = ∅
+      */
     @pure
-    def isClosed: Boolean = 
-      def rec(t: Type, c: BigInt): Boolean = 
-        t match 
-          case BasicType(_)         => true
-          case ArrowType(t1, t2)    => rec(t1, c) && rec(t2, c)
-          case VariableType(v)      => v < c
-          case AbsType(_, body)     => rec(body, c+1)
-          case AppType(t1, t2)      => rec(t1, c) && rec(t2, c)
-      rec(this, 0)
+    def isClosed: Boolean = !hasFreeVariablesAbove(0)
 
     /**
       * Measure for types
@@ -166,6 +193,8 @@ object LambdaOmega {
 
 object LambdaOmegaProperties{
   import LambdaOmega._
+  import ListProperties.*
+  import BigIntListProperties.*
 
   object Terms {
     @opaque @pure
@@ -224,7 +253,36 @@ object LambdaOmegaProperties{
 
   object Types {
 
-@opaque @pure
+    def hasFreeVariablesIn(t: Type, c: BigInt, d: BigInt) = Unit = {
+      
+    }.ensuring(t.freeVars.filter(x => c <= x && x < c + d).isEmpty == !t.hasFreeVariablesIn(c, d))
+
+    @opaque @pure
+    def hasFreeVariablesAboveSoundness(t: Type, c: BigInt): Unit = {
+      require(c >= 0)
+      t match
+        case BasicType(_) => ()
+        case AppType(t1, t2) => 
+          hasFreeVariablesAboveSoundness(t1, c)
+          hasFreeVariablesAboveSoundness(t2, c)
+          concatFilter(t1.freeVars, t2.freeVars, _ >= c)
+        case ArrowType(t1, t2) =>
+          hasFreeVariablesAboveSoundness(t1, c)
+          hasFreeVariablesAboveSoundness(t2, c)
+          concatFilter(t1.freeVars, t2.freeVars, _ >= c)
+        case VariableType(j) => ()
+        case AbsType(_, b) => 
+          hasFreeVariablesAboveSoundness(b, c + 1)
+          filterSubGe(b.freeVars.filter(_ > 0), 1, c)
+          filterCommutative(b.freeVars, _ > 0, _ >= c + 1)
+    }.ensuring(t.freeVars.filter(_ >= c).isEmpty == !t.hasFreeVariablesAbove(c))
+  
+    @opaque @pure
+    def isClosedSoundness(t: Type): Unit = {
+      hasFreeVariablesAboveSoundness(t, 0)
+    }.ensuring(t.freeVars.isEmpty == t.isClosed)
+
+    @opaque @pure
     def boundRangeDecrease(t: Type, c: BigInt, d1: BigInt, d2: BigInt): Unit = {
       require(d1 >= 0 && d2 >= 0)
       require(c >= 0)

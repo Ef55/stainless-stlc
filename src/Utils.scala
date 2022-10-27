@@ -39,6 +39,23 @@ object ListProperties {
     () //Unit required here for the return type
   }.ensuring((l1 ++ l2)(k) == l1(k))
 
+  @opaque @pure
+  def concatFilter[T](@induct l1: List[T], l2: List[T], p: T => Boolean): Unit = {
+  }.ensuring(l1.filter(p) ++ l2.filter(p) == (l1 ++ l2).filter(p))
+
+  def mergeFilter[T](@induct l: List[T], p1: T => Boolean, p2: T => Boolean): Unit = {
+  }.ensuring(l.filter(p1).filter(p2) == l.filter(x => p1(x) && p2(x)))
+
+  def filterCommutative[T](@induct l: List[T], p1: T => Boolean, p2: T => Boolean): Unit = {
+  }.ensuring(l.filter(p1).filter(p2) == l.filter(p2).filter(p1))
+
+}
+
+object BigIntListProperties{
+
+  @opaque @pure
+  def filterSubGe(@induct l: List[BigInt], a: BigInt, b: BigInt): Unit = {
+  }.ensuring(l.map(_ - a).filter(_ >= b) == l.filter(_ >= b + a).map(_ - a))
 
 }
 
