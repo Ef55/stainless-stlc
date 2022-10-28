@@ -51,7 +51,6 @@ object LambdaOmega {
       * 
       * TODO convert it to a set
       * 
-      * Basic property: all free variables are greater or equal than 0
       */
     @pure
     def freeVars: List[BigInt] = {
@@ -61,7 +60,7 @@ object LambdaOmega {
         case AppType(t1, t2) => t1.freeVars ++ t2.freeVars
         case AbsType(_, b) => b.freeVars.filter(x => x > 0).map(x => x - 1)
         case VariableType(j) => Cons(j, Nil())
-    }.ensuring(_.forall(_ >= 0))
+    }
     
     /**
       * Checks whether there are free variable occurences in the range [c, c + d].
@@ -253,10 +252,48 @@ object LambdaOmegaProperties{
 
   object Types {
 
-    def hasFreeVariablesIn(t: Type, c: BigInt, d: BigInt) = Unit = {
-      
-    }.ensuring(t.freeVars.filter(x => c <= x && x < c + d).isEmpty == !t.hasFreeVariablesIn(c, d))
+    // def hasFreeVariablesIn(t: Type, c: BigInt, d: BigInt) = Unit = {
+    //   require(c >= 0)
+    //   t match
+    //     case BasicType(_) => ()
+    //     case AppType(t1, t2) => 
+    //       hasFreeVariablesAboveSoundness(t1, c)
+    //       hasFreeVariablesAboveSoundness(t2, c)
+    //       concatFilter(t1.freeVars, t2.freeVars, _ >= c)
+    //     case ArrowType(t1, t2) =>
+    //       hasFreeVariablesAboveSoundness(t1, c)
+    //       hasFreeVariablesAboveSoundness(t2, c)
+    //       concatFilter(t1.freeVars, t2.freeVars, _ >= c)
+    //     case VariableType(j) => ()
+    //     case AbsType(_, b) => 
+    //       hasFreeVariablesAboveSoundness(b, c + 1)
+    //       mapfilterAddSub(b.freeVars.filter(_ > 0), 1)
+    //       mapAddSub(b.freeVars.filter(_ > 0).filter(_ >= c + 1), 1)
+    //       filterMapAddGe(b.freeVars.filter(_ > 0), -1, c)
+    //       filterCommutative(b.freeVars, _ > 0, _ >= c + 1)
+    // }.ensuring(t.freeVars.filter(x => c <= x && x < c + d).isEmpty == !t.hasFreeVariablesIn(c, d))
 
+    def freeVarsNonNeg(t: Type): Unit = {
+      t match
+        case BasicType(_) => ()
+        case VariableType(_) => ()
+        case AppType(t1, t2) =>
+          freeVarsNonNeg(t1)
+          freeVarsNonNeg(t2)
+          ListSpecs.listAppendValidProp(t2.freeVars, t1.freeVars, _ >= 0)
+        case ArrowType(t1, t2) =>
+          freeVarsNonNeg(t1)
+          freeVarsNonNeg(t2)
+          ListSpecs.listAppendValidProp(t2.freeVars, t1.freeVars, _ >= 0)
+        case AbsType(k, body) => 
+          freeVarsNonNeg(body)
+          filterGtGe(body.freeVars, 0)
+          mapAddSub(body.freeVars.filter(_ >= 1), 1)
+          filterMapAddGe(body.freeVars, -1, 0)
+          mapAddSub(body.freeVars, 1)
+          filterGeTwice(body.freeVars.map(_ - 1), 0, 0)
+    }.ensuring(t.freeVars.forall(_ >= 0))
+  
     @opaque @pure
     def hasFreeVariablesAboveSoundness(t: Type, c: BigInt): Unit = {
       require(c >= 0)
@@ -273,12 +310,15 @@ object LambdaOmegaProperties{
         case VariableType(j) => ()
         case AbsType(_, b) => 
           hasFreeVariablesAboveSoundness(b, c + 1)
-          filterSubGe(b.freeVars.filter(_ > 0), 1, c)
+          mapAddSub(b.freeVars.filter(_ > 0), 1)
+          mapAddSub(b.freeVars.filter(_ > 0).filter(_ >= c + 1), 1)
+          filterMapAddGe(b.freeVars.filter(_ > 0), -1, c)
           filterCommutative(b.freeVars, _ > 0, _ >= c + 1)
     }.ensuring(t.freeVars.filter(_ >= c).isEmpty == !t.hasFreeVariablesAbove(c))
   
     @opaque @pure
     def isClosedSoundness(t: Type): Unit = {
+      freeVarsNonNeg(t)
       hasFreeVariablesAboveSoundness(t, 0)
     }.ensuring(t.freeVars.isEmpty == t.isClosed)
 
