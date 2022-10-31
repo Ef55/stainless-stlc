@@ -31,25 +31,25 @@
 //       case FixDerivation(_, _, term, _) => term
 //     }
 
-//     def isValid: Boolean = {
+//     def isSound: Boolean = {
 //       this match{
 //         case VarDerivation(env, t, Var(k)) => {
 //           (k < env.size) && // Variable in environment
 //           env(k) == t       // and has the correct type
 //         }
 //         case AbsDerivation(env, ArrowType(typ1, typ2), Abs(typ, body), btd) => {
-//           btd.isValid && // Premise is valid,
+//           btd.isSound && // Premise is valid,
 //           btd.term == body && btd.env == typ :: env && // and has matching attributes
 //           typ == typ1 && btd.t == typ2 // Types are correct
 //         }
 //         case AbsDerivation(_ ,_, _, _) => false // An abstraction should always have an arrow type...
 //         case AppDerivation(env, t, App(t1, t2), btd1, btd2) => {
-//           btd1.isValid && btd2.isValid && // Premises are valid
+//           btd1.isSound && btd2.isSound && // Premises are valid
 //           btd1.term == t1 && btd2.term == t2 && btd1.env == env && btd2.env == env && // and have matching attributes
 //           btd1.t == ArrowType(btd2.t, t) // The body has expected type
 //         }
 //         case FixDerivation(env, t, Fix(f), ftd) => {
-//           ftd.isValid && // Premise is valid
+//           ftd.isSound && // Premise is valid
 //           ftd.term == f && ftd.env == env && // and has matching attributes
 //           ftd.t == ArrowType(t, t) // Fixed term is a function
 //         }
@@ -123,7 +123,7 @@
 //   /// Type derivations
 //   @opaque @pure
 //   def deriveTypeCompleteness(@induct td: TypeDerivation): Unit = {
-//     require(td.isValid)
+//     require(td.isSound)
 //   }.ensuring(deriveType(td.env, td.term) == Some(td))
 
 //   @opaque @pure
@@ -143,15 +143,15 @@
 //       }
 //     }
 //   }.ensuring(
-//     deriveType(env, t).get.isValid && 
+//     deriveType(env, t).get.isSound && 
 //     deriveType(env, t).get.term == t && 
 //     deriveType(env, t).get.env == env
 //   )
 
 //   @opaque @pure
 //   def typeDerivationsUniqueness(td1: TypeDerivation, td2: TypeDerivation): Unit = {
-//     require(td1.isValid)
-//     require(td2.isValid)
+//     require(td1.isSound)
+//     require(td2.isSound)
 //     require(td1.term == td2.term)
 //     require(td1.env == td2.env)
 
@@ -179,7 +179,7 @@
 
 //   @opaque @pure
 //   def environmentWeakening(td: TypeDerivation, envExt: TypeEnvironment): TypeDerivation = {
-//     require(td.isValid)
+//     require(td.isSound)
 //     td match {
 //       case VarDerivation(env, typ, Var(k)) => {
 //         concatFirstIndexing(env, envExt, k)
@@ -200,7 +200,7 @@
 //       }
 //     }
 //   }.ensuring(res => 
-//     res.isValid && 
+//     res.isSound && 
 //     ( res.env == td.env ++ envExt ) && 
 //     ( res.term == td.term ) && 
 //     ( res.t == td.t )
@@ -209,12 +209,12 @@
 //   @opaque @pure
 //   def variableEnvironmentStrengthening(v: VarDerivation, env: TypeEnvironment, envExt: TypeEnvironment): TypeDerivation = {
 //     require(v.env == env ++ envExt)
-//     require(v.isValid)
+//     require(v.isSound)
 //     require(v.ter.k < env.length)
 //     concatFirstIndexing(env, envExt, v.ter.k)
 //     VarDerivation(env, v.typ, v.ter)
 //   }.ensuring(res => 
-//     res.isValid && 
+//     res.isSound && 
 //     ( res.env == env ) && 
 //     ( res.t == v.t ) && 
 //     ( res.term == v.term )
@@ -223,12 +223,12 @@
 //   @opaque @pure
 //   def variableEnvironmentUpdate(v: VarDerivation, env: TypeEnvironment, oldEnv: TypeEnvironment, newEnv: TypeEnvironment): TypeDerivation = {
 //     require(v.env == env ++ oldEnv)
-//     require(v.isValid)
+//     require(v.isSound)
 //     require(v.ter.k < env.length)  
 //     val v2 = variableEnvironmentStrengthening(v, env, oldEnv) 
 //     environmentWeakening(v2, newEnv)
 //   }.ensuring(res => 
-//     res.isValid && 
+//     res.isSound && 
 //     ( res.env == (env ++ newEnv) ) && 
 //     ( res.t == v.t ) && 
 //     ( res.term == v.term )
@@ -236,7 +236,7 @@
 
 //   @opaque @pure
 //   def insertTypeInEnv(env1: TypeEnvironment, insert: Type, env2: TypeEnvironment, td: TypeDerivation): TypeDerivation = {
-//     require(td.isValid)
+//     require(td.isSound)
 //     require(env1 ++ env2 == td.env)
 
 //     val newEnv = env1 ++ (insert :: env2)
@@ -267,7 +267,7 @@
 //     }
     
 //   }.ensuring(res =>
-//     res.isValid &&
+//     res.isSound &&
 //     ( res.term == TermTr.shift(td.term, 1, env1.size) ) &&
 //     ( res.env == env1 ++ (insert :: env2) ) &&
 //     ( td.t == res.t )
@@ -275,7 +275,7 @@
 
 //   @opaque @pure
 //   def removeTypeInEnv(env1: TypeEnvironment, remove: Type, env2: TypeEnvironment, td: TypeDerivation): TypeDerivation = {
-//     require(td.isValid)
+//     require(td.isSound)
 //     require(td.env == env1 ++ (remove :: env2))
 //     require(!td.term.hasFreeVariablesIn(env1.size, 1))
 
@@ -311,7 +311,7 @@
 //       }
 //     }
 //   }.ensuring(res =>
-//     res.isValid &&
+//     res.isSound &&
 //     ( res.term == TermTr.shift(td.term, -1, env1.size) ) &&
 //     ( res.env == env1 ++ env2 ) &&
 //     ( td.t == res.t)
@@ -327,8 +327,8 @@
 
 //   @opaque @pure
 //   def preservationUnderSubst(td: TypeDerivation, j: BigInt, sd: TypeDerivation): TypeDerivation = {
-//     require(td.isValid)
-//     require(sd.isValid)
+//     require(td.isSound)
+//     require(sd.isSound)
 //     require(td.env == sd.env)
 //     require(0 <= j && j < td.env.size)
 //     require(td.env(j) == sd.t)
@@ -351,7 +351,7 @@
 //         assert(btd.env == argType :: td.env)
 //         val d1 = preservationUnderSubst(btd, j+1, d0) // Fragile: require 3/5
 //         val res = AbsDerivation(env, typ, Abs(argType, d1.term), d1)
-//         assert(  res.isValid )
+//         assert(  res.isSound )
 //         assert( res.term == TermTr.substitute(td.term, j, sd.term) )
 //         assert( td === res )
 //         res
@@ -360,7 +360,7 @@
 //         val td1p = preservationUnderSubst(td1, j, sd)
 //         val td2p = preservationUnderSubst(td2, j, sd)
 //         val res = AppDerivation(env, typ, App(td1p.term, td2p.term), td1p, td2p)
-//         assert(  res.isValid )
+//         assert(  res.isSound )
 //         assert( res.term == TermTr.substitute(td.term, j, sd.term) )
 //         assert( td === res )
 //         res
@@ -368,7 +368,7 @@
 //       case FixDerivation(env, typ, Fix(f), ftd) => {
 //         val ftdp = preservationUnderSubst(ftd, j, sd)
 //         val res = FixDerivation(env, typ, Fix(ftdp.term), ftdp)
-//         assert(  res.isValid )
+//         assert(  res.isSound )
 //         assert( res.term == TermTr.substitute(td.term, j, sd.term) )
 //         assert( td === res )
 //         res
@@ -376,14 +376,14 @@
 //     }
 
 //   }.ensuring(res =>
-//     res.isValid &&
+//     res.isSound &&
 //     ( res.term == TermTr.substitute(td.term, j, sd.term) ) &&
 //     ( td === res )
 //   )
 
 //   @opaque @pure
 //   def preservationUnderAbsSubst(env: TypeEnvironment, absTd: AbsDerivation, argTd: TypeDerivation, typ: Type): TypeDerivation = {
-//     require(absTd.isValid && argTd.isValid)
+//     require(absTd.isSound && argTd.isSound)
 //     require(absTd.env == env && argTd.env == env)
 //     require(absTd.ter.argType == argTd.t)
 //     require(absTd.t == ArrowType(argTd.t, typ))
@@ -399,7 +399,7 @@
 //     TermTrProp.boundRangeSubstitutionLemma(absTd.btd.term, 0, sd1.term)
 //     removeTypeInEnv(Nil(), argType, env, sd2)
 //   }.ensuring(res => 
-//     res.isValid &&
+//     res.isSound &&
 //     ( res.term == absSubstitution(absTd.ter.body, argTd.term) ) &&
 //     ( res.env == env ) &&
 //     ( res.t == typ )
@@ -407,7 +407,7 @@
 
 //   @opaque @pure
 //   def preservation(td: TypeDerivation, reduced: Term): TypeDerivation = {
-//     require(td.isValid)
+//     require(td.isSound)
 //     require(reducesTo(td.term, reduced).isDefined)
 //     decreases(td)
 
@@ -421,7 +421,7 @@
 //         val tp = reduced.asInstanceOf[Abs]
 //         val btdp = preservation(btd, tp.body)
 //         val tdp = AbsDerivation(env, typ, tp, btdp)
-//         assert(btdp.isValid)
+//         assert(btdp.isSound)
 //         assert(btdp.term == tp.body)
 //         assert(btd.env == argType :: td.env)
 //         assert(btdp.env == btd.env)
@@ -430,7 +430,7 @@
 //         assert(t1 == argType)
 //         assert(t2 == btdp.t)
 //         assert(tp == Abs(argType, btdp.term))
-//         assert(tdp.isValid)
+//         assert(tdp.isSound)
 //         tdp
 //       }
 //       case AppDerivation(env, typ, t@App(t1, t2), td1, td2) => {
@@ -445,9 +445,9 @@
 
 //             val td1p = preservation(td1, t1p)
 //             val tdp = AppDerivation(env, typ, tp, td1p, td2)
-//             assert(td1p.isValid && td2.isValid)
+//             assert(td1p.isSound && td2.isSound)
 //             assert(tp == App(td1p.term, td2.term))
-//             assert(tdp.isValid)
+//             assert(tdp.isSound)
 //             tdp
 //           }
 //           case App2Congruence => {
@@ -457,7 +457,7 @@
             
 //             val td2p = preservation(td2, t2p)
 //             val tdp = AppDerivation(env, typ, tp, td1, td2p)
-//             assert(tdp.isValid)
+//             assert(tdp.isSound)
 //             tdp
 //           }
 //           case AbsAppReduction => {
@@ -479,7 +479,7 @@
 
 //             val ftdp = preservation(ftd, fp)
 //             val tdp = FixDerivation(env, typ, tp, ftdp)
-//             assert(tdp.isValid)
+//             assert(tdp.isSound)
 //             tdp
 //           }
 //           case AbsFixReduction => {
@@ -492,7 +492,7 @@
 //     }
 
 //   }.ensuring(res => 
-//     res.isValid &&
+//     res.isSound &&
 //     ( res.term == reduced ) &&
 //     ( res === td )
 //   )

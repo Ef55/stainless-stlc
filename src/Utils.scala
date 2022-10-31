@@ -55,7 +55,7 @@ object ListProperties {
 }
 
 object BigIntListProperties{
-  
+
   @opaque @pure
   def filterLeGe(@induct l: List[BigInt], a: BigInt): Unit = {
   }.ensuring(l.filter(_ <= a) == l.filter(a >= _))
@@ -128,6 +128,8 @@ object BigIntListProperties{
   def filterMapAddGt(@induct l: List[BigInt], a: BigInt, b: BigInt): Unit = {
   }.ensuring(l.map(_ + a).filter(_ > b) == l.filter(_ > b - a).map(_ + a))
 
+  def filterSplitGeLt(@induct l: List[BigInt], a: BigInt, b: BigInt): Unit = {
+  }.ensuring(l.filter(x => a <= x && x < b) == l.filter(a <= _).filter(_ < b))
 
 }
 

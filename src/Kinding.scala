@@ -32,7 +32,7 @@ object Kinding {
       case AppTypeDerivation(_, _, typ, _, _) => typ
       case ArrowTypeDerivation(_, _, typ, _, _) => typ
     
-    def isValid: Boolean = 
+    def isSound: Boolean = 
       this match
         case BasicTypeDerivation(_, _) => true
         case VariableTypeDerivation(env, k, VariableType(j)) => 
@@ -40,18 +40,18 @@ object Kinding {
           env(j) == k
         
         case ArrowTypeDerivation(_, k, ArrowType(t1, t2), bkd1, bkd2) => 
-          bkd1.isValid && bkd2.isValid && // Premises are valid
+          bkd1.isSound && bkd2.isSound && // Premises are valid
           bkd1.typ == t1 && bkd2.typ == t2 && bkd1.env == env && bkd2.env == env && // and have matching attributes
           bkd1.k == ProperKind && bkd2.k == ProperKind && k == ProperKind
         
         case AbsTypeDerivation(env, ArrowKind(k1, k2), AbsType(argK, body), bkd) => 
-          bkd.isValid && // Premise is valid,
+          bkd.isSound && // Premise is valid,
           bkd.typ == body && bkd.env == argK :: env && // and has matching attributes
           argK == k1 && bkd.k == k2 // Types are correct
         
         case AbsTypeDerivation(_ ,_, _, _) => false // An abstraction should always have an arrow type...
         case AppTypeDerivation(env, k, AppType(t1, t2), bkd1, bkd2) => 
-          bkd1.isValid && bkd2.isValid && // Premises are valid
+          bkd1.isSound && bkd2.isSound && // Premises are valid
           bkd1.typ == t1 && bkd2.typ == t2 && bkd1.env == env && bkd2.env == env && // and have matching attributes
           bkd1.k == ArrowKind(bkd2.k, k) // The body has expected type    
     
@@ -126,7 +126,7 @@ object TypingProperties{
   /// Type derivations
   @opaque @pure
   def deriveKindCompleteness(@induct kd: KindDerivation): Unit = {
-    require(kd.isValid)
+    require(kd.isSound)
   }.ensuring(deriveKind(kd.env, kd.typ) == Some(kd))
 
   @opaque @pure
@@ -148,15 +148,15 @@ object TypingProperties{
       
     
   }.ensuring(
-    deriveKind(env, t).get.isValid && 
+    deriveKind(env, t).get.isSound && 
     deriveKind(env, t).get.typ == t && 
     deriveKind(env, t).get.env == env
   )
 
   @opaque @pure
   def kindDerivationUniqueness(kd1: KindDerivation, kd2: KindDerivation): Unit = {
-    require(kd1.isValid)
-    require(kd2.isValid)
+    require(kd1.isSound)
+    require(kd2.isSound)
     require(kd1.typ == kd2.typ)
     require(kd1.env == kd2.env)
 
@@ -165,7 +165,7 @@ object TypingProperties{
   }.ensuring(kd1 == kd2)
 
   def arrowKindNotRedIsAbsType(kd: KindDerivation): Unit = {
-    require(kd.isValid)
+    require(kd.isSound)
     require(kd.env == Nil())
     require(kd.k.isInstanceOf[ArrowKind])
     require(!detReduce(kd.typ).isDefined)
@@ -180,7 +180,7 @@ object TypingProperties{
   @opaque @pure
   def detReduceProgress(kd: KindDerivation): Unit = {
     require(kd.env == Nil())
-    require(kd.isValid)
+    require(kd.isSound)
     kd match
       case BasicTypeDerivation(_, _) => ()
       case VariableTypeDerivation(_, _, _) => ()
@@ -199,7 +199,7 @@ object TypingProperties{
 
   def valueNotReducible(kd: KindDerivation): Unit = {
     require(kd.typ.isValue)
-    require(kd.isValid)
+    require(kd.isSound)
     kd match
       case BasicTypeDerivation(_, _) => ()
       case VariableTypeDerivation(_, _, _) => ()
@@ -215,7 +215,7 @@ object TypingProperties{
 
   @opaque @pure
   def environmentWeakening(kd: KindDerivation, envExt: KindEnvironment): KindDerivation = {
-    require(kd.isValid)
+    require(kd.isSound)
     kd match 
       case BasicTypeDerivation(env, bt) => BasicTypeDerivation(env ++ envExt, bt)
       case VariableTypeDerivation(env, k, vt@VariableType(j)) => 
@@ -237,7 +237,7 @@ object TypingProperties{
 
     
   }.ensuring(res => 
-    res.isValid && 
+    res.isSound && 
     ( res.env == kd.env ++ envExt ) && 
     ( res.typ == kd.typ) && 
     ( res.k == kd.k )
@@ -246,12 +246,12 @@ object TypingProperties{
   @opaque @pure
   def variableTypeEnvironmentStrengthening(v: VariableTypeDerivation, env: KindEnvironment, envExt: KindEnvironment): KindDerivation = {
     require(v.env == env ++ envExt)
-    require(v.isValid)
+    require(v.isSound)
     require(v.typ.j < env.length)
     concatFirstIndexing(env, envExt, v.typ.j)
     VariableTypeDerivation(env, v.k, v.typ)
   }.ensuring(res => 
-    res.isValid && 
+    res.isSound && 
     ( res.env == env ) && 
     ( res.k == v.k ) && 
     ( res.typ == v.typ )
@@ -260,12 +260,12 @@ object TypingProperties{
   @opaque @pure
   def variableTypeEnvironmentUpdate(v: VariableTypeDerivation, env: KindEnvironment, oldEnv: KindEnvironment, newEnv: KindEnvironment): KindDerivation = {
     require(v.env == env ++ oldEnv)
-    require(v.isValid)
+    require(v.isSound)
     require(v.typ.j < env.length)  
     val v2 = variableTypeEnvironmentStrengthening(v, env, oldEnv) 
     environmentWeakening(v2, newEnv)
   }.ensuring(res => 
-    res.isValid && 
+    res.isSound && 
     ( res.env == (env ++ newEnv) ) && 
     ( res.k == v.k ) && 
     ( res.typ == v.typ )
@@ -273,7 +273,7 @@ object TypingProperties{
 
   @opaque @pure
   def insertKindInEnv(env1: KindEnvironment, insert: Kind, env2: KindEnvironment, kd: KindDerivation): KindDerivation = {
-    require(kd.isValid)
+    require(kd.isSound)
     require(env1 ++ env2 == kd.env)
 
     val newEnv = env1 ++ (insert :: env2)
@@ -306,7 +306,7 @@ object TypingProperties{
     
     
   }.ensuring(res =>
-    res.isValid &&
+    res.isSound &&
     ( res.typ == TypeTr.shift(kd.typ, 1, env1.size) ) &&
     ( res.env == env1 ++ (insert :: env2) ) &&
     ( kd.k == res.k )
@@ -314,7 +314,7 @@ object TypingProperties{
 
   @opaque @pure
   def removeKindInEnv(env1: KindEnvironment, remove: Kind, env2: KindEnvironment, kd: KindDerivation): KindDerivation = {
-    require(kd.isValid)
+    require(kd.isSound)
     require(kd.env == env1 ++ (remove :: env2))
     require(!kd.typ.hasFreeVariablesIn(env1.size, 1))
 
@@ -350,7 +350,7 @@ object TypingProperties{
         res
 
   }.ensuring(res =>
-    res.isValid &&
+    res.isSound &&
     ( res.typ == TypeTr.shift(kd.typ, -1, env1.size) ) &&
     ( res.env == env1 ++ env2 ) &&
     ( kd.k == res.k)
@@ -359,8 +359,8 @@ object TypingProperties{
 
   @opaque @pure
   def preservationUnderSubst(td: KindDerivation, j: BigInt, sd: KindDerivation): KindDerivation = { 
-    require(td.isValid)
-    require(sd.isValid)
+    require(td.isSound)
+    require(sd.isSound)
     require(td.env == sd.env)
     require(0 <= j && j < td.env.size)
     require(td.env(j) == sd.k)
@@ -383,14 +383,14 @@ object TypingProperties{
         val td2p = preservationUnderSubst(kd2, j, sd)
         ArrowTypeDerivation(env, typ, ArrowType(td1p.typ, td2p.typ), td1p, td2p)
   }.ensuring(res =>
-    res.isValid &&
+    res.isSound &&
     ( res.typ == TypeTr.substitute(td.typ, j, sd.typ) ) &&
     ( td === res )
   )
 
   @opaque @pure
   def preservationUnderAbsSubst(env: KindEnvironment, absKd: AbsTypeDerivation, argKd: KindDerivation, k: Kind): KindDerivation = {
-    require(absKd.isValid && argKd.isValid)
+    require(absKd.isSound && argKd.isSound)
     require(absKd.env == env && argKd.env == env)
     require(absKd.typ.argKind == argKd.k)
     require(absKd.k == ArrowKind(argKd.k, k))
@@ -406,14 +406,14 @@ object TypingProperties{
     TypeTrProp.boundRangeSubstitutionLemma(absKd.bkd.typ, 0, sd1.typ)
     removeKindInEnv(Nil(), argKind, env, sd2)
   }.ensuring(res => 
-    res.isValid &&
+    res.isSound &&
     ( res.typ == TypeTr.absSubstitution(absKd.typ.body, argKd.typ)) &&
     ( res.env == env ) &&
     ( res.k == k)
   )
 
   // def properEquivalentValuesEquals(eq: EquivalenceDerivation, kd1: KindDerivation, kd2: KindDerivation): Unit ={
-  //   require(eq.isValid)
+  //   require(eq.isSound)
   //   require(eq.type1 == kd1.typ)
   //   require(eq.type2 == kd2.typ)
 
@@ -438,12 +438,12 @@ object TypingProperties{
 
 
   // }.ensuring(_ => 
-  //   (kd1.isValid && kd1.k == ProperKind && kd1.typ.isValue && kd1.env == Nil()) ==
-  //   (kd2.isValid && kd2.k == ProperKind && kd2.typ.isValue && kd2.env == Nil())
+  //   (kd1.isSound && kd1.k == ProperKind && kd1.typ.isValue && kd1.env == Nil()) ==
+  //   (kd2.isSound && kd2.k == ProperKind && kd2.typ.isValue && kd2.env == Nil())
   // )
 
   // def equivalentSameKind(eq: EquivalenceDerivation, env: KindEnvironment, k: Kind): Unit = {
-  //   require(eq.isValid)
+  //   require(eq.isSound)
 
   //   eq match
   //     case ReflEqDerivation(_) => ()
@@ -460,12 +460,12 @@ object TypingProperties{
   //       equivalentSameKind(ed1, env, k)
   //     case _ => ( )
     
-  // }.ensuring(_ => (deriveKind(env, eq.type1).isDefined && deriveKind(env, eq.type1).get.isValid && deriveKind(env, eq.type1).get == k) ==
-  //                 (deriveKind(env, eq.type2).isDefined && deriveKind(env, eq.type1).get.isValid && deriveKind(env, eq.type2).get == k)    )
+  // }.ensuring(_ => (deriveKind(env, eq.type1).isDefined && deriveKind(env, eq.type1).get.isSound && deriveKind(env, eq.type1).get == k) ==
+  //                 (deriveKind(env, eq.type2).isDefined && deriveKind(env, eq.type1).get.isSound && deriveKind(env, eq.type2).get == k)    )
 
 //   @opaque @pure
 //   def preservation(td: KindDerivation, reduced: Type): KindDerivation = 
-//     require(td.isValid)
+//     require(td.isSound)
 //     require(reducesTo(td.typ, reduced).isDefined)
 //     decreases(td)
 
@@ -479,7 +479,7 @@ object TypingProperties{
 //         val tp = reduced.asInstanceOf[AbsType]
 //         val btdp = preservation(bkd, tp.body)
 //         val tdp = AbsTypeDerivation(env, typ, tp, btdp)
-//         assert(btdp.isValid)
+//         assert(btdp.isSound)
 //         assert(btdp.typ == tp.body)
 //         assert(bkd.env == argKind :: td.env)
 //         assert(btdp.env == bkd.env)
@@ -488,7 +488,7 @@ object TypingProperties{
 //         assert(t1 == argKind)
 //         assert(t2 == btdp.t)
 //         assert(tp == AbsType(argKind, btdp.typ))
-//         assert(tdp.isValid)
+//         assert(tdp.isSound)
 //         tdp
 //       
 //       case AppTypeDerivation(env, typ, t@AppType(t1, t2), kd1, kd2) => 
@@ -503,9 +503,9 @@ object TypingProperties{
 
 //             val td1p = preservation(kd1, t1p)
 //             val tdp = AppTypeDerivation(env, typ, tp, td1p, kd2)
-//             assert(td1p.isValid && kd2.isValid)
+//             assert(td1p.isSound && kd2.isSound)
 //             assert(tp == AppType(td1p.typ, kd2.typ))
-//             assert(tdp.isValid)
+//             assert(tdp.isSound)
 //             tdp
 //           
 //           case App2Congruence => 
@@ -515,7 +515,7 @@ object TypingProperties{
             
 //             val td2p = preservation(kd2, t2p)
 //             val tdp = AppTypeDerivation(env, typ, tp, kd1, td2p)
-//             assert(tdp.isValid)
+//             assert(tdp.isSound)
 //             tdp
 //           
 //           case AbsAppReduction => 
@@ -527,7 +527,7 @@ object TypingProperties{
 //     
 
 //   .ensuring(res => 
-//     res.isValid &&
+//     res.isSound &&
 //     ( res.typ == reduced ) &&
 //     ( res === td )
 //   )
