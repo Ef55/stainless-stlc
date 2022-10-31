@@ -113,11 +113,12 @@ object UsualTypeReduction{
         case NilUsualReduction(t) => t
         case ConsUsualReduction(head, tail) => tail.type2
 
-    def concat(prd2: MultiStepUsualReduction): MultiStepUsualReduction =
+    def concat(prd2: MultiStepUsualReduction): MultiStepUsualReduction = {
       this match
         case NilUsualReduction(t) => prd2
         case ConsUsualReduction(h, t) => ConsUsualReduction(h, t.concat(prd2))
-
+    }.ensuring(res => 
+      (isSound && prd2.isSound && type2 == prd2.type1) ==> (res.isSound && res.type1 == type1 && res.type2 == prd2.type2))
     /**
       * Returns whether the reduction is sound.
       * Each step must be sound and the types of the reduction steps must coincide i.e. the list has to be of the form
@@ -138,12 +139,6 @@ object UsualTypeReduction{
 object UsualTypeReductionProperties {
 
   import UsualTypeReduction._
-
-  def concatSoundness(@induct prd1: MultiStepUsualReduction, prd2: MultiStepUsualReduction): Unit = {
-    require(prd1.isSound)
-    require(prd2.isSound)
-    require(prd1.type2 == prd2.type1)
-  }.ensuring(prd1.concat(prd2).isSound)
 
   def arrowDerivationLMap(prd1: MultiStepUsualReduction, t2: Type): MultiStepUsualReduction = {
     require(prd1.isSound)

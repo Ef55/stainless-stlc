@@ -112,11 +112,12 @@ object ParallelTypeReduction{
         case NilParallelReduction(t) => t
         case ConsParallelReduction(head, tail) => tail.type2
 
-    def concat(prd2: MultiStepParallelReduction): MultiStepParallelReduction =
+    def concat(prd2: MultiStepParallelReduction): MultiStepParallelReduction = {
       this match
         case NilParallelReduction(t) => prd2
         case ConsParallelReduction(h, t) => ConsParallelReduction(h, t.concat(prd2))
-       
+    }.ensuring(res =>
+      (isSound && prd2.isSound && type2 == prd2.type1) ==> (res.isSound && res.type1 == type1 && res.type2 == prd2.type2))
 
     /**
       * Returns whether the reduction is sound.
@@ -411,12 +412,6 @@ object ParallelTypeReductionProperties {
                     res._2.type1 == prd2.type2 &&
                     res._1.type2 == res._2.type2 &&
                     res._1.isSound && res._2.isSound)
-
-  def concatSoundness(@induct prd1: MultiStepParallelReduction, prd2: MultiStepParallelReduction): Unit = {
-    require(prd1.isSound)
-    require(prd2.isSound)
-    require(prd1.type2 == prd2.type1)
-  }.ensuring(prd1.concat(prd2).isSound)
 
   /** 
     * * Short version: If T1 =>* T2 and T1 => T3 then there exits a type T4 such that T2 => T4 and T3 =>* T4
