@@ -112,6 +112,20 @@ object ParallelTypeReduction{
         case NilParallelReduction(t) => t
         case ConsParallelReduction(head, tail) => tail.type2
 
+    /**
+      * Transitivity of multistep reduction
+      * * Short version: If T1 =>* T2 and T2 =>* T3 then T1 =>* T3
+      * 
+      * Long version:
+      * 
+      * Preconditions:
+      *   - this, the list of reduction steps witnessing T1  =>* T2 is sound
+      *   - prd2, the list of reduction steps witnessing T2' =>* T3 is sound
+      *   - T2 = T2'
+      * 
+      * Postconditions:
+      *   There exists a sound list of reduction steps witnessing T1 => T3*
+      */
     def concat(prd2: MultiStepParallelReduction): MultiStepParallelReduction = {
       this match
         case NilParallelReduction(t) => prd2
@@ -322,7 +336,19 @@ object ParallelTypeReductionProperties {
     res.isSound &&
     res.type1 == substitute(td.type1, j, sd.type1) &&
     res.type2 == substitute(td.type2, j, sd.type2))
-  
+
+  /**
+    * * Short version: If λX.B1 => λX.B2 and A1 => A2 then B1[X := A1] => B2[X := A2]
+    * 
+    * Long version:
+    * 
+    * Preconditions:
+    *   - bd and ad, the derivation trees respectively witnessing B1 => B2 and A1 => A2, are sound
+    *
+    * Postcondition:
+    *   There exists a sound derivation tree witnessing absSubstitution(B1, A1) => absSubstitution(B2, A2)
+    * * The proof is constructive and returns this list
+    */
   @opaque @pure
   def reduceAbsSubst(bd: ParallelReductionDerivation, ad: ParallelReductionDerivation): ParallelReductionDerivation = {
     require(bd.isSound)
@@ -420,14 +446,15 @@ object ParallelTypeReductionProperties {
     * 
     * Preconditions:
     *   - prd1, the list of derivation trees witnessing T11 =>* T2 is sound
-    *   - prd2, the list of derivation trees witnessing T12 =>* T3 is sound
+    *   - h2, the list of derivation trees witnessing T12 => T3 is sound
     *   - T11 = T12 (= T1 in the above theorem statement)
     *
     * Postcondition:
-    *   There exists two sound list of derivation trees respectevely witnessing T =>* T41 and T' =>* T42 such that:
+    *   There exists two sound list of derivation trees respectevely witnessing T => T41 and T' =>* T42 such that:
     *     - T = T2
     *     - T'= T3
     *     - T41 = T42
+    *     - The number of steps in T' =>* T42 is the same as T1 => T2
     * * The proof is constructive and returns this pair of list
     */
   def confluenceStripe(prd1: MultiStepParallelReduction, h2: ParallelReductionDerivation): (ParallelReductionDerivation, MultiStepParallelReduction) = {
@@ -466,6 +493,8 @@ object ParallelTypeReductionProperties {
     *     - T = T2
     *     - T'= T3
     *     - T41 = T42
+    *     - The number of steps in T =>* T41 is the same as T12 =>* T3
+    *     - The number of steps in T' =>* 42 is the same as T11 =>* T2
     * * The proof is constructive and returns this pair of list
     */
   def confluence(prd1: MultiStepParallelReduction, prd2: MultiStepParallelReduction): (MultiStepParallelReduction, MultiStepParallelReduction) = {

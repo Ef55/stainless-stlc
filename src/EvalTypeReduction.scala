@@ -13,11 +13,11 @@ import stainless.annotation._
 import LambdaOmega._
 import TypeTransformations._
 
-object UsualTypeReduction{
+object EvalTypeReduction{
   /**
     * Derivation tree for a parallel type reduction step of the form type1 => type2, as defined in Figure 30-3 of TAPL
     */
-  sealed trait UsualReductionDerivation{
+  sealed trait EvalReductionDerivation{
 
     @pure
     def type1: Type = 
@@ -79,12 +79,12 @@ object UsualTypeReduction{
   /**
     * Parallel reduction rules as listed in TAPL Figure 30-3
     */
-  case class ArrowDerivationL(t1: ArrowType, t2: ArrowType, rd: UsualReductionDerivation) extends UsualReductionDerivation
-  case class ArrowDerivationR(t1: ArrowType, t2: ArrowType, rd: UsualReductionDerivation) extends UsualReductionDerivation
-  case class AbsDerivation(t1: AbsType, t2: AbsType, rd: UsualReductionDerivation) extends UsualReductionDerivation
-  case class AppDerivationL(t1: AppType, t2: AppType, rd: UsualReductionDerivation) extends UsualReductionDerivation
-  case class AppDerivationR(t1: AppType, t2: AppType, rd: UsualReductionDerivation) extends UsualReductionDerivation
-  case class AppAbsDerivation(abs: AbsType, arg: Type) extends UsualReductionDerivation
+  case class ArrowDerivationL(t1: ArrowType, t2: ArrowType, rd: EvalReductionDerivation) extends EvalReductionDerivation
+  case class ArrowDerivationR(t1: ArrowType, t2: ArrowType, rd: EvalReductionDerivation) extends EvalReductionDerivation
+  case class AbsDerivation(t1: AbsType, t2: AbsType, rd: EvalReductionDerivation) extends EvalReductionDerivation
+  case class AppDerivationL(t1: AppType, t2: AppType, rd: EvalReductionDerivation) extends EvalReductionDerivation
+  case class AppDerivationR(t1: AppType, t2: AppType, rd: EvalReductionDerivation) extends EvalReductionDerivation
+  case class AppAbsDerivation(abs: AbsType, arg: Type) extends EvalReductionDerivation
 
   /**
     * Transitive and reflexive closure of parallel reduction relation also noted type1 =>* type2 (TAPL Chapter 30.3).
@@ -92,31 +92,31 @@ object UsualTypeReduction{
     * ! not as the closure of a relation.
     * TODO Show the equivalence between the two representations.
     */
-  sealed trait MultiStepUsualReduction{
+  sealed trait MultiStepEvalReduction{
 
     /**
       * Number of reduction steps in the list
       */
     def size: BigInt = {
       this match 
-        case NilUsualReduction(_) => BigInt(0)
-        case ConsUsualReduction(_, tail) => tail.size + 1
+        case NilEvalReduction(_) => BigInt(0)
+        case ConsEvalReduction(_, tail) => tail.size + 1
     }.ensuring(_ >= 0)
 
     def type1: Type = 
       this match
-        case NilUsualReduction(t) => t
-        case ConsUsualReduction(head, tail) => head.type1
+        case NilEvalReduction(t) => t
+        case ConsEvalReduction(head, tail) => head.type1
 
     def type2: Type = 
       this match
-        case NilUsualReduction(t) => t
-        case ConsUsualReduction(head, tail) => tail.type2
+        case NilEvalReduction(t) => t
+        case ConsEvalReduction(head, tail) => tail.type2
 
-    def concat(prd2: MultiStepUsualReduction): MultiStepUsualReduction = {
+    def concat(prd2: MultiStepEvalReduction): MultiStepEvalReduction = {
       this match
-        case NilUsualReduction(t) => prd2
-        case ConsUsualReduction(h, t) => ConsUsualReduction(h, t.concat(prd2))
+        case NilEvalReduction(t) => prd2
+        case ConsEvalReduction(h, t) => ConsEvalReduction(h, t.concat(prd2))
     }.ensuring(res => 
       (isSound && prd2.isSound && type2 == prd2.type1) ==> (res.isSound && res.type1 == type1 && res.type2 == prd2.type2))
     /**
@@ -126,59 +126,66 @@ object UsualTypeReduction{
       */
     def isSound: Boolean = 
       this match
-        case NilUsualReduction(_) => true
-        case ConsUsualReduction(head, tail) => head.isSound && tail.isSound && head.type2 == tail.type1
+        case NilEvalReduction(_) => true
+        case ConsEvalReduction(head, tail) => head.isSound && tail.isSound && head.type2 == tail.type1
   }
 
-  case class NilUsualReduction(t: Type) extends MultiStepUsualReduction
-  case class ConsUsualReduction(head: UsualReductionDerivation, tail: MultiStepUsualReduction) extends MultiStepUsualReduction
+  case class NilEvalReduction(t: Type) extends MultiStepEvalReduction
+  case class ConsEvalReduction(head: EvalReductionDerivation, tail: MultiStepEvalReduction) extends MultiStepEvalReduction
 
 
 }
 
-object UsualTypeReductionProperties {
+object EvalTypeReductionProperties {
 
-  import UsualTypeReduction._
+  import EvalTypeReduction._
 
-  def arrowDerivationLMap(prd1: MultiStepUsualReduction, t2: Type): MultiStepUsualReduction = {
+  def arrowDerivationLMap(prd1: MultiStepEvalReduction, t2: Type): MultiStepEvalReduction = {
     require(prd1.isSound)
     prd1 match
-      case NilUsualReduction(t1) => NilUsualReduction(ArrowType(t1, t2))
-      case ConsUsualReduction(h, t) => ConsUsualReduction(ArrowDerivationL(ArrowType(h.type1, t2), ArrowType(h.type2, t2), h), arrowDerivationLMap(t, t2))
+      case NilEvalReduction(t1) => NilEvalReduction(ArrowType(t1, t2))
+      case ConsEvalReduction(h, t) => ConsEvalReduction(ArrowDerivationL(ArrowType(h.type1, t2), ArrowType(h.type2, t2), h), arrowDerivationLMap(t, t2))
     
   }.ensuring(res => res.isSound && res.type1 == ArrowType(prd1.type1, t2) && res.type2 == ArrowType(prd1.type2, t2) && res.size == prd1.size)
 
-  def arrowDerivationRMap(t1: Type, prd2: MultiStepUsualReduction): MultiStepUsualReduction = {
+  def arrowDerivationRMap(t1: Type, prd2: MultiStepEvalReduction): MultiStepEvalReduction = {
     require(prd2.isSound)
     prd2 match
-      case NilUsualReduction(t2) => NilUsualReduction(ArrowType(t1, t2))
-      case ConsUsualReduction(h, t) => ConsUsualReduction(ArrowDerivationR(ArrowType(t1, h.type1), ArrowType(t1, h.type2), h), arrowDerivationRMap(t1, t))
+      case NilEvalReduction(t2) => NilEvalReduction(ArrowType(t1, t2))
+      case ConsEvalReduction(h, t) => ConsEvalReduction(ArrowDerivationR(ArrowType(t1, h.type1), ArrowType(t1, h.type2), h), arrowDerivationRMap(t1, t))
     
   }.ensuring(res => res.isSound && res.type1 == ArrowType(t1, prd2.type1) && res.type2 == ArrowType(t1, prd2.type2) && res.size == prd2.size)
 
-  def appDerivationLMap(prd1: MultiStepUsualReduction, t2: Type): MultiStepUsualReduction = {
+  def appDerivationLMap(prd1: MultiStepEvalReduction, t2: Type): MultiStepEvalReduction = {
     require(prd1.isSound)
     prd1 match
-      case NilUsualReduction(t1) => NilUsualReduction(AppType(t1, t2))
-      case ConsUsualReduction(h, t) => ConsUsualReduction(AppDerivationL(AppType(h.type1, t2), AppType(h.type2, t2), h), appDerivationLMap(t, t2))
+      case NilEvalReduction(t1) => NilEvalReduction(AppType(t1, t2))
+      case ConsEvalReduction(h, t) => ConsEvalReduction(AppDerivationL(AppType(h.type1, t2), AppType(h.type2, t2), h), appDerivationLMap(t, t2))
     
   }.ensuring(res => res.isSound && res.type1 == AppType(prd1.type1, t2) && res.type2 == AppType(prd1.type2, t2) && res.size == prd1.size)
 
-  def appDerivationRMap(t1: Type, prd2: MultiStepUsualReduction): MultiStepUsualReduction = {
+  def appDerivationRMap(t1: Type, prd2: MultiStepEvalReduction): MultiStepEvalReduction = {
     require(prd2.isSound)
     prd2 match
-      case NilUsualReduction(t2) => NilUsualReduction(AppType(t1, t2))
-      case ConsUsualReduction(h, t) => ConsUsualReduction(AppDerivationR(AppType(t1, h.type1), AppType(t1, h.type2), h), appDerivationRMap(t1, t))
+      case NilEvalReduction(t2) => NilEvalReduction(AppType(t1, t2))
+      case ConsEvalReduction(h, t) => ConsEvalReduction(AppDerivationR(AppType(t1, h.type1), AppType(t1, h.type2), h), appDerivationRMap(t1, t))
     
   }.ensuring(res => res.isSound && res.type1 == AppType(t1, prd2.type1) && res.type2 == AppType(t1, prd2.type2) && res.size == prd2.size)
 
-  def absDerivationMap(k: Kind, prd: MultiStepUsualReduction): MultiStepUsualReduction = {
+  def absDerivationMap(k: Kind, prd: MultiStepEvalReduction): MultiStepEvalReduction = {
     require(prd.isSound)
     prd match
-      case NilUsualReduction(b) => NilUsualReduction(AbsType(k, b))
-      case ConsUsualReduction(h, t) => ConsUsualReduction(AbsDerivation(AbsType(k, h.type1), AbsType(k, h.type2), h), absDerivationMap(k, t))
+      case NilEvalReduction(b) => NilEvalReduction(AbsType(k, b))
+      case ConsEvalReduction(h, t) => ConsEvalReduction(AbsDerivation(AbsType(k, h.type1), AbsType(k, h.type2), h), absDerivationMap(k, t))
     
   }.ensuring(res => res.isSound && res.type1 == AbsType(k, prd.type1) && res.type2 == AbsType(k, prd.type2) && res.size == prd.size)
+}
+
+object EvalTypeReductionConfluence {
+
+  import ARSEquivalences._
+  import ParallelTypeReduction._
+  import EvalTypeReduction._
 
   /**
     * Confluence - TAPL Lemma 30.3.9
@@ -199,25 +206,19 @@ object UsualTypeReductionProperties {
     *     - T41 = T42
     * * The proof is constructive and returns this pair of list
     */
-  // def confluence(prd1: MultiStepUsualReduction, prd2: MultiStepUsualReduction): (MultiStepUsualReduction, MultiStepUsualReduction) = {
-  //   decreases(prd1.size + prd2.size)
-  //   require(prd1.isSound)
-  //   require(prd2.isSound)
-  //   require(prd1.type1 == prd2.type1)
+  def usualConfluence(prd1: MultiStepEvalReduction, prd2: MultiStepEvalReduction): (MultiStepEvalReduction, MultiStepEvalReduction) = {
+    decreases(prd1.size + prd2.size)
+    require(prd1.isSound)
+    require(prd2.isSound)
+    require(prd1.type1 == prd2.type1)
 
-  //   (prd1, prd2) match
-  //     case (NilUsualReduction(t1), NilUsualReduction(t2)) => (NilUsualReduction(t1), NilUsualReduction(t1))
-  //     case (NilUsualReduction(_t), ConsUsualReduction(head, tail)) => (ConsUsualReduction(head, tail), NilUsualReduction(prd2.type2))
-  //     case (ConsUsualReduction(head, tail), NilUsualReduction(_)) => (NilUsualReduction(prd1.type2), ConsUsualReduction(head, tail))
-  //     case (ConsUsualReduction(head1, tail1), ConsUsualReduction(head2, tail2)) =>
-  //       val (red11, prd12) = confluenceStripe(prd1, head2)
-  //       val (conf1, conf2) = confluence(prd12, tail2)
-  //       (ConsUsualReduction(red11, conf1), conf2)
-  // }.ensuring(res => 
-  //   res._1.type2 == res._2.type2 &&
-  //   res._1.type1 == prd1.type2 &&
-  //   res._2.type1 == prd2.type2 &&
-  //   res._1.isSound && res._2.isSound &&
-  //   res._2.size == prd1.size && res._1.size == prd2.size
-  // )
+    val res = ParallelTypeReductionProperties.confluence(usualToParallel(prd1), usualToParallel(prd2))
+    (parallelToUsual(res._1), parallelToUsual(res._2))
+    
+  }.ensuring(res => 
+    res._1.type2 == res._2.type2 &&
+    res._1.type1 == prd1.type2 &&
+    res._2.type1 == prd2.type2 &&
+    res._1.isSound && res._2.isSound
+  )
 }
