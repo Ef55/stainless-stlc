@@ -206,14 +206,14 @@ object EvalTypeReductionConfluence {
     *     - T41 = T42
     * * The proof is constructive and returns this pair of list
     */
-  def usualConfluence(prd1: MultiStepEvalReduction, prd2: MultiStepEvalReduction): (MultiStepEvalReduction, MultiStepEvalReduction) = {
+  def evalConfluence(prd1: MultiStepEvalReduction, prd2: MultiStepEvalReduction): (MultiStepEvalReduction, MultiStepEvalReduction) = {
     decreases(prd1.size + prd2.size)
     require(prd1.isSound)
     require(prd2.isSound)
     require(prd1.type1 == prd2.type1)
 
-    val res = ParallelTypeReductionProperties.confluence(usualToParallel(prd1), usualToParallel(prd2))
-    (parallelToUsual(res._1), parallelToUsual(res._2))
+    val res = ParallelTypeReductionProperties.confluence(evalToParallel(prd1), evalToParallel(prd2))
+    (parallelToEval(res._1), parallelToEval(res._2))
     
   }.ensuring(res => 
     res._1.type2 == res._2.type2 &&
