@@ -457,7 +457,7 @@ object ParallelTypeReductionProperties {
     *     - The number of steps in T' =>* T42 is the same as T1 => T2
     * * The proof is constructive and returns this pair of list
     */
-  def confluenceStripe(prd1: MultiStepParallelReduction, h2: ParallelReductionDerivation): (ParallelReductionDerivation, MultiStepParallelReduction) = {
+  def semiConfluence(prd1: MultiStepParallelReduction, h2: ParallelReductionDerivation): (ParallelReductionDerivation, MultiStepParallelReduction) = {
     require(prd1.isSound)
     require(h2.isSound)
     require(h2.type1 == prd1.type1)
@@ -466,7 +466,7 @@ object ParallelTypeReductionProperties {
       case NilParallelReduction(t) => (h2, NilParallelReduction(h2.type2))
       case ConsParallelReduction(h, t) =>
         val (dP1, dP2) = diamondProperty(h, h2)
-        val (conf1, conf2) = confluenceStripe(t, dP1)
+        val (conf1, conf2) = semiConfluence(t, dP1)
         (conf1, ConsParallelReduction(dP2, conf2))
 
   }.ensuring(res =>
@@ -508,7 +508,7 @@ object ParallelTypeReductionProperties {
       case (NilParallelReduction(_t), ConsParallelReduction(head, tail)) => (ConsParallelReduction(head, tail), NilParallelReduction(prd2.type2))
       case (ConsParallelReduction(head, tail), NilParallelReduction(_)) => (NilParallelReduction(prd1.type2), ConsParallelReduction(head, tail))
       case (ConsParallelReduction(head1, tail1), ConsParallelReduction(head2, tail2)) =>
-        val (red11, prd12) = confluenceStripe(prd1, head2)
+        val (red11, prd12) = semiConfluence(prd1, head2)
         val (conf1, conf2) = confluence(prd12, tail2)
         (ConsParallelReduction(red11, conf1), conf2)
   }.ensuring(res => 

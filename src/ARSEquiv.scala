@@ -17,9 +17,9 @@ import EvalTypeReductionProperties._
 import ParallelTypeReduction._
 import EvalTypeReduction._
 import TypeTransformations._
+import ARS._
 
 object ARSEquivalences{
-
 
   def parallelToEval(prd: ParallelReductionDerivation): MultiStepEvalReduction = {
     require(prd.isSound)
