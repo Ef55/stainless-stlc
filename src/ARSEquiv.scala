@@ -24,18 +24,20 @@ object ARSEquivalences{
   def parallelToEval(prd: ParallelReductionDerivation): MultiStepEvalReduction = {
     require(prd.isSound)
     prd match
-      case ParallelTypeReduction.ReflDerivation(t) => NilEvalReduction(t)
+      case ParallelTypeReduction.ReflDerivation(t) => ARSIdentity(t)
       case ParallelTypeReduction.ArrowDerivation(ArrowType(t11, t12), ArrowType(t21, t22), prd1, prd2) =>
         val conv1 = parallelToEval(prd1)
         val conv2 = parallelToEval(prd2)
         val arr1 = arrowDerivationLMap(conv1, t12)
         val arr2 = arrowDerivationRMap(t21, conv2)
+        EvalTypeReduction.concatWellFormed(arr1, arr2)
         arr1.concat(arr2)
       case ParallelTypeReduction.AppDerivation(AppType(t11, t12), AppType(t21, t22), prd1, prd2) =>
         val conv1 = parallelToEval(prd1)
         val conv2 = parallelToEval(prd2)
         val app1 = appDerivationLMap(conv1, t12)
         val app2 = appDerivationRMap(t21, conv2)
+        EvalTypeReduction.concatWellFormed(app1, app2)
         app1.concat(app2)
       case ParallelTypeReduction.AbsDerivation(AbsType(k1, b1), AbsType(k2, b2), prd) =>
         val conv = parallelToEval(prd)
@@ -45,35 +47,39 @@ object ARSEquivalences{
         val conv2 = parallelToEval(prd2)
         val step1 = appDerivationLMap(absDerivationMap(k, conv1), arg1)
         val step2 = appDerivationRMap(AbsType(k, body2), conv2)
-        val temp = ConsEvalReduction(EvalTypeReduction.AppAbsDerivation(AbsType(k, body2), arg2), NilEvalReduction(absSubstitution(body2, arg2)))
-        assert(temp.isSound && temp.type1 == AppType(AbsType(k, body2), arg2) && temp.type2 == absSubstitution(body2, arg2))
-        (step1.concat(step2)).concat(ConsEvalReduction(EvalTypeReduction.AppAbsDerivation(AbsType(k, body2), arg2), NilEvalReduction(absSubstitution(body2, arg2))))
-      case _ => NilEvalReduction(BasicType(""))
-  }.ensuring(res => res.isSound && res.type1 == prd.type1 && res.type2 == prd.type2)
+        EvalTypeReduction.concatWellFormed(step1, step2)
+        EvalTypeReduction.concatWellFormed(step1.concat(step2), ARS1Fold(EvalTypeReduction.AppAbsDerivation(AbsType(k, body2), arg2).toARSStep))
+        (step1.concat(step2)).concat(ARS1Fold(EvalTypeReduction.AppAbsDerivation(AbsType(k, body2), arg2).toARSStep))
+      case _ => ARSIdentity(BasicType(""))
+  }.ensuring(res => res.isValid && res.type1 == prd.type1 && res.type2 == prd.type2)
 
   def parallelToEval(prd: MultiStepParallelReduction): MultiStepEvalReduction = {
-    require(prd.isSound)
+    decreases(prd.size)
+    require(prd.isValid)
     prd match
-      case NilParallelReduction(t) => NilEvalReduction(t)
-      case ConsParallelReduction(h, t) => parallelToEval(h).concat(parallelToEval(t))
-  }.ensuring(res => res.isSound && res.type1 == prd.type1 && res.type2 == prd.type2)
+      case ARSIdentity(t) => ARSIdentity(t)
+      case ARSComposition(h, t) => 
+        EvalTypeReduction.concatWellFormed(parallelToEval(h.unfold), parallelToEval(t))
+        parallelToEval(h.unfold).concat(parallelToEval(t))
+  }.ensuring(res => res.isValid && res.type1 == prd.type1 && res.type2 == prd.type2)
 
   def evalToParallel(prd: EvalReductionDerivation): ParallelReductionDerivation = {
     require(prd.isSound)
-    prd match
+    (prd match
       case EvalTypeReduction.ArrowDerivationL(ArrowType(t11, t12), ArrowType(t21, t22), rd) => ParallelTypeReduction.ArrowDerivation(ArrowType(t11, t12), ArrowType(t21, t22), evalToParallel(rd), ParallelTypeReduction.ReflDerivation(t12))
       case EvalTypeReduction.ArrowDerivationR(ArrowType(t11, t12), ArrowType(t21, t22), rd) => ParallelTypeReduction.ArrowDerivation(ArrowType(t11, t12), ArrowType(t21, t22), ParallelTypeReduction.ReflDerivation(t11), evalToParallel(rd))
       case EvalTypeReduction.AppDerivationL(AppType(t11, t12), AppType(t21, t22), rd) => ParallelTypeReduction.AppDerivation(AppType(t11, t12), AppType(t21, t22), evalToParallel(rd), ParallelTypeReduction.ReflDerivation(t12))
       case EvalTypeReduction.AppDerivationR(AppType(t11, t12), AppType(t21, t22), rd) => ParallelTypeReduction.AppDerivation(AppType(t11, t12), AppType(t21, t22), ParallelTypeReduction.ReflDerivation(t11), evalToParallel(rd))
       case EvalTypeReduction.AbsDerivation(AbsType(k1, b1), AbsType(k2, b2), rd) => ParallelTypeReduction.AbsDerivation(AbsType(k1, b1), AbsType(k2, b2), evalToParallel(rd))
-      case EvalTypeReduction.AppAbsDerivation(abs, arg) => ParallelTypeReduction.AppAbsDerivation(abs, arg, abs.body, arg, ParallelTypeReduction.ReflDerivation(abs.body), ParallelTypeReduction.ReflDerivation(arg))
+      case EvalTypeReduction.AppAbsDerivation(abs, arg) => ParallelTypeReduction.AppAbsDerivation(abs, arg, abs.body, arg, ParallelTypeReduction.ReflDerivation(abs.body), ParallelTypeReduction.ReflDerivation(arg)))
     
   }.ensuring(res => res.isSound && res.type1 == prd.type1 && res.type2 == prd.type2)
 
   def evalToParallel(prd: MultiStepEvalReduction): MultiStepParallelReduction = {
-    require(prd.isSound)
+    decreases(prd.size)
+    require(prd.isValid)
     prd match
-      case NilEvalReduction(t) => NilParallelReduction(t)
-      case ConsEvalReduction(h, t) => ConsParallelReduction(evalToParallel(h), evalToParallel(t))
-  }.ensuring(res => res.isSound && res.type1 == prd.type1 && res.type2 == prd.type2 && prd.size == res.size)
+      case ARSIdentity(t) => ARSIdentity(t)
+      case ARSComposition(h, t) => ARSComposition(evalToParallel(h.unfold).toARSStep, evalToParallel(t))
+  }.ensuring(res => res.isValid && res.type1 == prd.type1 && res.type2 == prd.type2 && prd.size == res.size)
 }

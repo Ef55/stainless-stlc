@@ -14,8 +14,6 @@ import stainless.annotation._
 import LambdaOmega._
 import TypeTransformations._
 import TypeTransformationsProperties._
-import ARS._
-import ARSProperties._
 
 object ParallelTypeReduction{
   /**
@@ -77,12 +75,7 @@ object ParallelTypeReduction{
         case AppAbsDerivation(AbsType(argK, body1), arg1, body2, arg2, tt1, tt2) => 
           tt1.isSound && tt2.isSound && tt1.type1 == body1 && tt1.type2 == body2 &&
           tt2.type1 == arg1 && tt2.type2 == arg2 
-
-    def toARSStep: ParallelReductionStep = {
-      (this, type1, type2, isSound)
-    }.ensuring(_.isWellFormed)
   }
-
   /**
     * Parallel reduction rules as listed in TAPL Figure 30-3
     */
@@ -92,34 +85,68 @@ object ParallelTypeReduction{
   case class AppDerivation(t1: AppType, t2: AppType, ed: ParallelReductionDerivation, ed2: ParallelReductionDerivation) extends ParallelReductionDerivation
   case class AppAbsDerivation(abs1: AbsType, arg1: Type, body2: Type, arg2: Type , tt1: ParallelReductionDerivation, tt2: ParallelReductionDerivation) extends ParallelReductionDerivation
 
-  type ParallelReductionStep = ARSStep[Type, ParallelReductionDerivation]
-  type MultiStepParallelReduction = ARSKFoldComposition[Type, ParallelReductionDerivation]
+  /**
+    * Transitive and reflexive closure of parallel reduction relation also noted type1 =>* type2 (TAPL Chapter 30.3).
+    * ! In this implementation multistep reduction is represented as a list of parallel reduction steps and
+    * ! not as the closure of a relation.
+    * TODO Show the equivalence between the two representations.
+    */
+  sealed trait MultiStepParallelReduction{
 
-  extension (s: ParallelReductionStep){
-    def isWellFormed: Boolean = s.unfold.type1 == s.type1 && s.unfold.type2 == s.type2 && s.unfold.isSound == s.isSound
-    def isValid: Boolean = s.isSound && s.isWellFormed
+    /**
+      * Number of reduction steps in the list
+      */
+    def size: BigInt = {
+      this match 
+        case NilParallelReduction(_) => BigInt(0)
+        case ConsParallelReduction(_, tail) => tail.size + 1
+    }.ensuring(_ >= 0)
+
+    def type1: Type = 
+      this match
+        case NilParallelReduction(t) => t
+        case ConsParallelReduction(head, tail) => head.type1
+
+    def type2: Type = 
+      this match
+        case NilParallelReduction(t) => t
+        case ConsParallelReduction(head, tail) => tail.type2
+
+    /**
+      * Transitivity of multistep reduction
+      * * Short version: If T1 =>* T2 and T2 =>* T3 then T1 =>* T3
+      * 
+      * Long version:
+      * 
+      * Preconditions:
+      *   - this, the list of reduction steps witnessing T1  =>* T2 is sound
+      *   - prd2, the list of reduction steps witnessing T2' =>* T3 is sound
+      *   - T2 = T2'
+      * 
+      * Postconditions:
+      *   There exists a sound list of reduction steps witnessing T1 => T3*
+      */
+    def concat(prd2: MultiStepParallelReduction): MultiStepParallelReduction = {
+      this match
+        case NilParallelReduction(t) => prd2
+        case ConsParallelReduction(h, t) => ConsParallelReduction(h, t.concat(prd2))
+    }.ensuring(res =>
+      (isSound && prd2.isSound && type2 == prd2.type1) ==> (res.isSound && res.type1 == type1 && res.type2 == prd2.type2))
+
+    /**
+      * Returns whether the reduction is sound.
+      * Each step must be sound and the types of the reduction steps must coincide i.e. the list has to be of the form
+      * (Tn-1 => type2, Tn-2 => Tn-1, ..., T1 => T2, type1 => T1)
+      */
+    def isSound: Boolean = 
+      this match
+        case NilParallelReduction(_) => true
+        case ConsParallelReduction(head, tail) => head.isSound && tail.isSound && head.type2 == tail.type1
   }
 
-  extension (ms: MultiStepParallelReduction){
-    def isWellFormed: Boolean =
-      ms match
-        case ARSIdentity(t) => true
-        case ARSComposition(h, t) => h.isWellFormed && t.isWellFormed
-    def isValid: Boolean = {
-      ms.isSound && ms.isWellFormed  
-    }
-  }
+  case class NilParallelReduction(t: Type) extends MultiStepParallelReduction
+  case class ConsParallelReduction(head: ParallelReductionDerivation, tail: MultiStepParallelReduction) extends MultiStepParallelReduction
 
-  def concatWellFormed(@induct s1: MultiStepParallelReduction, s2: MultiStepParallelReduction): Unit = {
-    require(s1.isWellFormed)
-    require(s2.isWellFormed)
-  }.ensuring(_ => s1.concat(s2).isWellFormed)
-
-  def isValidInd(ms: MultiStepParallelReduction): Boolean = {
-    ms match
-        case ARSIdentity(t) => true
-        case ARSComposition(h, t) => h.isValid && isValidInd(t)
-  }.ensuring(_ == ms.isValid)
 
 
 }
@@ -430,25 +457,23 @@ object ParallelTypeReductionProperties {
     *     - The number of steps in T' =>* T42 is the same as T1 => T2
     * * The proof is constructive and returns this pair of list
     */
-  def semiConfluence(prd1: MultiStepParallelReduction, h2: ParallelReductionStep): (ParallelReductionStep, MultiStepParallelReduction) = {
-    decreases(prd1.size)
-    require(prd1.isValid)
-    require(h2.isValid)
+  def semiConfluence(prd1: MultiStepParallelReduction, h2: ParallelReductionDerivation): (ParallelReductionDerivation, MultiStepParallelReduction) = {
+    require(prd1.isSound)
+    require(h2.isSound)
     require(h2.type1 == prd1.type1)
 
     prd1 match
-      case ARSIdentity(t) => (h2, ARSIdentity(h2.type2))
-      case ARSComposition(h, t) =>
-        assert(h.isValid) //needed
-        val (dP1, dP2) = diamondProperty(h.unfold, h2.unfold)
-        val (conf1, conf2) = semiConfluence(t, dP1.toARSStep)
-        assert(dP2.toARSStep.isValid) //needed
-        (conf1, ARSComposition(dP2.toARSStep, conf2))
+      case NilParallelReduction(t) => (h2, NilParallelReduction(h2.type2))
+      case ConsParallelReduction(h, t) =>
+        val (dP1, dP2) = diamondProperty(h, h2)
+        val (conf1, conf2) = semiConfluence(t, dP1)
+        (conf1, ConsParallelReduction(dP2, conf2))
+
   }.ensuring(res =>
     res._1.type2 == res._2.type2 &&
     res._1.type1 == prd1.type2 &&
     res._2.type1 == h2.type2 &&
-    res._1.isValid && res._2.isValid &&
+    res._1.isSound && res._2.isSound &&
     res._2.size == prd1.size)
 
   /**
@@ -474,23 +499,23 @@ object ParallelTypeReductionProperties {
     */
   def confluence(prd1: MultiStepParallelReduction, prd2: MultiStepParallelReduction): (MultiStepParallelReduction, MultiStepParallelReduction) = {
     decreases(prd1.size + prd2.size)
-    require(prd1.isValid)
-    require(prd2.isValid)
+    require(prd1.isSound)
+    require(prd2.isSound)
     require(prd1.type1 == prd2.type1)
 
     (prd1, prd2) match
-      case (ARSIdentity(t1), ARSIdentity(t2)) => (ARSIdentity(t1), ARSIdentity(t1))
-      case (ARSIdentity(_), ARSComposition(head, tail)) => (ARSComposition(head, tail), ARSIdentity(prd2.type2))
-      case (ARSComposition(head, tail), ARSIdentity(_)) => (ARSIdentity(prd1.type2), ARSComposition(head, tail))
-      case (ARSComposition(head1, tail1), ARSComposition(head2, tail2)) =>
+      case (NilParallelReduction(t1), NilParallelReduction(t2)) => (NilParallelReduction(t1), NilParallelReduction(t1))
+      case (NilParallelReduction(_t), ConsParallelReduction(head, tail)) => (ConsParallelReduction(head, tail), NilParallelReduction(prd2.type2))
+      case (ConsParallelReduction(head, tail), NilParallelReduction(_)) => (NilParallelReduction(prd1.type2), ConsParallelReduction(head, tail))
+      case (ConsParallelReduction(head1, tail1), ConsParallelReduction(head2, tail2)) =>
         val (red11, prd12) = semiConfluence(prd1, head2)
         val (conf1, conf2) = confluence(prd12, tail2)
-        (ARSComposition(red11, conf1), conf2)
+        (ConsParallelReduction(red11, conf1), conf2)
   }.ensuring(res => 
     res._1.type2 == res._2.type2 &&
     res._1.type1 == prd1.type2 &&
     res._2.type1 == prd2.type2 &&
-    res._1.isValid && res._2.isValid &&
-    res._2.size == prd1.size && res._1.size == prd2.size 
+    res._1.isSound && res._2.isSound &&
+    res._2.size == prd1.size && res._1.size == prd2.size
   )
 }
