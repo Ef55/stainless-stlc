@@ -45,6 +45,18 @@ object ListProperties {
   }.ensuring(l1.filter(p) ++ l2.filter(p) == (l1 ++ l2).filter(p))
 
   @opaque @pure
+  def concatForall[T](@induct l1: List[T], l2: List[T], p: T => Boolean): Unit = {
+  }.ensuring(l1.forall(p) && l2.forall(p) == (l1 ++ l2).forall(p))
+
+  @opaque @pure
+  def concatContains[T](@induct l1: List[T], l2: List[T], e: T): Unit = {
+  }.ensuring(l1.contains(e) && l2.contains(e) == (l1 ++ l2).contains(e))
+
+  @opaque @pure
+  def mapContains[S, T](@induct l: List[S], f: S => T, e: S): Unit = {
+  }.ensuring(l.contains(e) == l.map(f).contains(f(e)))
+
+  @opaque @pure
   def mergeFilter[T](@induct l: List[T], p1: T => Boolean, p2: T => Boolean): Unit = {
   }.ensuring(l.filter(p1).filter(p2) == l.filter(x => p1(x) && p2(x)))
 

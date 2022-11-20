@@ -94,6 +94,8 @@ object ParallelTypeReduction{
 
   type ParallelReductionStep = ARSStep[Type, ParallelReductionDerivation]
   type MultiStepParallelReduction = ARSKFoldComposition[Type, ParallelReductionDerivation]
+  type ParallelEquivalence = ARSEquivalence[Type, ParallelReductionDerivation]
+  type ParallelEquivalenceSeq = ARSKFoldComposition[Type, ARSSymmStep[Type, ParallelReductionDerivation]]
 
   extension (s: ParallelReductionStep){
     def isWellFormed: Boolean = s.unfold.type1 == s.type1 && s.unfold.type2 == s.type2 && s.unfold.isSound == s.isSound
@@ -110,17 +112,61 @@ object ParallelTypeReduction{
     }
   }
 
+  extension (ms: ParallelEquivalence){
+    def isWellFormed: Boolean =
+      ms match
+        case ARSReflexivity(t) => true
+        case ARSBaseRelation(r) => r.isWellFormed
+        case ARSTransitivity(r1, r2) => r1.isWellFormed && r2.isWellFormed
+        case ARSSymmetry(r) => r.isWellFormed
+
+    def isValid: Boolean = {
+      ms.isSound && ms.isWellFormed  
+    }
+  }
+
+  extension (s: ARSSymmStep[Type, ParallelReductionDerivation]) {
+    def isDeepValid: Boolean = {
+      s match
+        case ARSBaseStepClass(s) => s.isValid
+        case ARSSymmStepClass(s) => s.isValid
+    }
+  }
+
+  extension (eq: ParallelEquivalenceSeq) {
+    def isDeepValid: Boolean =
+      decreases(eq.size)
+      eq match
+        case ARSIdentity(t) => true
+        case ARSComposition(h, t) => h.unfold.isDeepValid && t.isDeepValid
+  }
+
   def concatWellFormed(@induct s1: MultiStepParallelReduction, s2: MultiStepParallelReduction): Unit = {
     require(s1.isWellFormed)
     require(s2.isWellFormed)
   }.ensuring(_ => s1.concat(s2).isWellFormed)
 
+  def concatDeepValid(@induct s1: ParallelEquivalenceSeq, s2: ParallelEquivalenceSeq): Unit = {
+    require(s1.isDeepValid)
+    require(s2.isDeepValid  )
+  }.ensuring(_ => s1.concat(s2).isDeepValid)
+
+
   def isValidInd(ms: MultiStepParallelReduction): Boolean = {
+    decreases(ms.size)
     ms match
         case ARSIdentity(t) => true
-        case ARSComposition(h, t) => h.isValid && isValidInd(t)
+        case ARSComposition(h, t) => h.isValid && isValidInd(t) && h.type2 == t.type1
   }.ensuring(_ == ms.isValid)
 
+  def isValidInd(eq: ParallelEquivalence): Boolean = {
+    decreases(eq.size)
+    eq match
+      case ARSReflexivity(t) => true
+      case ARSBaseRelation(r) => r.isValid
+      case ARSTransitivity(r1, r2) => isValidInd(r1) && isValid(r2) && r1.type2 == r2.type1
+      case ARSSymmetry(r) => isValid(r)
+  }.ensuring(_ == eq.isValid)
 
 }
 
@@ -443,6 +489,7 @@ object ParallelTypeReductionProperties {
         val (dP1, dP2) = diamondProperty(h.unfold, h2.unfold)
         val (conf1, conf2) = semiConfluence(t, dP1.toARSStep)
         assert(dP2.toARSStep.isValid) //needed
+        isValidInd(ARSComposition(dP2.toARSStep, conf2))
         (conf1, ARSComposition(dP2.toARSStep, conf2))
   }.ensuring(res =>
     res._1.type2 == res._2.type2 &&
@@ -493,4 +540,84 @@ object ParallelTypeReductionProperties {
     res._1.isValid && res._2.isValid &&
     res._2.size == prd1.size && res._1.size == prd2.size 
   )
+
+  def churchRosser(eq: ParallelEquivalenceSeq): (MultiStepParallelReduction, MultiStepParallelReduction) = {
+    require(eq.isValid && eq.isDeepValid)
+    ARS.isValidInd(eq)
+
+    eq match
+      case ARSIdentity(t1) => (ARSIdentity(t1), ARSIdentity(t1))
+      case ARSComposition(h, t) => 
+        val (cr1, cr2) = churchRosser(t)
+        assert(h.isValid) //needed
+        h.unfold match
+          case ARSBaseStepClass(s) => 
+            isValidInd(cr1)
+            isValidInd(ARSComposition(s, cr1))
+            (ARSComposition(s, cr1), cr2)
+
+          case ARSSymmStepClass(s) => 
+            val (sc1, sc2) = semiConfluence(cr1, s)
+            concatWellFormed(cr2, ARS1Fold(sc1))
+            (sc2, cr2.concat(ARS1Fold(sc1)))
+
+  }.ensuring(res => 
+    res._1.type2 == res._2.type2 &&
+    res._1.type1 == eq.type1 &&
+    res._2.type1 == eq.type2 &&
+    res._1.isValid && res._2.isValid
+  )
+
+  def inverseDeepValid(@induct s: ARSSymmStep[Type, ParallelReductionDerivation]): Unit = {
+    require(s.isDeepValid)
+  }.ensuring(s.inverse.isDeepValid)
+
+  def symmClosureInverseDeepValid(eq: ParallelEquivalenceSeq): Unit = {
+    require(eq.isValid && eq.isDeepValid)
+    eq match
+      case ARSIdentity(_) => ()
+      case ARSComposition(h, t) =>
+        symmClosureInverseDeepValid(t)
+        inverseDeepValid(h.unfold)
+        assert(h.unfold.inverse.isDeepValid)
+        assert(ARS1Fold(h.unfold.inverse.toARSStep).isDeepValid)
+        concatDeepValid(symmClosureInverse(t), ARS1Fold(h.unfold.inverse.toARSStep))
+  }.ensuring(symmClosureInverse(eq).isDeepValid)
+
+  def equivalenceToSymmClosureDeepValid(eq: ParallelEquivalence): Unit ={
+    decreases(eq.size)
+    require(eq.isValid)
+    
+    isValidInd(eq)
+    eq match
+      case ARSReflexivity(t) => ()
+      case ARSSymmetry(r) => 
+        r match
+          case ARSSymmetry(r2) =>  equivalenceToSymmClosureDeepValid(r2)
+          case ARSTransitivity(r1, r2) => 
+            equivalenceToSymmClosureDeepValid(r2)
+            equivalenceToSymmClosureDeepValid(r1)
+            symmClosureInverseDeepValid(equivalenceToSymmClosure(r2))
+            symmClosureInverseDeepValid(equivalenceToSymmClosure(r1))
+            concatDeepValid(symmClosureInverse(equivalenceToSymmClosure(r2)), symmClosureInverse(equivalenceToSymmClosure(r1)))
+          case ARSReflexivity(t) => ()
+          case ARSBaseRelation(r2) => ()
+      case ARSTransitivity(r1, r2) => 
+        equivalenceToSymmClosureDeepValid(r2)
+        equivalenceToSymmClosureDeepValid(r1)
+        concatDeepValid(equivalenceToSymmClosure(r1), equivalenceToSymmClosure(r2))
+      case ARSBaseRelation(r) => ()
+  }.ensuring(equivalenceToSymmClosure(eq).isDeepValid)
+
+  def churchRosser(eq: ParallelEquivalence): (MultiStepParallelReduction, MultiStepParallelReduction) = {
+    require(eq.isValid)
+    equivalenceToSymmClosureDeepValid(eq)
+    churchRosser(equivalenceToSymmClosure(eq))
+
+  }.ensuring(res => 
+    res._1.type2 == res._2.type2 &&
+    res._1.type1 == eq.type1 &&
+    res._2.type1 == eq.type2 &&
+    res._1.isValid && res._2.isValid
+  ) 
 }

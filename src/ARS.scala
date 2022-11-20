@@ -40,15 +40,15 @@ object ARS {
   sealed trait ARSSymmStep[T, R]{
     def type1: T = this match
       case ARSBaseStepClass(s) => s.type1
-      case ARSSymmStepClass(s) => s.inverse.type1
+      case ARSSymmStepClass(s) => s.type2
     
     def type2: T = this match
       case ARSBaseStepClass(s) => s.type2
-      case ARSSymmStepClass(s) => s.inverse.type2
+      case ARSSymmStepClass(s) => s.type1
     
     def isSound: Boolean = this match
       case ARSBaseStepClass(s) => s.isSound
-      case ARSSymmStepClass(s) => s.inverse.isSound
+      case ARSSymmStepClass(s) => s.isSound
 
     def inverse: ARSSymmStep[T, R] = {
       this match
@@ -77,6 +77,12 @@ object ARS {
         case ARSComposition(h, t) => h.isWellFormed && t.isWellFormed  
     def isValid: Boolean = ms.isSound && ms.isWellFormed
   }
+
+  def isValidInd[T, R](ms: ARSKFoldComposition[T, ARSSymmStep[T, R]]) = {
+    ms match
+      case ARSIdentity(t) => true
+      case ARSComposition(h, t) => h.isValid && t.isValid && h.type2 == t.type1
+  }.ensuring(_ == ms.isValid)
 
   sealed trait ARSKFoldComposition[T, R]{
     def type1: T = this match

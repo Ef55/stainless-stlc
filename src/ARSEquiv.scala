@@ -63,6 +63,18 @@ object ARSEquivalences{
         parallelToEval(h.unfold).concat(parallelToEval(t))
   }.ensuring(res => res.isValid && res.type1 == prd.type1 && res.type2 == prd.type2)
 
+  def parallelToEval(prd: ParallelEquivalence): EvalEquivalence = {
+    decreases(prd.size)
+    require(prd.isValid)
+    prd match
+      case ARSReflexivity(t) => ARSReflexivity(t)
+      case ARSSymmetry(r) => ARSSymmetry(parallelToEval(r))
+      case ARSTransitivity(r1, r2) => ARSTransitivity(parallelToEval(r1), parallelToEval(r2))
+      case ARSBaseRelation(r) =>
+        toReflTransWellFormed(parallelToEval(r.unfold))
+        parallelToEval(r.unfold).toReflTrans
+  }.ensuring(res => res.isValid && res.type1 == prd.type1 && res.type2 == prd.type2)
+
   def evalToParallel(prd: EvalReductionDerivation): ParallelReductionDerivation = {
     require(prd.isSound)
     (prd match
@@ -82,4 +94,14 @@ object ARSEquivalences{
       case ARSIdentity(t) => ARSIdentity(t)
       case ARSComposition(h, t) => ARSComposition(evalToParallel(h.unfold).toARSStep, evalToParallel(t))
   }.ensuring(res => res.isValid && res.type1 == prd.type1 && res.type2 == prd.type2 && prd.size == res.size)
+
+  def evalToParallel(prd: EvalEquivalence): ParallelEquivalence = {
+    decreases(prd.size)
+    require(prd.isValid)
+    prd match
+      case ARSReflexivity(t) => ARSReflexivity(t)
+      case ARSSymmetry(r) => ARSSymmetry(evalToParallel(r))
+      case ARSTransitivity(r1, r2) => ARSTransitivity(evalToParallel(r1), evalToParallel(r2))
+      case ARSBaseRelation(r) => ARSBaseRelation(evalToParallel(r.unfold).toARSStep)
+  }.ensuring(res => res.isValid && res.type1 == prd.type1 && res.type2 == prd.type2)
 }

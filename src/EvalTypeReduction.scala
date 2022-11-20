@@ -91,15 +91,139 @@ object EvalTypeReduction{
   case class AppDerivationR(t1: AppType, t2: AppType, rd: EvalReductionDerivation) extends EvalReductionDerivation
   case class AppAbsDerivation(abs: AbsType, arg: Type) extends EvalReductionDerivation
 
-  /**
-    * Transitive and reflexive closure of parallel reduction relation also noted type1 =>* type2 (TAPL Chapter 30.3).
-    * ! In this implementation multistep reduction is represented as a list of parallel reduction steps and
-    * ! not as the closure of a relation.
-    * TODO Show the equivalence between the two representations.
-    */
+  def reduce(t: Type): List[EvalReductionDerivation] = {
+    t match
+      case BasicType(_) => Nil()
+      case VariableType(_) => Nil()
+      case abs@AbsType(k, b) => reduce(b).map(b2 => AbsDerivation(abs, AbsType(k, b2.type2), b2))
+      case arr@ArrowType(t1, t2) => 
+        val l1: List[EvalReductionDerivation] = reduce(t1).map(t1d => ArrowDerivationL(arr, ArrowType(t1d.type2, t2), t1d))
+        val l2: List[EvalReductionDerivation] = reduce(t2).map(t2d => ArrowDerivationR(arr, ArrowType(t1, t2d.type2), t2d))
+        l1 ++ l2
+      case app@AppType(t1, t2) =>
+        val l1: List[EvalReductionDerivation] = reduce(t1).map(t1d => AppDerivationL(app, AppType(t1d.type2, t2), t1d))
+        val l2: List[EvalReductionDerivation] = reduce(t2).map(t2d => AppDerivationR(app, AppType(t1, t2d.type2), t2d))
+        val l3: List[EvalReductionDerivation] = t1 match
+          case abs@AbsType(k, b) =>
+            Cons(AppAbsDerivation(abs, t2), Nil())
+          case _ => Nil()
+        (l1 ++ l2) ++ l3
+  }
+
+  def reduceSoundnessLemmaAbs(@induct l: List[EvalReductionDerivation], k: Kind, b: Type): Unit = {
+    require(l.forall(_.isSound))
+    require(l.forall(_.type1 == b))
+  }.ensuring(l.forall(b2 => AbsDerivation(AbsType(k, b), AbsType(k, b2.type2), b2).isSound) &&
+             l.forall(b2 => AbsDerivation(AbsType(k, b), AbsType(k, b2.type2), b2).type1 == AbsType(k, b)))
+
+  def reduceSoundnessLemmaArrL(@induct l: List[EvalReductionDerivation], t1: Type, t2: Type): Unit = {
+    require(l.forall(_.isSound))
+    require(l.forall(_.type1 == t1))
+  }.ensuring(l.forall(t1d => ArrowDerivationL(ArrowType(t1, t2), ArrowType(t1d.type2, t2), t1d).isSound) &&
+             l.forall(t1d => ArrowDerivationL(ArrowType(t1, t2), ArrowType(t1d.type2, t2), t1d).type1 == ArrowType(t1, t2)))
+
+  def reduceSoundnessLemmaArrR(@induct l: List[EvalReductionDerivation], t1: Type, t2: Type): Unit = {
+    require(l.forall(_.isSound))
+    require(l.forall(_.type1 == t2))
+  }.ensuring(l.forall(t2d => ArrowDerivationR(ArrowType(t1, t2), ArrowType(t1, t2d.type2), t2d).isSound) &&
+             l.forall(t2d => ArrowDerivationR(ArrowType(t1, t2), ArrowType(t1, t2d.type2), t2d).type1 == ArrowType(t1, t2)))
+
+  def reduceSoundnessLemmaAppL(@induct l: List[EvalReductionDerivation], t1: Type, t2: Type): Unit = {
+    require(l.forall(_.isSound))
+    require(l.forall(_.type1 == t1))
+  }.ensuring(l.forall(t1d => AppDerivationL(AppType(t1, t2), AppType(t1d.type2, t2), t1d).isSound) &&
+             l.forall(t1d => AppDerivationL(AppType(t1, t2), AppType(t1d.type2, t2), t1d).type1 == AppType(t1, t2)))
+
+  def reduceSoundnessLemmaAppR(@induct l: List[EvalReductionDerivation], t1: Type, t2: Type): Unit = {
+    require(l.forall(_.isSound))
+    require(l.forall(_.type1 == t2))
+  }.ensuring(l.forall(t2d => AppDerivationR(AppType(t1, t2), AppType(t1, t2d.type2), t2d).isSound) &&
+             l.forall(t2d => AppDerivationR(AppType(t1, t2), AppType(t1, t2d.type2), t2d).type1 == AppType(t1, t2)))
+
+  def reduceSoundness(t: Type): Unit = {
+    t match
+      case BasicType(_) => ()
+      case VariableType(_) => ()
+      case abs@AbsType(k, b) => 
+        reduceSoundness(b)
+        reduceSoundnessLemmaAbs(reduce(b), k, b)
+        ListSpecs.mapPred[EvalReductionDerivation, EvalReductionDerivation](reduce(b), (b2: EvalReductionDerivation) => AbsDerivation(abs, AbsType(k, b2.type2), b2), (r: EvalReductionDerivation) => r.isSound)
+        ListSpecs.mapPred[EvalReductionDerivation, EvalReductionDerivation](reduce(b), (b2: EvalReductionDerivation) => AbsDerivation(abs, AbsType(k, b2.type2), b2), (r: EvalReductionDerivation) => r.type1 == t)
+
+        assert(reduce(b).map((b2: EvalReductionDerivation) => AbsDerivation(abs, AbsType(k, b2.type2), b2)).forall((r: EvalReductionDerivation) => r.isSound))
+      case arr@ArrowType(t1, t2) => 
+        reduceSoundness(t1)
+        reduceSoundness(t2)
+        reduceSoundnessLemmaArrL(reduce(t1), t1, t2)
+        reduceSoundnessLemmaArrR(reduce(t2), t1, t2)
+        ListSpecs.mapPred[EvalReductionDerivation, EvalReductionDerivation](reduce(t1), (t1d: EvalReductionDerivation) => ArrowDerivationL(arr, ArrowType(t1d.type2, t2), t1d), (r: EvalReductionDerivation) => r.isSound)
+        ListSpecs.mapPred[EvalReductionDerivation, EvalReductionDerivation](reduce(t1), (t1d: EvalReductionDerivation) => ArrowDerivationL(arr, ArrowType(t1d.type2, t2), t1d), (r: EvalReductionDerivation) => r.type1 == t)
+        ListSpecs.mapPred[EvalReductionDerivation, EvalReductionDerivation](reduce(t2), (t2d: EvalReductionDerivation) => ArrowDerivationR(arr, ArrowType(t1, t2d.type2), t2d), (r: EvalReductionDerivation) => r.isSound)
+        ListSpecs.mapPred[EvalReductionDerivation, EvalReductionDerivation](reduce(t2), (t2d: EvalReductionDerivation) => ArrowDerivationR(arr, ArrowType(t1, t2d.type2), t2d), (r: EvalReductionDerivation) => r.type1 == t)
+        val l1: List[EvalReductionDerivation] = reduce(t1).map((t1d: EvalReductionDerivation) => ArrowDerivationL(arr, ArrowType(t1d.type2, t2), t1d))
+        val l2: List[EvalReductionDerivation] = reduce(t2).map((t2d: EvalReductionDerivation) => ArrowDerivationR(arr, ArrowType(t1, t2d.type2), t2d))
+        ListProperties.concatForall[EvalReductionDerivation](l1, l2, (r: EvalReductionDerivation) => r.isSound)
+        ListProperties.concatForall[EvalReductionDerivation](l1, l2, (r: EvalReductionDerivation) => r.type1 == t)
+
+      case app@AppType(t1, t2) =>
+        reduceSoundness(t1)
+        reduceSoundness(t2)
+        reduceSoundnessLemmaAppL(reduce(t1), t1, t2)
+        reduceSoundnessLemmaAppR(reduce(t2), t1, t2)
+        ListSpecs.mapPred[EvalReductionDerivation, EvalReductionDerivation](reduce(t1), (t1d: EvalReductionDerivation) => AppDerivationL(app, AppType(t1d.type2, t2), t1d), (r: EvalReductionDerivation) => r.isSound)
+        ListSpecs.mapPred[EvalReductionDerivation, EvalReductionDerivation](reduce(t1), (t1d: EvalReductionDerivation) => AppDerivationL(app, AppType(t1d.type2, t2), t1d), (r: EvalReductionDerivation) => r.type1 == t)
+        ListSpecs.mapPred[EvalReductionDerivation, EvalReductionDerivation](reduce(t2), (t2d: EvalReductionDerivation) => AppDerivationR(app, AppType(t1, t2d.type2), t2d), (r: EvalReductionDerivation) => r.isSound)
+        ListSpecs.mapPred[EvalReductionDerivation, EvalReductionDerivation](reduce(t2), (t2d: EvalReductionDerivation) => AppDerivationR(app, AppType(t1, t2d.type2), t2d), (r: EvalReductionDerivation) => r.type1 == t)
+        val l1: List[EvalReductionDerivation] = reduce(t1).map((t1d: EvalReductionDerivation) => AppDerivationL(app, AppType(t1d.type2, t2), t1d))
+        val l2: List[EvalReductionDerivation] = reduce(t2).map((t2d: EvalReductionDerivation) => AppDerivationR(app, AppType(t1, t2d.type2), t2d))
+        ListProperties.concatForall[EvalReductionDerivation](l1, l2, (r: EvalReductionDerivation) => r.isSound)
+        ListProperties.concatForall[EvalReductionDerivation](l1, l2, (r: EvalReductionDerivation) => r.type1 == t)
+        val l3: List[EvalReductionDerivation] = t1 match
+          case abs@AbsType(k, b) =>
+            Cons(AppAbsDerivation(abs, t2), Nil())
+          case _ => Nil()
+        assert((l1 ++ l2).forall((r: EvalReductionDerivation) => r.isSound))
+        assert((l1 ++ l2).forall((r: EvalReductionDerivation) => r.type1 == t))
+        ListProperties.concatForall[EvalReductionDerivation](l1 ++ l2, l3, (r: EvalReductionDerivation) => r.isSound)
+        ListProperties.concatForall[EvalReductionDerivation](l1 ++ l2, l3, (r: EvalReductionDerivation) => r.type1 == t)
+        t1 match
+          case abs@AbsType(k, b) =>
+            assert((Cons(AppAbsDerivation(abs, t2), Nil())).forall((r: EvalReductionDerivation) => r.isSound))
+            assert((Cons(AppAbsDerivation(abs, t2), Nil())).forall((r: EvalReductionDerivation) => r.type1 == t))
+          case _ => ()
+        
+  }.ensuring(reduce(t).forall((r: EvalReductionDerivation) => r.isSound) && reduce(t).forall((r: EvalReductionDerivation) => r.type1 == t))
+
+  def reduceCompleteness(r: EvalReductionDerivation): Unit = {
+    require(r.isSound)
+    
+    r match
+      case ArrowDerivationL(ArrowType(t11, t12), ArrowType(t21, t22), rd) => 
+        reduceCompleteness(rd)
+        ListProperties.mapContains(reduce(t11), (t1d: EvalReductionDerivation) => ArrowDerivationL(ArrowType(t11, t12), ArrowType(t1d.type2, t12), t1d), rd)
+        val l1: List[EvalReductionDerivation] = reduce(t11).map(t1d => ArrowDerivationL(ArrowType(t11, t12), ArrowType(t1d.type2, t12), t1d))
+        val l2: List[EvalReductionDerivation] = reduce(t12).map(t2d => ArrowDerivationR(ArrowType(t11, t12), ArrowType(t11, t2d.type2), t2d))
+        ListProperties.concatContains(l1, l2, r)
+
+        //rd.isSound && rd.type1 == t11 && rd.type2 == t21 && t12 == t22
+      case ArrowDerivationR(ArrowType(t11, t12), ArrowType(t21, t22), rd) =>
+        reduceCompleteness(rd)
+        //rd.isSound && rd.type1 == t12 && rd.type2 == t22 && t11 == t21
+      case AbsDerivation(AbsType(k1, b1), AbsType(k2, b2), rd) => 
+        reduceCompleteness(rd)
+        //rd.isSound && rd.type1 == b1 && rd.type2 == b2 && k1 == k2
+      case AppDerivationL(AppType(t11, t12), AppType(t21, t22), rd) =>
+        reduceCompleteness(rd)
+        //rd.isSound && rd.type1 == t11 && rd.type2 == t21 && t12 == t22
+      case AppDerivationR(AppType(t11, t12), AppType(t21, t22), rd) =>
+        reduceCompleteness(rd)
+        //rd.isSound && rd.type1 == t12 && rd.type2 == t22 && t11 == t21
+      case AppAbsDerivation(_, _) => ()
+  }.ensuring(reduce(r.type1).contains(r))
 
   type EvalReductionStep = ARSStep[Type, EvalReductionDerivation]
   type MultiStepEvalReduction = ARSKFoldComposition[Type, EvalReductionDerivation]
+  type EvalEquivalence = ARSEquivalence[Type, EvalReductionDerivation]
 
   extension (s: EvalReductionStep){
     def isWellFormed: Boolean = s.unfold.type1 == s.type1 && s.unfold.type2 == s.type2 && s.unfold.isSound == s.isSound
@@ -111,10 +235,21 @@ object EvalTypeReduction{
       ms match
         case ARSIdentity(t) => true
         case ARSComposition(h, t) => h.isWellFormed && t.isWellFormed
-    def isValid: Boolean = 
+    def isValid: Boolean = ms.isSound && ms.isWellFormed
+  }
+
+  extension (ms: EvalEquivalence){
+    def isWellFormed: Boolean =
+      decreases(ms.size)
       ms match
-        case ARSIdentity(t) => true
-        case ARSComposition(h, t) => h.isValid && t.isValid
+        case ARSReflexivity(t) => true
+        case ARSBaseRelation(r) => r.isWellFormed
+        case ARSTransitivity(r1, r2) => r1.isWellFormed && r2.isWellFormed
+        case ARSSymmetry(r) => r.isWellFormed
+
+    def isValid: Boolean = {
+      ms.isSound && ms.isWellFormed  
+    }
   }
 
   def concatWellFormed(@induct s1: MultiStepEvalReduction, s2: MultiStepEvalReduction): Unit = {
@@ -122,10 +257,15 @@ object EvalTypeReduction{
     require(s2.isWellFormed)
   }.ensuring(_ => s1.concat(s2).isWellFormed)
 
-  def concatIsValid(@induct s1: MultiStepEvalReduction, s2: MultiStepEvalReduction): Unit = {
-    require(s1.isValid)
-    require(s2.isValid)
-  }.ensuring(_ => s1.concat(s2).isValid)
+  def toReflTransWellFormed(@induct ms: MultiStepEvalReduction): Unit = {
+    require(ms.isWellFormed)
+  }.ensuring(_ => ms.toReflTrans.isWellFormed)
+
+  def isValidInd(ms: MultiStepEvalReduction): Boolean = {
+    ms match
+        case ARSIdentity(t) => true
+        case ARSComposition(h, t) => h.isValid && isValidInd(t) && h.type2 == t.type1
+  }.ensuring(_ == ms.isValid)
 
 }
 
@@ -214,4 +354,18 @@ object EvalTypeReductionConfluence {
     res._2.type1 == prd2.type2 &&
     res._1.isValid && res._2.isValid
   )
+
+  def churchRosser(eq: EvalEquivalence): (MultiStepEvalReduction, MultiStepEvalReduction) = {
+    require(eq.isValid)
+
+    val res = ParallelTypeReductionProperties.churchRosser(evalToParallel(eq))
+    (parallelToEval(res._1), parallelToEval(res._2))
+
+  }.ensuring(res => 
+    res._1.type2 == res._2.type2 &&
+    res._1.type1 == eq.type1 &&
+    res._2.type1 == eq.type2 &&
+    res._1.isValid && res._2.isValid
+  ) 
 }
+
