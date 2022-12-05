@@ -1,69 +1,76 @@
-// import stainless.lang._
-// import stainless.collection._
-// import stainless.annotation._
-// import stainless.proof._
+import stainless.lang._
+import stainless.collection._
+import stainless.annotation._
+import stainless.proof._
 
-// object Typing {
-//   import STLC._
-//   import Reduction._
-//   import Transformations._
 
-//   sealed trait TypeDerivation {
+import LambdaOmega._
+import Kinding._
+import ParallelTypeReduction._
 
-//     def env: TypeEnvironment = this match {
-//       case VarDerivation(e, _, _) => e
-//       case AbsDerivation(e, _, _, _) => e
-//       case AppDerivation(e, _, _, _, _) => e
-//       case FixDerivation(e, _, _, _) => e
-//     }
 
-//     def t: Type = this match {
-//       case VarDerivation(_, t, _) => t
-//       case AbsDerivation(_, t, _, _) => t
-//       case AppDerivation(_, t, _, _, _) => t
-//       case FixDerivation(_, t, _, _) => t
-//     }
+object Typing {
 
-//     def term: Term = this match{
-//       case VarDerivation(_, _, term) => term
-//       case AbsDerivation(_, _, term, _) => term
-//       case AppDerivation(_, _, term, _, _) => term
-//       case FixDerivation(_, _, term, _) => term
-//     }
+  import ARS._
 
-//     def isSound: Boolean = {
-//       this match{
-//         case VarDerivation(env, t, Var(k)) => {
-//           (k < env.size) && // Variable in environment
-//           env(k) == t       // and has the correct type
-//         }
-//         case AbsDerivation(env, ArrowType(typ1, typ2), Abs(typ, body), btd) => {
-//           btd.isSound && // Premise is valid,
-//           btd.term == body && btd.env == typ :: env && // and has matching attributes
-//           typ == typ1 && btd.t == typ2 // Types are correct
-//         }
-//         case AbsDerivation(_ ,_, _, _) => false // An abstraction should always have an arrow type...
-//         case AppDerivation(env, t, App(t1, t2), btd1, btd2) => {
-//           btd1.isSound && btd2.isSound && // Premises are valid
-//           btd1.term == t1 && btd2.term == t2 && btd1.env == env && btd2.env == env && // and have matching attributes
-//           btd1.t == ArrowType(btd2.t, t) // The body has expected type
-//         }
-//         case FixDerivation(env, t, Fix(f), ftd) => {
-//           ftd.isSound && // Premise is valid
-//           ftd.term == f && ftd.env == env && // and has matching attributes
-//           ftd.t == ArrowType(t, t) // Fixed term is a function
-//         }
-//       }
-//     }
+  sealed trait TypeDerivation {
+
+    def env: TypeEnvironment = this match {
+      case VarDerivation(e, _, _) => e
+      case AbsDerivation(e, _, _, _, _) => e
+      case AppDerivation(e, _, _, _, _) => e
+      case EquivDerivation(e, _, _, _, _, _) => e
+    }
+
+    def t: Type = this match {
+      case VarDerivation(_, t, _) => t
+      case AbsDerivation(_, t, _, _, _) => t
+      case AppDerivation(_, t, _, _, _) => t
+      case EquivDerivation(_, t, _, _, _, _) => t
+    }
+
+    def term: Term = this match{
+      case VarDerivation(_, _, term) => term
+      case AbsDerivation(_, _, term, _, _) => term
+      case AppDerivation(_, _, term, _, _) => term
+      case EquivDerivation(_, _, term, _, _, _) => term
+    }
+
+    def isSound: Boolean = {
+      this match{
+        case VarDerivation(env, t, Var(k)) => {
+          (k < env.size) && // Variable in environment
+          env(k) == t       // and has the correct type
+        }
+        case AbsDerivation(env, ArrowType(typ1, typ2), Abs(typ, body), kd, btd) => {
+          btd.isSound && // Premise is valid,
+          btd.term == body && btd.env == typ :: env && // and has matching attributes
+          typ == typ1 && btd.t == typ2 && // Types are correct
+          kd.isSound && kd.typ == typ1 && kd.k == ProperKind && kd.env == Nil()
+        }
+        case AbsDerivation(_ ,_, _, _, _) => false // An abstraction should always have an arrow type...
+        case AppDerivation(env, t, App(t1, t2), btd1, btd2) => {
+          btd1.isSound && btd2.isSound && // Premises are valid
+          btd1.term == t1 && btd2.term == t2 && btd1.env == env && btd2.env == env && // and have matching attributes
+          btd1.t == ArrowType(btd2.t, t) // The body has expected type
+        }
+        case EquivDerivation(env, typ, ter, td, eq, kd) => {
+          td.isSound && eq.isValid && kd.isSound && // Premise is valid
+          td.env == env && td.term == ter && // and has matching attributes
+          eq.type1 == td.t && eq.type2 == typ &&
+          kd.env == Nil() && kd.typ == typ && kd.k == ProperKind
+        }
+      }
+    }
     
-//     def ===(that: TypeDerivation): Boolean = {
-//       this.t == that.t && this.env == that.env
-//     }
-//   }
-//   case class VarDerivation(e: TypeEnvironment, typ: Type, ter: Var) extends TypeDerivation
-//   case class AbsDerivation(e: TypeEnvironment, typ: Type, ter: Abs, btd: TypeDerivation) extends TypeDerivation
-//   case class AppDerivation(e: TypeEnvironment, typ: Type, ter: App, btd1: TypeDerivation, btd2: TypeDerivation) extends TypeDerivation
-//   case class FixDerivation(e: TypeEnvironment, typ: Type, ter: Fix, ftd: TypeDerivation) extends TypeDerivation
+    def ===(that: TypeDerivation): Boolean = {
+      this.t == that.t && this.env == that.env
+    }
+  }
+  case class VarDerivation(e: TypeEnvironment, typ: Type, ter: Var) extends TypeDerivation
+  case class AbsDerivation(e: TypeEnvironment, typ: Type, ter: Abs, kd: KindDerivation, btd: TypeDerivation) extends TypeDerivation
+  case class AppDerivation(e: TypeEnvironment, typ: Type, ter: App, btd1: TypeDerivation, btd2: TypeDerivation) extends TypeDerivation
+  case class EquivDerivation(e: TypeEnvironment, typ: Type, ter: Term, td: TypeDerivation, eq: ParallelEquivalence, kd: KindDerivation) extends TypeDerivation
 
 //   def deriveType(env: TypeEnvironment, t: Term): Option[TypeDerivation] = {
 //     t match {
@@ -105,16 +112,15 @@
 //     deriveType(Nil(), t)
 //   }
 
-//  }
+}
 
 
-// object TypingProperties {
-//   import STLC._
-//   import Typing._
+object TypingProperties {
+  import Typing._
 //   import Reduction._  
 //   import Transformations.{ Terms => TermTr}
 
-//   import ListProperties._
+  import ListProperties._
 //   import STLCProperties.{ Terms => TermProp}
 //   import ReductionProperties._
 //   import TransformationsProperties.{ Terms => TermTrProp}
@@ -175,36 +181,35 @@
 //   }.ensuring(reduceCallByValue(t).isDefined || t.isValue)
 
 
-//   /// Preservation
+  /// Preservation
 
-//   @opaque @pure
-//   def environmentWeakening(td: TypeDerivation, envExt: TypeEnvironment): TypeDerivation = {
-//     require(td.isSound)
-//     td match {
-//       case VarDerivation(env, typ, Var(k)) => {
-//         concatFirstIndexing(env, envExt, k)
-//         VarDerivation(env ++ envExt, typ, Var(k))
-//       }
-//       case AbsDerivation(env, typ, Abs(argType, body), btd) => {
-//         val resBtd = environmentWeakening(btd, envExt)
-//         AbsDerivation(env ++ envExt, typ, Abs(argType, body), resBtd)
-//       }
-//       case AppDerivation(env, typ, App(t1, t2), bt1, bt2) => {
-//         val resBt1 = environmentWeakening(bt1, envExt)
-//         val resBt2 = environmentWeakening(bt2, envExt)
-//         AppDerivation(env ++ envExt, typ, App(t1, t2), resBt1, resBt2)
-//       }
-//       case FixDerivation(env, typ, Fix(f), ftd) => {
-//         val resFtd = environmentWeakening(ftd, envExt)
-//         FixDerivation(env ++ envExt, typ, Fix(f), resFtd)
-//       }
-//     }
-//   }.ensuring(res => 
-//     res.isSound && 
-//     ( res.env == td.env ++ envExt ) && 
-//     ( res.term == td.term ) && 
-//     ( res.t == td.t )
-//   )
+  @opaque @pure
+  def environmentWeakening(td: TypeDerivation, envExt: TypeEnvironment): TypeDerivation = {
+    require(td.isSound)
+    td match 
+      case VarDerivation(env, typ, Var(k)) => 
+        concatFirstIndexing(env, envExt, k)
+        VarDerivation(env ++ envExt, typ, Var(k))
+
+      case AbsDerivation(env, typ, Abs(argType, body), kd, btd) => 
+        val resBtd = environmentWeakening(btd, envExt)
+        AbsDerivation(env ++ envExt, typ, Abs(argType, body), kd, resBtd)
+      
+      case AppDerivation(env, typ, App(t1, t2), bt1, bt2) => 
+        val resBt1 = environmentWeakening(bt1, envExt)
+        val resBt2 = environmentWeakening(bt2, envExt)
+        AppDerivation(env ++ envExt, typ, App(t1, t2), resBt1, resBt2)
+
+      case EquivDerivation(env, typ, ter, td, eq, kd) => 
+        val resTd = environmentWeakening(td, envExt)
+        EquivDerivation(env ++ envExt, typ, ter, resTd, eq, kd)
+
+  }.ensuring(res => 
+    res.isSound && 
+    res.env == td.env ++ envExt && 
+    res.term == td.term && 
+    res.t == td.t
+  )
 
 //   @opaque @pure
 //   def variableEnvironmentStrengthening(v: VarDerivation, env: TypeEnvironment, envExt: TypeEnvironment): TypeDerivation = {
@@ -497,4 +502,4 @@
 //     ( res === td )
 //   )
 
-// }
+}

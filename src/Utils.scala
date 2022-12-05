@@ -7,6 +7,7 @@ object ListProperties {
 
   @opaque @pure
   def insertionIndexing[T](l1: List[T], l2: List[T], elem: T, k: BigInt): Unit = {
+    decreases(l1.length)
     require(k < l1.size + l2.size)
     require(k >= l1.size)
     l1 match{
@@ -18,6 +19,7 @@ object ListProperties {
 
   @opaque @pure
   def concatSecondIndexing[T](l1: List[T], l2: List[T], k: BigInt): Unit = {
+    decreases(l1.length)
     require(k >= l1.size)
     require(k < l1.size + l2.size)
     l1 match{
@@ -46,15 +48,26 @@ object ListProperties {
 
   @opaque @pure
   def concatForall[T](@induct l1: List[T], l2: List[T], p: T => Boolean): Unit = {
-  }.ensuring(l1.forall(p) && l2.forall(p) == (l1 ++ l2).forall(p))
+    require(l1.forall(p))
+    require(l2.forall(p))
+  }.ensuring((l1 ++ l2).forall(p))
 
   @opaque @pure
   def concatContains[T](@induct l1: List[T], l2: List[T], e: T): Unit = {
-  }.ensuring(l1.contains(e) && l2.contains(e) == (l1 ++ l2).contains(e))
+  }.ensuring(l1.contains(e) || l2.contains(e) == (l1 ++ l2).contains(e))
 
   @opaque @pure
-  def mapContains[S, T](@induct l: List[S], f: S => T, e: S): Unit = {
-  }.ensuring(l.contains(e) == l.map(f).contains(f(e)))
+  def mapContains[S, T](l: List[S], f: S => T, e: S): Unit = {
+    decreases(l.length)
+    require(l.contains(e))
+    l match
+      case Nil() => ()
+      case Cons(h, t) => 
+        if h == e then
+          ()
+        else
+          mapContains(t, f, e)
+  }.ensuring(l.map(f).contains(f(e)))
 
   @opaque @pure
   def mergeFilter[T](@induct l: List[T], p1: T => Boolean, p2: T => Boolean): Unit = {
@@ -144,6 +157,12 @@ object BigIntListProperties{
   }.ensuring(l.filter(x => a <= x && x < b) == l.filter(a <= _).filter(_ < b))
 
 }
+
+def Unreacheable: Nothing = {
+  require(false)
+  ???
+}
+
 
 object OptionProperties {
   

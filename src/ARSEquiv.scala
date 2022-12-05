@@ -50,8 +50,8 @@ object ARSEquivalences{
         EvalTypeReduction.concatWellFormed(step1, step2)
         EvalTypeReduction.concatWellFormed(step1.concat(step2), ARS1Fold(EvalTypeReduction.AppAbsDerivation(AbsType(k, body2), arg2).toARSStep))
         (step1.concat(step2)).concat(ARS1Fold(EvalTypeReduction.AppAbsDerivation(AbsType(k, body2), arg2).toARSStep))
-      case _ => ARSIdentity(BasicType(""))
-  }.ensuring(res => res.isValid && res.type1 == prd.type1 && res.type2 == prd.type2)
+      case _ => Unreacheable
+  }.ensuring(res => res.isValid && res.t1 == prd.type1 && res.t2 == prd.type2)
 
   def parallelToEval(prd: MultiStepParallelReduction): MultiStepEvalReduction = {
     decreases(prd.size)
@@ -61,7 +61,7 @@ object ARSEquivalences{
       case ARSComposition(h, t) => 
         EvalTypeReduction.concatWellFormed(parallelToEval(h.unfold), parallelToEval(t))
         parallelToEval(h.unfold).concat(parallelToEval(t))
-  }.ensuring(res => res.isValid && res.type1 == prd.type1 && res.type2 == prd.type2)
+  }.ensuring(res => res.isValid && res.t1 == prd.t1 && res.t2 == prd.t2)
 
   def parallelToEval(prd: ParallelEquivalence): EvalEquivalence = {
     decreases(prd.size)
@@ -73,7 +73,7 @@ object ARSEquivalences{
       case ARSBaseRelation(r) =>
         toReflTransWellFormed(parallelToEval(r.unfold))
         parallelToEval(r.unfold).toReflTrans
-  }.ensuring(res => res.isValid && res.type1 == prd.type1 && res.type2 == prd.type2)
+  }.ensuring(res => res.isValid && res.t1 == prd.t1 && res.t2 == prd.t2)
 
   def evalToParallel(prd: EvalReductionDerivation): ParallelReductionDerivation = {
     require(prd.isSound)
@@ -93,7 +93,7 @@ object ARSEquivalences{
     prd match
       case ARSIdentity(t) => ARSIdentity(t)
       case ARSComposition(h, t) => ARSComposition(evalToParallel(h.unfold).toARSStep, evalToParallel(t))
-  }.ensuring(res => res.isValid && res.type1 == prd.type1 && res.type2 == prd.type2 && prd.size == res.size)
+  }.ensuring(res => res.isValid && res.t1 == prd.t1 && res.t2 == prd.t2 && prd.size == res.size)
 
   def evalToParallel(prd: EvalEquivalence): ParallelEquivalence = {
     decreases(prd.size)
@@ -103,5 +103,5 @@ object ARSEquivalences{
       case ARSSymmetry(r) => ARSSymmetry(evalToParallel(r))
       case ARSTransitivity(r1, r2) => ARSTransitivity(evalToParallel(r1), evalToParallel(r2))
       case ARSBaseRelation(r) => ARSBaseRelation(evalToParallel(r.unfold).toARSStep)
-  }.ensuring(res => res.isValid && res.type1 == prd.type1 && res.type2 == prd.type2)
+  }.ensuring(res => res.isValid && res.t1 == prd.t1 && res.t2 == prd.t2)
 }

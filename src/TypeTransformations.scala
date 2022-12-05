@@ -1,3 +1,10 @@
+/**
+  *  References: 
+  *    - [TAPL] Types and Programming Languages, Benjamin C. Pierce, 2002, The MIT Press
+  * 
+  *  This file defines De Bruijn indices operations such as shift and substitutions and their main properties (TAPL Chap 6).
+  *  De Bruijn indices for types are covered here whereas terms are covered in TermTransformations.
+  */
 import stainless.lang._
 import stainless.collection._
 import stainless.annotation._
@@ -8,6 +15,10 @@ object TypeTransformations {
   
   import TypeTransformationsProperties._
 
+  /**
+    * d place shift of a type above cutoff c - TAPL Definition 6.2.1
+    */
+  @pure
   def shift(t: Type, d: BigInt, c: BigInt): Type = {
     require(c >= 0)
     require(if(d < 0){!t.hasFreeVariablesIn(c, -d)} else true)
@@ -20,6 +31,10 @@ object TypeTransformations {
     }
   }.ensuring(_.size == t.size)
 
+  /**
+  * Substitution of a type s for variable number j in type t - TAPL Definition 6.2.4
+  */
+  @pure
   def substitute(t: Type, j: BigInt, s: Type): Type = {
     t match {
       case BasicType(_) => t
@@ -31,6 +46,7 @@ object TypeTransformations {
   }
 
   // ↑⁻¹( [0 -> ↑¹(arg)]body )
+  @pure
   def absSubstitution(body: Type, arg: Type): Type = {
     assert(!arg.hasFreeVariablesIn(0, 0))
     boundRangeShift(arg, 1, 0, 0, 0)
@@ -38,27 +54,39 @@ object TypeTransformations {
     shift(substitute(body, 0, shift(arg, 1, 0)), -1, 0)
   }
 
-  def shift(env: TypeEnvironment, d: BigInt, c: BigInt): TypeEnvironment = {
-    require(c >= 0)
-    require(if(d < 0) !hasFreeVariablesIn(env, c, -d) else true)
+  // def shift(env: TypeEnvironment, d: BigInt, c: BigInt): TypeEnvironment = {
+  //   require(c >= 0)
+  //   require(if(d < 0) !hasFreeVariablesIn(env, c, -d) else true)
     
-    env match {
-      case Nil() => Nil[Type]()
-      case Cons(h, t) => {
-        Cons(shift(h, d, c), shift(t, d, c))
-      }
-    }
-  }.ensuring(res => res.length == env.length)
+  //   env match {
+  //     case Nil() => Nil[Type]()
+  //     case Cons(h, t) => {
+  //       Cons(shift(h, d, c), shift(t, d, c))
+  //     }
+  //   }
+  // }.ensuring(res => res.length == env.length)
 
-  def substitute(env: TypeEnvironment, d: BigInt, typ: Type): TypeEnvironment = {
-    env.map(substitute(_, d, typ))
-  }
+  // def substitute(env: TypeEnvironment, d: BigInt, typ: Type): TypeEnvironment = {
+  //   env.map(substitute(_, d, typ))
+  // }
 }
 
 object TypeTransformationsProperties {
   import LambdaOmegaProperties.Types._
   import TypeTransformations._
 
+  /**
+   * * Short version: If J ∉ FV(T), [J -> S]T = T
+   * 
+   * Long version:
+   *
+   * Preconditions:
+   *   - j is non negative
+   *   - FV(t) ∩ [j, j + 1[ = ∅
+   * 
+   * Postcondition:
+   *   - [j -> S]t = t
+   */
   @opaque @pure
   def boundRangeSubstitutionIdentity(t: Type, j: BigInt, typ: Type): Unit = {
     require(j >= 0)
@@ -84,6 +112,9 @@ object TypeTransformationsProperties {
     substitute(t, j, typ) == t
   )
 
+  /**
+    * A 0 place shift does not affect the time
+    */
   @opaque @pure
   def shift0Identity(t: Type, c: BigInt): Unit = {
     require(c >= 0)
@@ -104,6 +135,24 @@ object TypeTransformationsProperties {
     }
   }.ensuring(shift(t, 0, c) == t)
 
+  /**
+    * This theorem states how to compose two shifts into one bigger shift under some conditions
+    * 
+    * * Short and less general version: shift(shift(T, a, c), b, c) == shift(T, a + b, c)
+    * 
+    * Long version:
+    *
+    * Preconditions:
+    *   - a, c and d are non negative (could be generalized for a < 0 as well)
+    *   - d <= c + a
+    *   - FV(t) ∩ [c, d[ = ∅ if c <= d, otherwise invert c and d
+    *   - b >= - a
+    * 
+    * Postcondition:
+    *   - If b < 0, FV(shift(t, a, c)) ∩ [d, d - b[ = ∅ (not interesting, but needed in order to express the second result)
+    *   - shift(shift(t, a, c), b, d) == shift(t, a + b, c)
+    * 
+    */
   @opaque @pure
   def boundRangeShiftComposition(t: Type, a: BigInt, b: BigInt, c: BigInt, d: BigInt): Unit = {
     require(a >= 0)
@@ -111,7 +160,7 @@ object TypeTransformationsProperties {
     require(d >= 0)
     require(d <= c + a)
     require(if(d < c) !t.hasFreeVariablesIn(d, c - d) else !t.hasFreeVariablesIn(c, d - c))
-    require((b >= 0) || (-b <= a))
+    require(-b <= a)
 
 
     if (d < c){
@@ -149,36 +198,36 @@ object TypeTransformationsProperties {
       }
     }
   }.ensuring(
-    (if(b < 0){!shift(t, a, c).hasFreeVariablesIn(d, -b)} else true) &&
+    (b < 0 ==> !shift(t, a, c).hasFreeVariablesIn(d, -b)) &&
     shift(shift(t, a, c), b, d) == shift(t, a + b, c)
   )
 
+  /**
+    * Describes exactly how free variables behave after shifts
+    */
   @opaque @pure
   def boundRangeShift(t: Type, d: BigInt, c: BigInt, a: BigInt, b: BigInt): Unit = {
     require(c >= 0)
     require(b >= 0)
     require(a >= 0)
-    require(if(d < 0){!t.hasFreeVariablesIn(c, -d)} else true)
-    require(!t.hasFreeVariablesIn(a, b))
+    require(d < 0 ==> !t.hasFreeVariablesIn(c, -d))
 
-    t match {
-      case BasicType(_) => ()
-      case VariableType(_) => ()
-      case AbsType(_, body)   => {
+    t match
+      case BasicType(_)       => ()
+      case VariableType(_)    => ()
+      case AbsType(_, body)   => 
         boundRangeShift(body, d, c+1, a + 1, b)
-      }
-      case ArrowType(t1, t2)    => {
+      case ArrowType(t1, t2)  => 
         boundRangeShift(t1, d, c, a, b)
         boundRangeShift(t2, d, c, a, b)
-      }
-      case AppType(t1, t2)    => {
+      case AppType(t1, t2)    => 
         boundRangeShift(t1, d, c, a, b)
         boundRangeShift(t2, d, c, a, b)
-      }
-    }
 
   }.ensuring(
-      if(d >= 0){
+      !t.hasFreeVariablesIn(a, b)
+        ==
+      (if(d >= 0){
         (if(c >= a && c <= a + b)           {!shift(t, d, c).hasFreeVariablesIn(a, b + d)} else {true}) &&
         (if(c <= a + b)                     {!shift(t, d, c).hasFreeVariablesIn(a + d, b)} else {true}) &&
         (if(c >= a)                         {!shift(t, d, c).hasFreeVariablesIn(a, b)} else {true})
@@ -188,9 +237,21 @@ object TypeTransformationsProperties {
         (if(a + b >= c && a <= c)           {!shift(t, d, c).hasFreeVariablesIn(a, c - a)} else true) &&
         (if(a + b >= -d + c && a <= -d + c) {!shift(t, d, c).hasFreeVariablesIn(c, a + b + d - c)} else true) &&
         (if(a >= -d + c)                    {!shift(t, d, c).hasFreeVariablesIn(a + d, b)} else true) 
-      } 
+      })
     )
 
+  /**
+    * * Short version: If FV(S) ∩ [0, J + 1[ = ∅, then J ∉ FV([J -> S]T)
+    * 
+    * Long version:
+    * 
+    * Preconditions:
+    *   - j is a non negative type variable
+    *   - FV(S) ∩ [0, j + 1[ = ∅
+    * 
+    * Postcondition:
+    *  FV([j -> S]T) ∩ [j, j + 1[ = ∅
+    */
   @opaque @pure
   def boundRangeSubstitutionLemma(t: Type, j: BigInt, s: Type): Unit = {
     require(j >= 0)
@@ -218,6 +279,9 @@ object TypeTransformationsProperties {
   }.ensuring(!substitute(t, j, s).hasFreeVariablesIn(j, 1))
 
 
+  /** 
+    * The four following theorems state under which conditions, two shifts commute
+    */
   @opaque @pure
   def shiftCommutativityPosPos(subs: Type, b: BigInt, c: BigInt, a: BigInt, d: BigInt) : Unit ={
     require(a >= 0)
@@ -346,7 +410,9 @@ object TypeTransformationsProperties {
               true)
 
 
-
+  /**
+    * States how shift and substitution commute
+    */
   @opaque @pure
   def shiftSubstitutionCommutativityType(typ: Type, s: BigInt, c: BigInt, k: BigInt, subs: Type): Unit = {
     require(k >= 0)
@@ -397,10 +463,9 @@ object TypeTransformationsProperties {
             shift(substitute(typ, k, subs), s, c) == substitute(shift(typ, s, c), k, shift(subs, s, c))
   )
 
-
-
-
-
+  /**
+    * Describes how free variables behave after substitutions
+    */
   @opaque @pure
   def boundRangeSubstitutionLemma(t: Type, j: BigInt, s: Type, a: BigInt, b: BigInt, c: BigInt, d: BigInt): Unit = {
     require(j >= 0)
@@ -456,7 +521,20 @@ object TypeTransformationsProperties {
 
 
 
-  
+  /**
+    * States how substitution commutes (mentioned in proof of TAPL Lemma 30.3.4)
+    * 
+    * * Short version: If J ∉ FV(U) and J ≠ K then [K -> U][J -> S]T = [J -> [K -> U]S][K -> U]T
+    * 
+    * Long version:
+    *  
+    * Preconditions:
+    *   - j ≠ k are non negative type variables
+    *   - FV(u) ∩ [j, j + 1[ = ∅
+    * 
+    * Postcondition:
+    *   [h -> u][j -> s]t = [j -> [k -> u]s][k -> u]t
+    */
   @opaque @pure
   def substitutionCommutativity(t: Type, j: BigInt, s: Type, k: BigInt, u: Type): Unit = {
     require(j >= 0)
@@ -489,8 +567,23 @@ object TypeTransformationsProperties {
     substitute(substitute(t, k, u), j, substitute(s, k, u))
   )
 
-  //absSubst
-
+  
+  /**
+   * States how free variable behave when reducing redexed
+   * 
+   * * Short version: FV((λ.T1)(T2)) ∩ [c, c + d[ = ∅ => FV(↑⁻¹([0 -> ↑¹T2]T1)) ∩ [c, c + d[ = ∅
+   * 
+   * Long version:
+   * 
+   * Preconditions:
+   *   - c and d are non negative integers
+   *   - FV(arg) ∩ [c, c + d[ = ∅ (arg = T2 in the above statement)
+   *   - FV(body) ∩ [c + 1, c + 1 + d[ = ∅ (body = T1 in the above statement)
+   *   ! These two conditions imply FV((λ.body)(arg)) ∩ [c, c + d[ = ∅
+   * 
+   * Postcondition:
+   *   FV(↑⁻¹([0 -> ↑¹arg]body)) ∩ [c, c + d[ = ∅
+   */
   @opaque @pure
   def boundRangeAbsSubst(body: Type, arg: Type, c: BigInt, d: BigInt) = {
     require(c >= 0)
@@ -505,10 +598,26 @@ object TypeTransformationsProperties {
     boundRangeShift(substitute(body, 0, shift(arg, 1, 0)), -1, 0, c + 1, d)
   }.ensuring(!absSubstitution(body, arg).hasFreeVariablesIn(c, d))
 
+  /**
+    * States how shift commutes with redex reduction 
+    * 
+    * * Short version: shift(↑⁻¹([0 -> ↑¹T2]T1), d, c) = ↑⁻¹([0 -> ↑¹shift(T2, d, c)]shift(T1, d, c + 1))
+    * 
+    * Long version:
+    *  
+    * Preconditions:
+    *   - c is a non negative integer
+    *   - if d < 0 then  FV(arg) ∩ [c, c + d[ = ∅ and FV(body) ∩ [c + 1, c + 1 + d[ = ∅ (where body = T1 and arg = T2
+    *     in the above version)
+    *   ! Therefore if d < 0 then FV((λ.body)(arg)) ∩ [c, c + d[ = ∅
+    * 
+    * Postcondition:
+    *   shift(↑⁻¹([0 -> ↑¹arg]body), d, c) = ↑⁻¹([0 -> ↑¹shift(arg, d, c)]shift(body, d, c + 1))
+    */
   @opaque @pure
   def shiftAbsSubstitutionCommutativity(body: Type, arg: Type, d: BigInt, c: BigInt) = {
     require(c >= 0)
-    require(if d < 0 then !arg.hasFreeVariablesIn(c, -d) && !body.hasFreeVariablesIn(c + 1, -d) else true)
+    require(d < 0 ==> !arg.hasFreeVariablesIn(c, -d) && !body.hasFreeVariablesIn(c + 1, -d))
 
     boundRangeShift(arg, 1, 0, 0, 0)
     boundRangeSubstitutionLemma(body, 0, shift(arg, 1, 0))
@@ -526,6 +635,20 @@ object TypeTransformationsProperties {
       shiftCommutativityPosPos(arg, d, c, 1, 0)
   }.ensuring(_ => shift(absSubstitution(body, arg), d, c) == absSubstitution(shift(body, d, c + 1), shift(arg, d, c)))
 
+  /**
+    * States how substitution commutes with redex reduction 
+    * 
+    * * Short version: If 0 ∉ FV(S) then [J -> S]↑⁻¹([0 -> ↑¹T2]T1) = ↑⁻¹([0 -> ↑¹[J -> S]T2][J + 1 -> ↑¹S]T1)
+    * 
+    * Long version: (where body = T1 and arg = T2)
+    *  
+    * Preconditions:
+    *   - j is a non negative type variable
+    *   - FV(s) ∩ [0, 1[ = ∅
+    * 
+    * Postcondition:
+    *   [j -> s]↑⁻¹([0 -> ↑¹arg]body) = ↑⁻¹([0 -> ↑¹[j -> s]arg][j + 1 -> ↑¹s]body
+    */
   @opaque @pure
   def absSubstSubstCommutativity(body: Type, arg: Type, j: BigInt, s: Type): Unit = {
     require(j >= 0)
