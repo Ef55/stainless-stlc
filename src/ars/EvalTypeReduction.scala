@@ -30,22 +30,22 @@ object EvalTypeReduction{
     @pure
     def type1: Type = 
       this match
-        case ArrowDerivationL(t1, _, _) => t1
-        case ArrowDerivationR(t1, _, _) => t1
-        case AbsDerivation(t1, _, _) => t1
-        case AppDerivationL(t1, _, _) => t1
-        case AppDerivationR(t1, _, _) => t1
-        case AppAbsDerivation(abs, arg) => AppType(abs, arg)
+        case ArrowTypeDerivationL(t1, _, _) => t1
+        case ArrowTypeDerivationR(t1, _, _) => t1
+        case AbsTypeDerivation(t1, _, _) => t1
+        case AppTypeDerivationL(t1, _, _) => t1
+        case AppTypeDerivationR(t1, _, _) => t1
+        case AppAbsTypeDerivation(abs, arg) => AppType(abs, arg)
 
     @pure
     def type2: Type = 
       this match
-        case ArrowDerivationL(_, t2, _) => t2
-        case ArrowDerivationR(_, t2, _) => t2
-        case AbsDerivation(_, t2, _) => t2
-        case AppDerivationL(_, t2, _) => t2
-        case AppDerivationR(_, t2, _) => t2
-        case AppAbsDerivation(abs, arg) => absSubstitution(abs.body, arg)
+        case ArrowTypeDerivationL(_, t2, _) => t2
+        case ArrowTypeDerivationR(_, t2, _) => t2
+        case AbsTypeDerivation(_, t2, _) => t2
+        case AppTypeDerivationL(_, t2, _) => t2
+        case AppTypeDerivationR(_, t2, _) => t2
+        case AppAbsTypeDerivation(abs, arg) => absSubstitution(abs.body, arg)
 
 
     /**
@@ -55,12 +55,12 @@ object EvalTypeReduction{
     @pure
     def size: BigInt = {
       this match
-        case ArrowDerivationL(_, _, rd) => rd.size + 1 
-        case ArrowDerivationR(_, _, rd) => rd.size + 1
-        case AbsDerivation(_, _, rd) => rd.size + 1
-        case AppDerivationL(_, _, rd) => rd.size + 1
-        case AppDerivationR(_, _, rd) => rd.size + 1
-        case AppAbsDerivation(abs, arg) => BigInt(1)
+        case ArrowTypeDerivationL(_, _, rd) => rd.size + 1 
+        case ArrowTypeDerivationR(_, _, rd) => rd.size + 1
+        case AbsTypeDerivation(_, _, rd) => rd.size + 1
+        case AppTypeDerivationL(_, _, rd) => rd.size + 1
+        case AppTypeDerivationR(_, _, rd) => rd.size + 1
+        case AppAbsTypeDerivation(abs, arg) => BigInt(1)
     }.ensuring(_ > BigInt(0))
 
     /**
@@ -74,17 +74,17 @@ object EvalTypeReduction{
     @pure
     def isSound: Boolean = 
       this match 
-        case ArrowDerivationL(ArrowType(t11, t12), ArrowType(t21, t22), rd) => 
+        case ArrowTypeDerivationL(ArrowType(t11, t12), ArrowType(t21, t22), rd) => 
           rd.isSound && rd.type1 == t11 && rd.type2 == t21 && t12 == t22
-        case ArrowDerivationR(ArrowType(t11, t12), ArrowType(t21, t22), rd) =>
+        case ArrowTypeDerivationR(ArrowType(t11, t12), ArrowType(t21, t22), rd) =>
           rd.isSound && rd.type1 == t12 && rd.type2 == t22 && t11 == t21
-        case AbsDerivation(AbsType(k1, b1), AbsType(k2, b2), rd) => 
+        case AbsTypeDerivation(AbsType(k1, b1), AbsType(k2, b2), rd) => 
           rd.isSound && rd.type1 == b1 && rd.type2 == b2 && k1 == k2
-        case AppDerivationL(AppType(t11, t12), AppType(t21, t22), rd) =>
+        case AppTypeDerivationL(AppType(t11, t12), AppType(t21, t22), rd) =>
           rd.isSound && rd.type1 == t11 && rd.type2 == t21 && t12 == t22
-        case AppDerivationR(AppType(t11, t12), AppType(t21, t22), rd) =>
+        case AppTypeDerivationR(AppType(t11, t12), AppType(t21, t22), rd) =>
           rd.isSound && rd.type1 == t12 && rd.type2 == t22 && t11 == t21
-        case AppAbsDerivation(_, _) => true
+        case AppAbsTypeDerivation(_, _) => true
 
     def toARSStep: EvalReductionStep = {
       (this, type1, type2, isSound)
@@ -94,12 +94,12 @@ object EvalTypeReduction{
   /**
     * Evaluation reduction rules inspired from TAPL Figure 5-3
     */
-  case class ArrowDerivationL(t1: ArrowType, t2: ArrowType, rd: EvalReductionDerivation) extends EvalReductionDerivation
-  case class ArrowDerivationR(t1: ArrowType, t2: ArrowType, rd: EvalReductionDerivation) extends EvalReductionDerivation
-  case class AbsDerivation(t1: AbsType, t2: AbsType, rd: EvalReductionDerivation) extends EvalReductionDerivation
-  case class AppDerivationL(t1: AppType, t2: AppType, rd: EvalReductionDerivation) extends EvalReductionDerivation
-  case class AppDerivationR(t1: AppType, t2: AppType, rd: EvalReductionDerivation) extends EvalReductionDerivation
-  case class AppAbsDerivation(abs: AbsType, arg: Type) extends EvalReductionDerivation
+  case class ArrowTypeDerivationL(t1: ArrowType, t2: ArrowType, rd: EvalReductionDerivation) extends EvalReductionDerivation
+  case class ArrowTypeDerivationR(t1: ArrowType, t2: ArrowType, rd: EvalReductionDerivation) extends EvalReductionDerivation
+  case class AbsTypeDerivation(t1: AbsType, t2: AbsType, rd: EvalReductionDerivation) extends EvalReductionDerivation
+  case class AppTypeDerivationL(t1: AppType, t2: AppType, rd: EvalReductionDerivation) extends EvalReductionDerivation
+  case class AppTypeDerivationR(t1: AppType, t2: AppType, rd: EvalReductionDerivation) extends EvalReductionDerivation
+  case class AppAbsTypeDerivation(abs: AbsType, arg: Type) extends EvalReductionDerivation
   
   /**
    * Outputs the set of all the types to to which t reduces along with the proof of the reduction
@@ -110,17 +110,17 @@ object EvalTypeReduction{
     t match
       case BasicType(_) => Nil()
       case VariableType(_) => Nil()
-      case abs@AbsType(k, b) => reduce(b).map(b2 => AbsDerivation(abs, AbsType(k, b2.type2), b2))
+      case abs@AbsType(k, b) => reduce(b).map(b2 => AbsTypeDerivation(abs, AbsType(k, b2.type2), b2))
       case arr@ArrowType(t1, t2) => 
-        val l1: List[EvalReductionDerivation] = reduce(t1).map(t1d => ArrowDerivationL(arr, ArrowType(t1d.type2, t2), t1d))
-        val l2: List[EvalReductionDerivation] = reduce(t2).map(t2d => ArrowDerivationR(arr, ArrowType(t1, t2d.type2), t2d))
+        val l1: List[EvalReductionDerivation] = reduce(t1).map(t1d => ArrowTypeDerivationL(arr, ArrowType(t1d.type2, t2), t1d))
+        val l2: List[EvalReductionDerivation] = reduce(t2).map(t2d => ArrowTypeDerivationR(arr, ArrowType(t1, t2d.type2), t2d))
         l1 ++ l2
       case app@AppType(t1, t2) =>
-        val l1: List[EvalReductionDerivation] = reduce(t1).map(t1d => AppDerivationL(app, AppType(t1d.type2, t2), t1d))
-        val l2: List[EvalReductionDerivation] = reduce(t2).map(t2d => AppDerivationR(app, AppType(t1, t2d.type2), t2d))
+        val l1: List[EvalReductionDerivation] = reduce(t1).map(t1d => AppTypeDerivationL(app, AppType(t1d.type2, t2), t1d))
+        val l2: List[EvalReductionDerivation] = reduce(t2).map(t2d => AppTypeDerivationR(app, AppType(t1, t2d.type2), t2d))
         val l3: List[EvalReductionDerivation] = t1 match
           case abs@AbsType(k, b) =>
-            Cons(AppAbsDerivation(abs, t2), Nil())
+            Cons(AppAbsTypeDerivation(abs, t2), Nil())
           case _ => Nil()
         (l1 ++ l2) ++ l3
   }
@@ -141,32 +141,32 @@ object EvalTypeReduction{
   def reduceSoundnessLemmaAbs(@induct l: List[EvalReductionDerivation], k: Kind, b: Type): Unit = {
     require(l.forall(_.isSound))
     require(l.forall(_.type1 == b))
-  }.ensuring(l.forall(b2 => AbsDerivation(AbsType(k, b), AbsType(k, b2.type2), b2).isSound) &&
-             l.forall(b2 => AbsDerivation(AbsType(k, b), AbsType(k, b2.type2), b2).type1 == AbsType(k, b)))
+  }.ensuring(l.forall(b2 => AbsTypeDerivation(AbsType(k, b), AbsType(k, b2.type2), b2).isSound) &&
+             l.forall(b2 => AbsTypeDerivation(AbsType(k, b), AbsType(k, b2.type2), b2).type1 == AbsType(k, b)))
 
   def reduceSoundnessLemmaArrL(@induct l: List[EvalReductionDerivation], t1: Type, t2: Type): Unit = {
     require(l.forall(_.isSound))
     require(l.forall(_.type1 == t1))
-  }.ensuring(l.forall(t1d => ArrowDerivationL(ArrowType(t1, t2), ArrowType(t1d.type2, t2), t1d).isSound) &&
-             l.forall(t1d => ArrowDerivationL(ArrowType(t1, t2), ArrowType(t1d.type2, t2), t1d).type1 == ArrowType(t1, t2)))
+  }.ensuring(l.forall(t1d => ArrowTypeDerivationL(ArrowType(t1, t2), ArrowType(t1d.type2, t2), t1d).isSound) &&
+             l.forall(t1d => ArrowTypeDerivationL(ArrowType(t1, t2), ArrowType(t1d.type2, t2), t1d).type1 == ArrowType(t1, t2)))
 
   def reduceSoundnessLemmaArrR(@induct l: List[EvalReductionDerivation], t1: Type, t2: Type): Unit = {
     require(l.forall(_.isSound))
     require(l.forall(_.type1 == t2))
-  }.ensuring(l.forall(t2d => ArrowDerivationR(ArrowType(t1, t2), ArrowType(t1, t2d.type2), t2d).isSound) &&
-             l.forall(t2d => ArrowDerivationR(ArrowType(t1, t2), ArrowType(t1, t2d.type2), t2d).type1 == ArrowType(t1, t2)))
+  }.ensuring(l.forall(t2d => ArrowTypeDerivationR(ArrowType(t1, t2), ArrowType(t1, t2d.type2), t2d).isSound) &&
+             l.forall(t2d => ArrowTypeDerivationR(ArrowType(t1, t2), ArrowType(t1, t2d.type2), t2d).type1 == ArrowType(t1, t2)))
 
   def reduceSoundnessLemmaAppL(@induct l: List[EvalReductionDerivation], t1: Type, t2: Type): Unit = {
     require(l.forall(_.isSound))
     require(l.forall(_.type1 == t1))
-  }.ensuring(l.forall(t1d => AppDerivationL(AppType(t1, t2), AppType(t1d.type2, t2), t1d).isSound) &&
-             l.forall(t1d => AppDerivationL(AppType(t1, t2), AppType(t1d.type2, t2), t1d).type1 == AppType(t1, t2)))
+  }.ensuring(l.forall(t1d => AppTypeDerivationL(AppType(t1, t2), AppType(t1d.type2, t2), t1d).isSound) &&
+             l.forall(t1d => AppTypeDerivationL(AppType(t1, t2), AppType(t1d.type2, t2), t1d).type1 == AppType(t1, t2)))
 
   def reduceSoundnessLemmaAppR(@induct l: List[EvalReductionDerivation], t1: Type, t2: Type): Unit = {
     require(l.forall(_.isSound))
     require(l.forall(_.type1 == t2))
-  }.ensuring(l.forall(t2d => AppDerivationR(AppType(t1, t2), AppType(t1, t2d.type2), t2d).isSound) &&
-             l.forall(t2d => AppDerivationR(AppType(t1, t2), AppType(t1, t2d.type2), t2d).type1 == AppType(t1, t2)))
+  }.ensuring(l.forall(t2d => AppTypeDerivationR(AppType(t1, t2), AppType(t1, t2d.type2), t2d).isSound) &&
+             l.forall(t2d => AppTypeDerivationR(AppType(t1, t2), AppType(t1, t2d.type2), t2d).type1 == AppType(t1, t2)))
 
   /**
     * Soudness of reduce
@@ -179,21 +179,21 @@ object EvalTypeReduction{
       case abs@AbsType(k, b) => 
         reduceSoundness(b)
         reduceSoundnessLemmaAbs(reduce(b), k, b)
-        ListSpecs.mapPred[EvalReductionDerivation, EvalReductionDerivation](reduce(b), (b2: EvalReductionDerivation) => AbsDerivation(abs, AbsType(k, b2.type2), b2), (r: EvalReductionDerivation) => r.isSound)
-        ListSpecs.mapPred[EvalReductionDerivation, EvalReductionDerivation](reduce(b), (b2: EvalReductionDerivation) => AbsDerivation(abs, AbsType(k, b2.type2), b2), (r: EvalReductionDerivation) => r.type1 == t)
+        ListSpecs.mapPred[EvalReductionDerivation, EvalReductionDerivation](reduce(b), (b2: EvalReductionDerivation) => AbsTypeDerivation(abs, AbsType(k, b2.type2), b2), (r: EvalReductionDerivation) => r.isSound)
+        ListSpecs.mapPred[EvalReductionDerivation, EvalReductionDerivation](reduce(b), (b2: EvalReductionDerivation) => AbsTypeDerivation(abs, AbsType(k, b2.type2), b2), (r: EvalReductionDerivation) => r.type1 == t)
 
-        assert(reduce(b).map((b2: EvalReductionDerivation) => AbsDerivation(abs, AbsType(k, b2.type2), b2)).forall((r: EvalReductionDerivation) => r.isSound))
+        assert(reduce(b).map((b2: EvalReductionDerivation) => AbsTypeDerivation(abs, AbsType(k, b2.type2), b2)).forall((r: EvalReductionDerivation) => r.isSound))
       case arr@ArrowType(t1, t2) => 
         reduceSoundness(t1)
         reduceSoundness(t2)
         reduceSoundnessLemmaArrL(reduce(t1), t1, t2)
         reduceSoundnessLemmaArrR(reduce(t2), t1, t2)
-        ListSpecs.mapPred[EvalReductionDerivation, EvalReductionDerivation](reduce(t1), (t1d: EvalReductionDerivation) => ArrowDerivationL(arr, ArrowType(t1d.type2, t2), t1d), (r: EvalReductionDerivation) => r.isSound)
-        ListSpecs.mapPred[EvalReductionDerivation, EvalReductionDerivation](reduce(t1), (t1d: EvalReductionDerivation) => ArrowDerivationL(arr, ArrowType(t1d.type2, t2), t1d), (r: EvalReductionDerivation) => r.type1 == t)
-        ListSpecs.mapPred[EvalReductionDerivation, EvalReductionDerivation](reduce(t2), (t2d: EvalReductionDerivation) => ArrowDerivationR(arr, ArrowType(t1, t2d.type2), t2d), (r: EvalReductionDerivation) => r.isSound)
-        ListSpecs.mapPred[EvalReductionDerivation, EvalReductionDerivation](reduce(t2), (t2d: EvalReductionDerivation) => ArrowDerivationR(arr, ArrowType(t1, t2d.type2), t2d), (r: EvalReductionDerivation) => r.type1 == t)
-        val l1: List[EvalReductionDerivation] = reduce(t1).map((t1d: EvalReductionDerivation) => ArrowDerivationL(arr, ArrowType(t1d.type2, t2), t1d))
-        val l2: List[EvalReductionDerivation] = reduce(t2).map((t2d: EvalReductionDerivation) => ArrowDerivationR(arr, ArrowType(t1, t2d.type2), t2d))
+        ListSpecs.mapPred[EvalReductionDerivation, EvalReductionDerivation](reduce(t1), (t1d: EvalReductionDerivation) => ArrowTypeDerivationL(arr, ArrowType(t1d.type2, t2), t1d), (r: EvalReductionDerivation) => r.isSound)
+        ListSpecs.mapPred[EvalReductionDerivation, EvalReductionDerivation](reduce(t1), (t1d: EvalReductionDerivation) => ArrowTypeDerivationL(arr, ArrowType(t1d.type2, t2), t1d), (r: EvalReductionDerivation) => r.type1 == t)
+        ListSpecs.mapPred[EvalReductionDerivation, EvalReductionDerivation](reduce(t2), (t2d: EvalReductionDerivation) => ArrowTypeDerivationR(arr, ArrowType(t1, t2d.type2), t2d), (r: EvalReductionDerivation) => r.isSound)
+        ListSpecs.mapPred[EvalReductionDerivation, EvalReductionDerivation](reduce(t2), (t2d: EvalReductionDerivation) => ArrowTypeDerivationR(arr, ArrowType(t1, t2d.type2), t2d), (r: EvalReductionDerivation) => r.type1 == t)
+        val l1: List[EvalReductionDerivation] = reduce(t1).map((t1d: EvalReductionDerivation) => ArrowTypeDerivationL(arr, ArrowType(t1d.type2, t2), t1d))
+        val l2: List[EvalReductionDerivation] = reduce(t2).map((t2d: EvalReductionDerivation) => ArrowTypeDerivationR(arr, ArrowType(t1, t2d.type2), t2d))
         ListProperties.concatForall[EvalReductionDerivation](l1, l2, (r: EvalReductionDerivation) => r.isSound)
         ListProperties.concatForall[EvalReductionDerivation](l1, l2, (r: EvalReductionDerivation) => r.type1 == t)
 
@@ -202,17 +202,17 @@ object EvalTypeReduction{
         reduceSoundness(t2)
         reduceSoundnessLemmaAppL(reduce(t1), t1, t2)
         reduceSoundnessLemmaAppR(reduce(t2), t1, t2)
-        ListSpecs.mapPred[EvalReductionDerivation, EvalReductionDerivation](reduce(t1), (t1d: EvalReductionDerivation) => AppDerivationL(app, AppType(t1d.type2, t2), t1d), (r: EvalReductionDerivation) => r.isSound)
-        ListSpecs.mapPred[EvalReductionDerivation, EvalReductionDerivation](reduce(t1), (t1d: EvalReductionDerivation) => AppDerivationL(app, AppType(t1d.type2, t2), t1d), (r: EvalReductionDerivation) => r.type1 == t)
-        ListSpecs.mapPred[EvalReductionDerivation, EvalReductionDerivation](reduce(t2), (t2d: EvalReductionDerivation) => AppDerivationR(app, AppType(t1, t2d.type2), t2d), (r: EvalReductionDerivation) => r.isSound)
-        ListSpecs.mapPred[EvalReductionDerivation, EvalReductionDerivation](reduce(t2), (t2d: EvalReductionDerivation) => AppDerivationR(app, AppType(t1, t2d.type2), t2d), (r: EvalReductionDerivation) => r.type1 == t)
-        val l1: List[EvalReductionDerivation] = reduce(t1).map((t1d: EvalReductionDerivation) => AppDerivationL(app, AppType(t1d.type2, t2), t1d))
-        val l2: List[EvalReductionDerivation] = reduce(t2).map((t2d: EvalReductionDerivation) => AppDerivationR(app, AppType(t1, t2d.type2), t2d))
+        ListSpecs.mapPred[EvalReductionDerivation, EvalReductionDerivation](reduce(t1), (t1d: EvalReductionDerivation) => AppTypeDerivationL(app, AppType(t1d.type2, t2), t1d), (r: EvalReductionDerivation) => r.isSound)
+        ListSpecs.mapPred[EvalReductionDerivation, EvalReductionDerivation](reduce(t1), (t1d: EvalReductionDerivation) => AppTypeDerivationL(app, AppType(t1d.type2, t2), t1d), (r: EvalReductionDerivation) => r.type1 == t)
+        ListSpecs.mapPred[EvalReductionDerivation, EvalReductionDerivation](reduce(t2), (t2d: EvalReductionDerivation) => AppTypeDerivationR(app, AppType(t1, t2d.type2), t2d), (r: EvalReductionDerivation) => r.isSound)
+        ListSpecs.mapPred[EvalReductionDerivation, EvalReductionDerivation](reduce(t2), (t2d: EvalReductionDerivation) => AppTypeDerivationR(app, AppType(t1, t2d.type2), t2d), (r: EvalReductionDerivation) => r.type1 == t)
+        val l1: List[EvalReductionDerivation] = reduce(t1).map((t1d: EvalReductionDerivation) => AppTypeDerivationL(app, AppType(t1d.type2, t2), t1d))
+        val l2: List[EvalReductionDerivation] = reduce(t2).map((t2d: EvalReductionDerivation) => AppTypeDerivationR(app, AppType(t1, t2d.type2), t2d))
         ListProperties.concatForall[EvalReductionDerivation](l1, l2, (r: EvalReductionDerivation) => r.isSound)
         ListProperties.concatForall[EvalReductionDerivation](l1, l2, (r: EvalReductionDerivation) => r.type1 == t)
         val l3: List[EvalReductionDerivation] = t1 match
           case abs@AbsType(k, b) =>
-            Cons(AppAbsDerivation(abs, t2), Nil())
+            Cons(AppAbsTypeDerivation(abs, t2), Nil())
           case _ => Nil()
         assert((l1 ++ l2).forall((r: EvalReductionDerivation) => r.isSound))
         assert((l1 ++ l2).forall((r: EvalReductionDerivation) => r.type1 == t))
@@ -220,8 +220,8 @@ object EvalTypeReduction{
         ListProperties.concatForall[EvalReductionDerivation](l1 ++ l2, l3, (r: EvalReductionDerivation) => r.type1 == t)
         t1 match
           case abs@AbsType(k, b) =>
-            assert((Cons(AppAbsDerivation(abs, t2), Nil())).forall((r: EvalReductionDerivation) => r.isSound))
-            assert((Cons(AppAbsDerivation(abs, t2), Nil())).forall((r: EvalReductionDerivation) => r.type1 == t))
+            assert((Cons(AppAbsTypeDerivation(abs, t2), Nil())).forall((r: EvalReductionDerivation) => r.isSound))
+            assert((Cons(AppAbsTypeDerivation(abs, t2), Nil())).forall((r: EvalReductionDerivation) => r.type1 == t))
           case _ => ()
         
   }.ensuring(reduce(t).forall((r: EvalReductionDerivation) => r.isSound) && reduce(t).forall((r: EvalReductionDerivation) => r.type1 == t))
@@ -234,52 +234,52 @@ object EvalTypeReduction{
     require(r.isSound)
     
     r match
-      case ArrowDerivationL(ArrowType(t11, t12), ArrowType(t21, t22), rd) => 
+      case ArrowTypeDerivationL(ArrowType(t11, t12), ArrowType(t21, t22), rd) => 
         reduceCompleteness(rd)
-        ListProperties.mapContains(reduce(t11), (t1d: EvalReductionDerivation) => ArrowDerivationL(ArrowType(t11, t12), ArrowType(t1d.type2, t12), t1d), rd)
-        val l1: List[EvalReductionDerivation] = reduce(t11).map(t1d => ArrowDerivationL(ArrowType(t11, t12), ArrowType(t1d.type2, t12), t1d))
-        val l2: List[EvalReductionDerivation] = reduce(t12).map(t2d => ArrowDerivationR(ArrowType(t11, t12), ArrowType(t11, t2d.type2), t2d))
+        ListProperties.mapContains(reduce(t11), (t1d: EvalReductionDerivation) => ArrowTypeDerivationL(ArrowType(t11, t12), ArrowType(t1d.type2, t12), t1d), rd)
+        val l1: List[EvalReductionDerivation] = reduce(t11).map(t1d => ArrowTypeDerivationL(ArrowType(t11, t12), ArrowType(t1d.type2, t12), t1d))
+        val l2: List[EvalReductionDerivation] = reduce(t12).map(t2d => ArrowTypeDerivationR(ArrowType(t11, t12), ArrowType(t11, t2d.type2), t2d))
         ListProperties.concatContains(l1, l2, r)
 
-      case ArrowDerivationR(ArrowType(t11, t12), ArrowType(t21, t22), rd) =>
+      case ArrowTypeDerivationR(ArrowType(t11, t12), ArrowType(t21, t22), rd) =>
         reduceCompleteness(rd)
-        ListProperties.mapContains(reduce(t12), (t2d: EvalReductionDerivation) => ArrowDerivationR(ArrowType(t11, t12), ArrowType(t11, t2d.type2), t2d), rd)
-        val l1: List[EvalReductionDerivation] = reduce(t11).map(t1d => ArrowDerivationL(ArrowType(t11, t12), ArrowType(t1d.type2, t12), t1d))
-        val l2: List[EvalReductionDerivation] = reduce(t12).map(t2d => ArrowDerivationR(ArrowType(t11, t12), ArrowType(t11, t2d.type2), t2d))
+        ListProperties.mapContains(reduce(t12), (t2d: EvalReductionDerivation) => ArrowTypeDerivationR(ArrowType(t11, t12), ArrowType(t11, t2d.type2), t2d), rd)
+        val l1: List[EvalReductionDerivation] = reduce(t11).map(t1d => ArrowTypeDerivationL(ArrowType(t11, t12), ArrowType(t1d.type2, t12), t1d))
+        val l2: List[EvalReductionDerivation] = reduce(t12).map(t2d => ArrowTypeDerivationR(ArrowType(t11, t12), ArrowType(t11, t2d.type2), t2d))
         ListProperties.concatContains(l1, l2, r)
 
-      case AbsDerivation(AbsType(k1, b1), AbsType(k2, b2), rd) => 
+      case AbsTypeDerivation(AbsType(k1, b1), AbsType(k2, b2), rd) => 
         reduceCompleteness(rd)
-        ListProperties.mapContains(reduce(b1), (bd: EvalReductionDerivation) => AbsDerivation(AbsType(k1, b1), AbsType(k2, bd.type2), bd), rd)
-        val l: List[EvalReductionDerivation] = reduce(b1).map(bd => AbsDerivation(AbsType(k1, b1), AbsType(k2, bd.type2), bd))
+        ListProperties.mapContains(reduce(b1), (bd: EvalReductionDerivation) => AbsTypeDerivation(AbsType(k1, b1), AbsType(k2, bd.type2), bd), rd)
+        val l: List[EvalReductionDerivation] = reduce(b1).map(bd => AbsTypeDerivation(AbsType(k1, b1), AbsType(k2, bd.type2), bd))
 
-      case AppDerivationL(AppType(t11, t12), AppType(t21, t22), rd) =>
+      case AppTypeDerivationL(AppType(t11, t12), AppType(t21, t22), rd) =>
         reduceCompleteness(rd)
-        ListProperties.mapContains(reduce(t11), (t1d: EvalReductionDerivation) => AppDerivationL(AppType(t11, t12), AppType(t1d.type2, t12), t1d), rd)
-        val l1: List[EvalReductionDerivation] = reduce(t11).map(t1d => AppDerivationL(AppType(t11, t12), AppType(t1d.type2, t12), t1d))
-        val l2: List[EvalReductionDerivation] = reduce(t12).map(t2d => AppDerivationR(AppType(t11, t12), AppType(t11, t2d.type2), t2d))
+        ListProperties.mapContains(reduce(t11), (t1d: EvalReductionDerivation) => AppTypeDerivationL(AppType(t11, t12), AppType(t1d.type2, t12), t1d), rd)
+        val l1: List[EvalReductionDerivation] = reduce(t11).map(t1d => AppTypeDerivationL(AppType(t11, t12), AppType(t1d.type2, t12), t1d))
+        val l2: List[EvalReductionDerivation] = reduce(t12).map(t2d => AppTypeDerivationR(AppType(t11, t12), AppType(t11, t2d.type2), t2d))
         val l3: List[EvalReductionDerivation] = 
           t11 match
             case abs@AbsType(k, b) =>
-              Cons(AppAbsDerivation(abs, t12), Nil())
+              Cons(AppAbsTypeDerivation(abs, t12), Nil())
             case _ => Nil()
         ListProperties.concatContains(l1, l2, r)
         ListProperties.concatContains(l1 ++ l2, l3, r)
 
-      case AppDerivationR(AppType(t11, t12), AppType(t21, t22), rd) =>
+      case AppTypeDerivationR(AppType(t11, t12), AppType(t21, t22), rd) =>
         reduceCompleteness(rd)
-        ListProperties.mapContains(reduce(t12), (t2d: EvalReductionDerivation) => AppDerivationR(AppType(t11, t12), AppType(t11, t2d.type2), t2d), rd)
-        val l1: List[EvalReductionDerivation] = reduce(t11).map(t1d => AppDerivationL(AppType(t11, t12), AppType(t1d.type2, t12), t1d))
-        val l2: List[EvalReductionDerivation] = reduce(t12).map(t2d => AppDerivationR(AppType(t11, t12), AppType(t11, t2d.type2), t2d))
+        ListProperties.mapContains(reduce(t12), (t2d: EvalReductionDerivation) => AppTypeDerivationR(AppType(t11, t12), AppType(t11, t2d.type2), t2d), rd)
+        val l1: List[EvalReductionDerivation] = reduce(t11).map(t1d => AppTypeDerivationL(AppType(t11, t12), AppType(t1d.type2, t12), t1d))
+        val l2: List[EvalReductionDerivation] = reduce(t12).map(t2d => AppTypeDerivationR(AppType(t11, t12), AppType(t11, t2d.type2), t2d))
         val l3: List[EvalReductionDerivation] = 
           t11 match
             case abs@AbsType(k, b) =>
-              Cons(AppAbsDerivation(abs, t12), Nil())
+              Cons(AppAbsTypeDerivation(abs, t12), Nil())
             case _ => Nil()
         ListProperties.concatContains(l1, l2, r)
         ListProperties.concatContains(l1 ++ l2, l3, r)
 
-      case AppAbsDerivation(_, _) => ()
+      case AppAbsTypeDerivation(_, _) => ()
   }.ensuring(reduce(r.type1).contains(r))
 
   /**
@@ -298,23 +298,23 @@ object EvalTypeReduction{
     t match
       case at@ArrowType(t11, t12) =>
         fullBetaReduce(t11) match 
-          case Some(prd1) => Some(ArrowDerivationL(at, ArrowType(prd1.type2, t12), prd1))
+          case Some(prd1) => Some(ArrowTypeDerivationL(at, ArrowType(prd1.type2, t12), prd1))
           case _ => fullBetaReduce(t12) match
-            case Some(prd2) => Some(ArrowDerivationR(at, ArrowType(t11, prd2.type2), prd2))
+            case Some(prd2) => Some(ArrowTypeDerivationR(at, ArrowType(t11, prd2.type2), prd2))
             case _ => None()
 
       case (at@AppType(t11, t12)) =>
         fullBetaReduce(t11) match 
-          case Some(prd1) => Some(AppDerivationL(at, AppType(prd1.type2, t12), prd1))
+          case Some(prd1) => Some(AppTypeDerivationL(at, AppType(prd1.type2, t12), prd1))
           case _ => fullBetaReduce(t12) match 
-            case Some(prd2) => Some(AppDerivationR(at, AppType(t11, prd2.type2), prd2))
+            case Some(prd2) => Some(AppTypeDerivationR(at, AppType(t11, prd2.type2), prd2))
             case _ => t11 match 
-              case abs@AbsType(argK, body) => Some(AppAbsDerivation(abs, t12))
+              case abs@AbsType(argK, body) => Some(AppAbsTypeDerivation(abs, t12))
               case _ => None()
       
       case (abs@AbsType(k, b)) =>
         fullBetaReduce(b) match
-          case Some(prd) => Some(AbsDerivation(abs, AbsType(k, prd.type2), prd))
+          case Some(prd) => Some(AbsTypeDerivation(abs, AbsType(k, prd.type2), prd))
           case _ => None()
 
       case _ => None()
@@ -441,6 +441,8 @@ object EvalTypeReduction{
   */
 object EvalTypeReductionValidity{
 
+  import EvalTypeReduction.*
+
   def concatWellFormed(@induct s1: MultiStepEvalReduction, s2: MultiStepEvalReduction): Unit = {
     require(s1.isWellFormed)
     require(s2.isWellFormed)
@@ -497,7 +499,7 @@ object EvalTypeReductionProperties {
   import EvalTypeReductionValidity._
 
   /**
-   * Soudness of reduction mapping for ArrowDerivationL
+   * Soudness of reduction mapping for ArrowTypeDerivationL
    * 
    * * Short version: If T1 -k-> T1' then (T1 -> T2) -k-> (T1' -> T2)
    * 
@@ -518,12 +520,12 @@ object EvalTypeReductionProperties {
     require(prd1.isValid)
     prd1 match
       case ARSIdentity(t1) => ARSIdentity(ArrowType(t1, t2))
-      case ARSComposition(h, t) => ARSComposition(ArrowDerivationL(ArrowType(h.t1, t2), ArrowType(h.t2, t2), h.unfold).toARSStep, arrowDerivationLMap(t, t2))
+      case ARSComposition(h, t) => ARSComposition(ArrowTypeDerivationL(ArrowType(h.t1, t2), ArrowType(h.t2, t2), h.unfold).toARSStep, arrowDerivationLMap(t, t2))
     
   }.ensuring(res => res.isValid && res.t1 == ArrowType(prd1.t1, t2) && res.t2 == ArrowType(prd1.t2, t2) && res.size == prd1.size)
   
   /**
-   * Soudness of reduction mapping for AppDerivationR
+   * Soudness of reduction mapping for AppTypeDerivationR
    * 
    * * Short version: If T2 -k-> T2' then (T1 -> T2) -k-> (T1 -> T2')
    * 
@@ -544,12 +546,12 @@ object EvalTypeReductionProperties {
     require(prd2.isValid)
     prd2 match
       case ARSIdentity(t2) => ARSIdentity(ArrowType(t1, t2))
-      case ARSComposition(h, t) => ARSComposition(ArrowDerivationR(ArrowType(t1, h.t1), ArrowType(t1, h.t2), h.unfold).toARSStep, arrowDerivationRMap(t1, t))
+      case ARSComposition(h, t) => ARSComposition(ArrowTypeDerivationR(ArrowType(t1, h.t1), ArrowType(t1, h.t2), h.unfold).toARSStep, arrowDerivationRMap(t1, t))
     
   }.ensuring(res => res.isValid && res.t1 == ArrowType(t1, prd2.t1) && res.t2 == ArrowType(t1, prd2.t2) && res.size == prd2.size)
 
   /**
-   * Soudness of reduction mapping for AppDerivationL
+   * Soudness of reduction mapping for AppTypeDerivationL
    * 
    * * Short version: If T1 -k-> T1' then T1 T2 -k-> T1' T2
    * 
@@ -570,12 +572,12 @@ object EvalTypeReductionProperties {
     require(prd1.isValid)
     prd1 match
       case ARSIdentity(t1) => ARSIdentity(AppType(t1, t2))
-      case ARSComposition(h, t) => ARSComposition(AppDerivationL(AppType(h.t1, t2), AppType(h.t2, t2), h.unfold).toARSStep, appDerivationLMap(t, t2))
+      case ARSComposition(h, t) => ARSComposition(AppTypeDerivationL(AppType(h.t1, t2), AppType(h.t2, t2), h.unfold).toARSStep, appDerivationLMap(t, t2))
     
   }.ensuring(res => res.isValid && res.t1 == AppType(prd1.t1, t2) && res.t2 == AppType(prd1.t2, t2) && res.size == prd1.size)
 
   /**
-   * Soudness of reduction mapping for AppDerivationR
+   * Soudness of reduction mapping for AppTypeDerivationR
    * 
    * * Short version: If T2 -k-> T2' then T1 T2 -k-> T1 T2'
    * 
@@ -596,12 +598,12 @@ object EvalTypeReductionProperties {
     require(prd2.isValid)
     prd2 match
       case ARSIdentity(t2) => ARSIdentity(AppType(t1, t2))
-      case ARSComposition(h, t) => ARSComposition(AppDerivationR(AppType(t1, h.t1), AppType(t1, h.t2), h.unfold).toARSStep, appDerivationRMap(t1, t))
+      case ARSComposition(h, t) => ARSComposition(AppTypeDerivationR(AppType(t1, h.t1), AppType(t1, h.t2), h.unfold).toARSStep, appDerivationRMap(t1, t))
     
   }.ensuring(res => res.isValid && res.t1 == AppType(t1, prd2.t1) && res.t2 == AppType(t1, prd2.t2) && res.size == prd2.size)
 
   /**
-   * Soudness of reduction mapping for AbsDerivation
+   * Soudness of reduction mapping for AbsTypeDerivation
    * 
    * * Short version: If T1 -k-> T2 then λ.T1 -k-> λ.T2
    * 
@@ -622,7 +624,7 @@ object EvalTypeReductionProperties {
     require(prd.isValid)
     prd match
       case ARSIdentity(b) => ARSIdentity(AbsType(k, b))
-      case ARSComposition(h, t) => ARSComposition(AbsDerivation(AbsType(k, h.t1), AbsType(k, h.t2), h.unfold).toARSStep, absDerivationMap(k, t))
+      case ARSComposition(h, t) => ARSComposition(AbsTypeDerivation(AbsType(k, h.t1), AbsType(k, h.t2), h.unfold).toARSStep, absDerivationMap(k, t))
     
   }.ensuring(res => res.isValid && res.t1 == AbsType(k, prd.t1) && res.t2 == AbsType(k, prd.t2) && res.size == prd.size)
 }
@@ -632,6 +634,7 @@ object EvalTypeReductionConfluence {
   import ARSEquivalences._
   import ParallelTypeReduction._
   import EvalTypeReduction._
+  import EvalTypeReductionValidity.*
 
   /**
     * Confluence - TRAT Definition 2.1.3, TAPL Lemma 30.3.9
@@ -767,6 +770,7 @@ object TypeEquivalenceDecidability{
   import ParallelTypeReduction._
   import EvalTypeReduction._
   import EvalTypeReductionConfluence._
+  import EvalTypeReductionValidity._
 
   /**
    * Procedure that reduces a type to its normal form.

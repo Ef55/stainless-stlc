@@ -57,7 +57,7 @@ object Typing {
         case EquivDerivation(env, typ, ter, td, eq, kd) => {
           td.isSound && eq.isValid && kd.isSound && // Premise is valid
           td.env == env && td.term == ter && // and has matching attributes
-          eq.type1 == td.t && eq.type2 == typ &&
+          eq.t1 == td.t && eq.t2 == typ &&
           kd.env == Nil() && kd.typ == typ && kd.k == ProperKind
         }
       }
