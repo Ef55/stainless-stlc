@@ -86,7 +86,8 @@ object ParallelTypeReduction{
       * ! for technical reasons mentioned in the ARS file
       * 
       * * Basic property: the resulting reduction step is well formed
-      */    
+      */
+    @pure    
     def toARSStep: ParallelReductionStep = {
       (this, type1, type2, isSound)
     }.ensuring(_.isWellFormed)
@@ -118,22 +119,27 @@ object ParallelTypeReduction{
   type ParallelEquivalenceSeq = ARSKFoldComposition[Type, ARSSymmStep[Type, ParallelReductionDerivation]]
 
   extension (s: ParallelReductionStep){
+    @pure
     def isWellFormed: Boolean = s.unfold.type1 == s.t1 && s.unfold.type2 == s.t2 && s.unfold.isSound == s.isSound
+    @pure
     def isValid: Boolean = s.isSound && s.isWellFormed
   }
 
   extension (ms: MultiStepParallelReduction){
+    @pure
     def isWellFormed: Boolean =
       decreases(ms)
       ms match
         case ARSIdentity(t) => true
         case ARSComposition(h, t) => h.isWellFormed && t.isWellFormed
+    @pure
     def isValid: Boolean = {
       ms.isSound && ms.isWellFormed  
     }
   }
 
   extension (ms: ParallelEquivalence){
+    @pure
     def isWellFormed: Boolean =
       decreases(ms)
       ms match
@@ -141,7 +147,7 @@ object ParallelTypeReduction{
         case ARSBaseRelation(r) => r.isWellFormed
         case ARSTransitivity(r1, r2) => r1.isWellFormed && r2.isWellFormed
         case ARSSymmetry(r) => r.isWellFormed
-
+    @pure
     def isValid: Boolean = {
       ms.isSound && ms.isWellFormed  
     }
@@ -154,6 +160,7 @@ object ParallelTypeReductionValidity{
   import ParallelTypeReduction.*
 
   extension (s: ARSSymmStep[Type, ParallelReductionDerivation]) {
+    @pure
     def isDeepValid: Boolean = {
       s match
         case ARSBaseStepClass(s) => s.isValid
@@ -162,6 +169,7 @@ object ParallelTypeReductionValidity{
   }
 
   extension (eq: ParallelEquivalenceSeq) {
+    @pure
     def isDeepValid: Boolean =
       decreases(eq.size)
       eq match
@@ -169,6 +177,7 @@ object ParallelTypeReductionValidity{
         case ARSComposition(h, t) => h.unfold.isDeepValid && t.isDeepValid
   }
 
+  @pure
   def isValidInd(ms: MultiStepParallelReduction): Boolean = {
     decreases(ms.size)
     ms match
@@ -176,6 +185,7 @@ object ParallelTypeReductionValidity{
         case ARSComposition(h, t) => h.isValid && isValidInd(t) && h.t2 == t.t1
   }.ensuring(_ == ms.isValid)
 
+  @pure
   def isValidInd(eq: ParallelEquivalence): Boolean = {
     decreases(eq.size)
     eq match
@@ -185,10 +195,39 @@ object ParallelTypeReductionValidity{
       case ARSSymmetry(r) => isValid(r)
   }.ensuring(_ == eq.isValid)
 
+  @pure
   def concatWellFormed(@induct s1: MultiStepParallelReduction, s2: MultiStepParallelReduction): Unit = {
     require(s1.isWellFormed)
     require(s2.isWellFormed)
   }.ensuring(_ => s1.concat(s2).isWellFormed)
+
+  def toReflTransWellFormed(@induct ms: MultiStepParallelReduction): Unit = {
+    require(ms.isWellFormed)
+  }.ensuring(ms.toReflTrans.isWellFormed)
+
+  @pure @opaque @inlineOnce
+  def kFoldInverseToReflTransWellFormed(ms: MultiStepParallelReduction): Unit = {
+    require(ms.isValid)
+    toReflTransWellFormed(ms)
+  }.ensuring(kFoldInverseToReflTrans(ms).isWellFormed)
+
+  def reductionImpliesEquivalenceWellFormed(ms1: MultiStepParallelReduction, ms2: MultiStepParallelReduction, eq: ParallelEquivalence): Unit = {
+    require(ms1.isValid)
+    require(ms2.isValid)
+    require(eq.isValid)
+    require(ms1.t2 == eq.t1)
+    require(ms2.t2 == eq.t2)
+    toReflTransWellFormed(ms1)
+    kFoldInverseToReflTransWellFormed(ms2)
+  }.ensuring(reductionImpliesEquivalence(ms1, ms2, eq).isWellFormed)
+
+  def reduceSameFormEquivalentWellFormed(ms1: MultiStepParallelReduction, ms2: MultiStepParallelReduction): Unit = {
+    require(ms1.isValid)
+    require(ms2.isValid)
+    require(ms1.t2 == ms2.t2)
+    reductionImpliesEquivalenceWellFormed(ms1, ms2, ARSReflexivity(ms1.t2))
+  }.ensuring(reduceSameFormEquivalent(ms1, ms2).isWellFormed)
+
 
   def concatDeepValid(@induct s1: ParallelEquivalenceSeq, s2: ParallelEquivalenceSeq): Unit = {
     require(s1.isDeepValid)
@@ -666,5 +705,54 @@ object ParallelTypeReductionProperties {
     res._1.t1 == eq.t1 &&
     res._2.t1 == eq.t2 &&
     res._1.isValid && res._2.isValid
-  ) 
+  )
+
+  def arrowMultiStepReduction(s1: Type, s2: Type, red: MultiStepParallelReduction): (MultiStepParallelReduction, MultiStepParallelReduction) = {
+    require(red.isValid)
+    require(red.t1 == ArrowType(s1, s2))
+
+    isValidInd(red)
+
+    red match
+      case ARSIdentity(_) => (ARSIdentity(s1), ARSIdentity(s2))
+      case ARSComposition(h, t) =>
+        assert(h.isValid)
+        h.unfold match
+          case ReflDerivation(_) => arrowMultiStepReduction(s1, s2, t)
+          case ArrowTypeDerivation(_, ArrowType(s3, s4), br1, br2) =>
+            val (sdr1, sdr2) = arrowMultiStepReduction(s3, s4, t)
+            (ARSComposition(br1.toARSStep, sdr1), ARSComposition(br2.toARSStep, sdr2))
+          case _ => Unreacheable
+    
+  }.ensuring(
+    res => 
+      res._1.isValid &&
+      res._2.isValid &&
+      res._1.t1 == s1 &&
+      res._2.t1 == s2 &&
+      red.t2 == ArrowType(res._1.t2, res._2.t2)
+  )
+
+  def arrowEquivalence(s1: Type, s2: Type, s3: Type, s4: Type, eq: ParallelEquivalence): (ParallelEquivalence, ParallelEquivalence) = {
+    require(eq.isValid)
+    require(eq.t1 == ArrowType(s1, s2))
+    require(eq.t2 == ArrowType(s3, s4))
+
+    val (pr1, pr2) = churchRosser(eq)
+    val (spr11, spr12) = arrowMultiStepReduction(s1, s2, pr1)
+    val (spr21, spr22) = arrowMultiStepReduction(s3, s4, pr2)
+    reduceSameFormEquivalentWellFormed(spr11, spr21)
+    reduceSameFormEquivalentWellFormed(spr12, spr22)
+    (reduceSameFormEquivalent(spr11, spr21), reduceSameFormEquivalent(spr12, spr22))
+    
+  }.ensuring(
+    res => 
+      res._1.isValid &&
+      res._2.isValid &&
+      res._1.t1 == s1 &&
+      res._2.t1 == s2 &&
+      res._1.t2 == s3 &&
+      res._2.t2 == s4
+  )
+
 }

@@ -27,21 +27,6 @@ object LambdaOmega {
     */
   sealed trait Type {
 
-    // // /**
-    // //   * Determines which types are considered as values in our calculus.
-    // //   * ! This definition is informal and is only meant to give us a nice criteria
-    // //   * ! to determine which types can be deterministically reduced or not.
-    // //   * TODO add a reference to the theorem
-    // //   */
-    // // @pure
-    // // def isValue: Boolean = 
-    // //   decreases(size)
-    // //   this match
-    // //     case AbsType(_, body) => true
-    // //     case BasicType(_) => true
-    // //     case ArrowType(t1, t2) => t1.isValue && t2.isValue
-    // //     case _ => false
-
     /**
       * Set of free variables of a type also noted FV(T).
       * The set of free variables of a lambda is described in TAPL Chap 6.1
@@ -93,6 +78,7 @@ object LambdaOmega {
       * 
       * For the equivalence between this definition and the classical one cf. hasFreeVariablesAboveSoundness
       */
+    @pure
     def hasFreeVariablesAbove(c: BigInt): Boolean = {
       decreases(size)
       require(c >= 0)
@@ -236,22 +222,6 @@ object LambdaOmega {
    */
   type KindEnvironment = List[Kind]
   type TypeEnvironment = List[Type]
-
-  // // @pure
-  // // def hasFreeVariablesIn(env: TypeEnvironment, c: BigInt, d: BigInt): Boolean = {
-  // //   decreases(env.length)
-  // //   require(c >= 0)
-  // //   require(d >= 0)
-
-  // //   env match 
-  // //     case Nil() => false
-  // //     case Cons(h, t) => h.hasFreeVariablesIn(c, d) || hasFreeVariablesIn(t, c, d)
-
-  // // }.ensuring(res =>
-  // //   ( !res ==> env.forall(!_.hasFreeVariablesIn(c, d)) ) &&
-  // //   ( res ==> env.exists(_.hasFreeVariablesIn(c, d)) ) &&
-  // //   ( (d == 0) ==> !res )
-  // // )
 }
 
 object LambdaOmegaProperties{
@@ -264,6 +234,7 @@ object LambdaOmegaProperties{
     /**
       * * ∀x ∈ FV(T), x ≥ 0
       */
+    @pure @opaque @inlineOnce
     def freeVarsNonNeg(t: Type): Unit = {
       decreases(t.size)
       t match
@@ -291,6 +262,7 @@ object LambdaOmegaProperties{
      *
      * * T.hasFreeVariablesIn(c, d) <=> FV(T) ∩ [c, c + d[ ≠ ∅
      */
+    @pure @opaque @inlineOnce
     def hasFreeVariablesInSoundness(t: Type, c: BigInt, d: BigInt): Unit = {
       decreases(t.size)
       require(c >= 0)
@@ -301,11 +273,15 @@ object LambdaOmegaProperties{
         case AppType(t1, t2) => 
           hasFreeVariablesInSoundness(t1, c, d)
           hasFreeVariablesInSoundness(t2, c, d)
+          filterSplitGeLt(t1.freeVars, c, c + d)
+          filterSplitGeLt(t2.freeVars, c, c + d)
           concatFilter(t1.freeVars.filter(c <= _), t2.freeVars.filter(c <= _), _ < c + d)
           concatFilter(t1.freeVars, t2.freeVars, c <= _)
         case ArrowType(t1, t2) =>
           hasFreeVariablesInSoundness(t1, c, d)
           hasFreeVariablesInSoundness(t2, c, d)
+          filterSplitGeLt(t1.freeVars, c, c + d)
+          filterSplitGeLt(t2.freeVars, c, c + d)
           concatFilter(t1.freeVars.filter(c <= _), t2.freeVars.filter(c <= _), _ < c + d)
           concatFilter(t1.freeVars, t2.freeVars, c <= _)
         case VariableType(j) => ()
@@ -328,7 +304,7 @@ object LambdaOmegaProperties{
      *
      * * T.hasFreeVariablesAbove(c) <=> FV(T) ∩ [c, ∞[ ≠ ∅
      */
-    @opaque @pure
+    @inlineOnce @opaque @pure
     def hasFreeVariablesAboveSoundness(t: Type, c: BigInt): Unit = {
       decreases(t.size)
       require(c >= 0)
@@ -356,7 +332,7 @@ object LambdaOmegaProperties{
      *
      * * T.isClosed <=> FV(T) = ∅
      */  
-    @opaque @pure
+    @inlineOnce @opaque @pure
     def isClosedSoundness(t: Type): Unit = {
       freeVarsNonNeg(t)
       hasFreeVariablesAboveSoundness(t, 0)
@@ -376,7 +352,7 @@ object LambdaOmegaProperties{
       * Postcondition:
       *   T has no free variable occurences between c and c + d2
       */
-    @opaque @pure
+    @inlineOnce @opaque @pure
     def boundRangeDecrease(t: Type, c: BigInt, d1: BigInt, d2: BigInt): Unit = {
       decreases(t.size)
       require(d2 >= 0)
@@ -411,7 +387,7 @@ object LambdaOmegaProperties{
       * Postcondition:
       *   T has no free variable occurences between c2 and d - (c2 - c1) + c2 (= c1 + d)
       */
-    @opaque @pure
+    @inlineOnce @opaque @pure
     def boundRangeIncreaseCutoff(t: Type, c1: BigInt, c2: BigInt, d: BigInt): Unit = {
       decreases(t.size)
       require(0 <= c1)
@@ -446,7 +422,7 @@ object LambdaOmegaProperties{
       * Postcondition:
       *   T has no free variable occurences between a and a + b + c
       */
-    @opaque @pure
+    @inlineOnce @opaque @pure
     def boundRangeConcatenation(t: Type, a: BigInt, b: BigInt, c: BigInt): Unit = {
       decreases(t.size)
       require(a >= 0)
@@ -475,6 +451,7 @@ object LambdaOmegaProperties{
     /**
       * * ∀x ∈ FV(t), x ≥ 0
       */
+    @pure @opaque @inlineOnce
     def freeVarsNonNeg(t: Term): Unit = {
       decreases(t.size)
       t match
@@ -497,6 +474,7 @@ object LambdaOmegaProperties{
      * 
      * * t.hasFreeVariablesIn(c, d) <=> FV(t) ∩ [c, c + d[ ≠ ∅
      */
+    @pure @opaque @inlineOnce
     def hasFreeVariablesInSoundness(t: Term, c: BigInt, d: BigInt): Unit = {
       decreases(t.size)
       require(c >= 0)
@@ -506,6 +484,8 @@ object LambdaOmegaProperties{
         case App(t1, t2) => 
           hasFreeVariablesInSoundness(t1, c, d)
           hasFreeVariablesInSoundness(t2, c, d)
+          filterSplitGeLt(t1.freeVars, c, c + d)
+          filterSplitGeLt(t2.freeVars, c, c + d)
           concatFilter(t1.freeVars.filter(c <= _), t2.freeVars.filter(c <= _), _ < c + d)
           concatFilter(t1.freeVars, t2.freeVars, c <= _)
         case Var(j) => ()
@@ -528,7 +508,7 @@ object LambdaOmegaProperties{
      * 
      * * t.hasFreeVariablesAbove(c) <=> FV(t) ∩ [c, ∞[ ≠ ∅
      */
-    @opaque @pure
+    @inlineOnce @opaque @pure
     def hasFreeVariablesAboveSoundness(t: Term, c: BigInt): Unit = {
       decreases(t.size)
       require(c >= 0)
@@ -551,7 +531,7 @@ object LambdaOmegaProperties{
      *
      * * t.isClosed <=> FV(t) = ∅
      */
-    @opaque @pure
+    @inlineOnce @opaque @pure
     def isClosedSoundness(t: Term): Unit = {
       freeVarsNonNeg(t)
       hasFreeVariablesAboveSoundness(t, 0)
@@ -570,7 +550,7 @@ object LambdaOmegaProperties{
       * Postcondition:
       *   t has no free variable occurences between c and c + d2
       */
-    @opaque @pure
+    @inlineOnce @opaque @pure
     def boundRangeDecrease(t: Term, c: BigInt, d1: BigInt, d2: BigInt): Unit = {
       decreases(t.size)
       require(d1 >= 0 && d2 >= 0)
@@ -601,7 +581,7 @@ object LambdaOmegaProperties{
       * Postcondition:
       *   t has no free variable occurences between c2 and d - (c2 - c1) + c2 (= c1 + d)
       */
-    @opaque @pure
+    @inlineOnce @opaque @pure
     def boundRangeIncreaseCutoff(t: Term, c1: BigInt, c2: BigInt, d: BigInt): Unit = {
       decreases(t.size)
       require(c1 >= 0 && c2 >= 0)
@@ -631,7 +611,7 @@ object LambdaOmegaProperties{
       * Postcondition:
       *   t has no free variable occurences between a and a + b + c
       */
-    @opaque @pure
+    @inlineOnce @opaque @pure
     def boundRangeConcatenation(t: Term, a: BigInt, b: BigInt, c: BigInt): Unit = {
       decreases(t.size)
       require(a >= 0)

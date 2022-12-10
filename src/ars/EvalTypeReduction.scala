@@ -279,7 +279,16 @@ object EvalTypeReduction{
         ListProperties.concatContains(l1, l2, r)
         ListProperties.concatContains(l1 ++ l2, l3, r)
 
-      case AppAbsTypeDerivation(_, _) => ()
+      case AppAbsTypeDerivation(t11, t12) => 
+        val l1: List[EvalReductionDerivation] = reduce(t11).map(t1d => AppTypeDerivationL(AppType(t11, t12), AppType(t1d.type2, t12), t1d))
+        val l2: List[EvalReductionDerivation] = reduce(t12).map(t2d => AppTypeDerivationR(AppType(t11, t12), AppType(t11, t2d.type2), t2d))
+        val l3: List[EvalReductionDerivation] = 
+          t11 match
+            case abs@AbsType(k, b) =>
+              Cons(AppAbsTypeDerivation(abs, t12), Nil())
+            case _ => Nil()
+        assert(l3.contains(r))
+        ListProperties.concatContains(l1 ++ l2, l3, r)
   }.ensuring(reduce(r.type1).contains(r))
 
   /**

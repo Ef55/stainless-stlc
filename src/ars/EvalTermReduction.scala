@@ -217,7 +217,16 @@ object EvalTermReduction{
         ListProperties.concatContains(l1, l2, r)
         ListProperties.concatContains(l1 ++ l2, l3, r)
 
-      case AppAbsDerivation(_, _) => ()
+      case AppAbsDerivation(t11, t12) =>         
+        val l1: List[EvalReductionDerivation] = reduce(t11).map(t1d => AppDerivationL(App(t11, t12), App(t1d.term2, t12), t1d))
+        val l2: List[EvalReductionDerivation] = reduce(t12).map(t2d => AppDerivationR(App(t11, t12), App(t11, t2d.term2), t2d))
+        val l3: List[EvalReductionDerivation] = 
+          t11 match
+            case abs@Abs(k, b) =>
+              Cons(AppAbsDerivation(abs, t12), Nil())
+            case _ => Nil()
+        assert(l3.contains)
+        ListProperties.concatContains(l1 ++ l2, l3, r)
   }.ensuring(reduce(r.term1).contains(r))
 
   /**
@@ -284,97 +293,3 @@ object EvalTermReduction{
   }.ensuring(callByValueReducesTo(t1, t2).get.isSound && callByValueReducesTo(t1, t2).get.term1 == t1 && callByValueReducesTo(t1, t2).get.term2 == t2)
 
 }
-
-// import stainless.lang._
-// import stainless.collection._
-// import stainless.annotation._
-
-
-
-//   def appReducesToSoundness(app: App, tp: Term): Unit = {
-//     require(reducesTo(app, tp).isDefined)
-//   }.ensuring(reducesTo(app, tp).get.isInstanceOf[AppRule])
-
-//   def app1CongruenceInversion(t: Term, tp: Term): Unit = {
-//     require(reducesTo(t, tp).isDefined)
-//     require(reducesTo(t, tp).get == App1Congruence)
-
-//     assert(t.isInstanceOf[App])
-//   }.ensuring(
-//     t.isInstanceOf[App] && tp.isInstanceOf[App] &&
-//     (t.asInstanceOf[App].t2 == tp.asInstanceOf[App].t2) &&
-//     reducesTo(t.asInstanceOf[App].t1, tp.asInstanceOf[App].t1).isDefined
-//   )
-
-//   def app2CongruenceInversion(t: Term, tp: Term): Unit = {
-//     require(reducesTo(t, tp).isDefined)
-//     require(reducesTo(t, tp).get == App2Congruence)
-
-//     assert(t.isInstanceOf[App])
-//   }.ensuring(
-//     t.isInstanceOf[App] && tp.isInstanceOf[App] &&
-//     (t.asInstanceOf[App].t1 == tp.asInstanceOf[App].t1) &&
-//     reducesTo(t.asInstanceOf[App].t2, tp.asInstanceOf[App].t2).isDefined
-//   )
-
-//   def absAppReductionInversion(t: Term, tp: Term): Unit = {
-//     require(reducesTo(t, tp).isDefined)
-//     require(reducesTo(t, tp).get == AbsAppReduction)
-
-//     assert(t.isInstanceOf[App])
-//     val App(t1, _) = t
-//     assert(t1.isInstanceOf[Abs])
-//   }.ensuring(
-//     t.isInstanceOf[App] && t.asInstanceOf[App].t1.isInstanceOf[Abs] &&
-//     ( 
-//       tp 
-//       == 
-//       absSubstitution(t.asInstanceOf[App].t1.asInstanceOf[Abs].body, t.asInstanceOf[App].t2) 
-//     )
-//   )
-
-//   def fixReducesToSoundness(fix: Fix, tp: Term): Unit = {
-//     require(reducesTo(fix, tp).isDefined)
-//   }.ensuring(reducesTo(fix, tp).get.isInstanceOf[FixRule])
-
-//   def fixCongruenceInversion(t: Term, tp: Term): Unit = {
-//     require(reducesTo(t, tp).isDefined)
-//     require(reducesTo(t, tp).get == FixCongruence)
-
-//     assert(t.isInstanceOf[Fix])
-//   }.ensuring(
-//     t.isInstanceOf[Fix] && tp.isInstanceOf[Fix] &&
-//     reducesTo(t.asInstanceOf[Fix].t, tp.asInstanceOf[Fix].t).isDefined
-//   )
-
-//   def absFixReductionInversion(t: Term, tp: Term): Unit = {
-//     require(reducesTo(t, tp).isDefined)
-//     require(reducesTo(t, tp).get == AbsFixReduction)
-
-//     assert(t.isInstanceOf[Fix])
-//     val Fix(f) = t
-//     assert(f.isInstanceOf[Abs])
-//   }.ensuring(
-//     t.isInstanceOf[Fix] && t.asInstanceOf[Fix].t.isInstanceOf[Abs] &&
-//     ( 
-//       tp 
-//       == 
-//       absSubstitution(t.asInstanceOf[Fix].t.asInstanceOf[Abs].body, t) 
-//     )
-//   )
-
-//   def absReducesToSoundness(abs: Abs, tp: Term): Unit = {
-//     require(reducesTo(abs, tp).isDefined)
-//   }.ensuring(reducesTo(abs, tp).get.isInstanceOf[AbsRule])
-
-//   def absCongruenceInversion(t: Term, tp: Term): Unit = {
-//     require(reducesTo(t, tp).isDefined)
-//     require(reducesTo(t, tp).get == AbsCongruence)
-//   }.ensuring(
-//     t.isInstanceOf[Abs] && tp.isInstanceOf[Abs] &&
-//     ( t.asInstanceOf[Abs].argType == tp.asInstanceOf[Abs].argType ) &&
-//     reducesTo(t.asInstanceOf[Abs].body, tp.asInstanceOf[Abs].body).isDefined
-//   )
-
-//   /// Call-by-value soudness
-// }

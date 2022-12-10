@@ -540,6 +540,7 @@ object ARSProperties{
     */ 
   def symmClosureInverse[T, R](ms: ARSKFoldComposition[T, ARSSymmStep[T, R]]): ARSKFoldComposition[T, ARSSymmStep[T, R]] = {
     require(ms.isValid)
+    decreases(ms.size)
     val res = ms match
       case ARSIdentity(t) => ARSIdentity(t)
       case ARSComposition(h, t) => 
