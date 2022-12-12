@@ -7,7 +7,7 @@ object ListProperties {
 
   @inlineOnce @opaque @pure
   def insertionIndexing[T](l1: List[T], l2: List[T], elem: T, k: BigInt): Unit = {
-    decreases(l1.length)
+    decreases(l1)
     require(k < l1.size + l2.size)
     require(k >= l1.size)
     l1 match{
@@ -19,7 +19,7 @@ object ListProperties {
 
   @inlineOnce @opaque @pure
   def concatSecondIndexing[T](l1: List[T], l2: List[T], k: BigInt): Unit = {
-    decreases(l1.length)
+    decreases(l1)
     require(k >= l1.size)
     require(k < l1.size + l2.size)
     l1 match{
@@ -58,7 +58,7 @@ object ListProperties {
 
   @inlineOnce @opaque @pure
   def mapContains[S, T](l: List[S], f: S => T, e: S): Unit = {
-    decreases(l.length)
+    decreases(l)
     require(l.contains(e))
     l match
       case Nil() => ()

@@ -54,6 +54,7 @@ object EvalTypeReduction{
       */
     @pure
     def size: BigInt = {
+      decreases(this)
       this match
         case ArrowTypeDerivationL(_, _, rd) => rd.size + 1 
         case ArrowTypeDerivationR(_, _, rd) => rd.size + 1
@@ -73,6 +74,7 @@ object EvalTypeReduction{
       */
     @pure
     def isSound: Boolean = 
+      decreases(this)
       this match 
         case ArrowTypeDerivationL(ArrowType(t11, t12), ArrowType(t21, t22), rd) => 
           rd.isSound && rd.type1 == t11 && rd.type2 == t21 && t12 == t22
@@ -86,6 +88,7 @@ object EvalTypeReduction{
           rd.isSound && rd.type1 == t12 && rd.type2 == t22 && t11 == t21
         case AppAbsTypeDerivation(_, _) => true
 
+    @pure
     def toARSStep: EvalReductionStep = {
       (this, type1, type2, isSound)
     }.ensuring(_.isWellFormed)
@@ -106,7 +109,9 @@ object EvalTypeReduction{
    * 
    * ! Lists are used here instead of sets since their are easier to deal with in Stainless
    */
+  @pure
   def reduce(t: Type): List[EvalReductionDerivation] = {
+    decreases(t)
     t match
       case BasicType(_) => Nil()
       case VariableType(_) => Nil()
@@ -129,6 +134,7 @@ object EvalTypeReduction{
     * Decider procedure for reduction
     * If t1 -> t2 then the algorithm output a proof that witnesses the reduction
     */
+  @pure
   def reducesTo(t1: Type, t2: Type): Option[EvalReductionDerivation] = {
     reduce(t1).filter((r: EvalReductionDerivation) => r.type2 == t2) match
       case Nil() => None()
@@ -138,30 +144,35 @@ object EvalTypeReduction{
   /**
     * List of technical lemmas needed to prove soundness of reduce
     */
+  @pure @opaque @inlineOnce
   def reduceSoundnessLemmaAbs(@induct l: List[EvalReductionDerivation], k: Kind, b: Type): Unit = {
     require(l.forall(_.isSound))
     require(l.forall(_.type1 == b))
   }.ensuring(l.forall(b2 => AbsTypeDerivation(AbsType(k, b), AbsType(k, b2.type2), b2).isSound) &&
              l.forall(b2 => AbsTypeDerivation(AbsType(k, b), AbsType(k, b2.type2), b2).type1 == AbsType(k, b)))
 
+  @pure @opaque @inlineOnce
   def reduceSoundnessLemmaArrL(@induct l: List[EvalReductionDerivation], t1: Type, t2: Type): Unit = {
     require(l.forall(_.isSound))
     require(l.forall(_.type1 == t1))
   }.ensuring(l.forall(t1d => ArrowTypeDerivationL(ArrowType(t1, t2), ArrowType(t1d.type2, t2), t1d).isSound) &&
              l.forall(t1d => ArrowTypeDerivationL(ArrowType(t1, t2), ArrowType(t1d.type2, t2), t1d).type1 == ArrowType(t1, t2)))
 
+  @pure @opaque @inlineOnce
   def reduceSoundnessLemmaArrR(@induct l: List[EvalReductionDerivation], t1: Type, t2: Type): Unit = {
     require(l.forall(_.isSound))
     require(l.forall(_.type1 == t2))
   }.ensuring(l.forall(t2d => ArrowTypeDerivationR(ArrowType(t1, t2), ArrowType(t1, t2d.type2), t2d).isSound) &&
              l.forall(t2d => ArrowTypeDerivationR(ArrowType(t1, t2), ArrowType(t1, t2d.type2), t2d).type1 == ArrowType(t1, t2)))
 
+  @pure @opaque @inlineOnce
   def reduceSoundnessLemmaAppL(@induct l: List[EvalReductionDerivation], t1: Type, t2: Type): Unit = {
     require(l.forall(_.isSound))
     require(l.forall(_.type1 == t1))
   }.ensuring(l.forall(t1d => AppTypeDerivationL(AppType(t1, t2), AppType(t1d.type2, t2), t1d).isSound) &&
              l.forall(t1d => AppTypeDerivationL(AppType(t1, t2), AppType(t1d.type2, t2), t1d).type1 == AppType(t1, t2)))
 
+  @pure @opaque @inlineOnce
   def reduceSoundnessLemmaAppR(@induct l: List[EvalReductionDerivation], t1: Type, t2: Type): Unit = {
     require(l.forall(_.isSound))
     require(l.forall(_.type1 == t2))
@@ -172,7 +183,9 @@ object EvalTypeReduction{
     * Soudness of reduce
     * That is all the proofs in the set outputed by reduce are sound and they all witness T -> T' for some T'
     */
+  @pure @opaque @inlineOnce
   def reduceSoundness(t: Type): Unit = {
+    decreases(t)
     t match
       case BasicType(_) => ()
       case VariableType(_) => ()
@@ -230,7 +243,9 @@ object EvalTypeReduction{
    * Completeness of reduce
    * That is if T1 -> T2 then T2 ∈ reduce(T1)
    */
+  @pure @opaque @inlineOnce
   def reduceCompleteness(r: EvalReductionDerivation): Unit = {
+    decreases(r)
     require(r.isSound)
     
     r match
@@ -294,6 +309,7 @@ object EvalTypeReduction{
   /**
    * Normal form - TRAT Section 2.1.1
    */
+  @pure
   def isEvalNormalForm(t: Type): Boolean = {
     reduce(t).isEmpty
   }
@@ -303,7 +319,9 @@ object EvalTypeReduction{
     * Reduction strategy where reduction is applied whenever it is possible
     * The procedure outputs a proof witnessing the reduction
     */
+  @pure
   def fullBetaReduce(t: Type): Option[EvalReductionDerivation] = {
+    decreases(t)
     t match
       case at@ArrowType(t11, t12) =>
         fullBetaReduce(t11) match 
@@ -333,7 +351,9 @@ object EvalTypeReduction{
    * Full beta reduction soudness
    * That is the proof witnessing T -> T' is sound
    */
+  @pure @opaque @inlineOnce
   def fullBetaReduceSoundness(t: Type): Unit = {
+    decreases(t)
     require(fullBetaReduce(t).isDefined)
     t match
       case at@ArrowType(t11, t12) =>
@@ -364,6 +384,7 @@ object EvalTypeReduction{
    * Full beta reduction completeness
    * That is a type is reducible then it is also reducible under full beta reduction
    */
+  @pure @opaque @inlineOnce
   def fullBetaReduceCompleteness(@induct r: EvalReductionDerivation): Unit = {
     require(r.isSound)
   }.ensuring(_ => fullBetaReduce(r.type1).isDefined)
@@ -372,6 +393,7 @@ object EvalTypeReduction{
     * Outputs if T1 -> T2 according to full beta reduction
     * If it is the case, outputs a proof of the reduction
     */
+  @pure
   def fullBetaReducesTo(t1: Type, t2: Type): Option[EvalReductionDerivation] = {
     fullBetaReduce(t1) match
       case Some(prd) => if prd.type2 == t2 then Some(prd) else None()
@@ -382,6 +404,7 @@ object EvalTypeReduction{
    * Soudness of fullBetaReducesTo
    * That is if the procedure outputs a proof of T1 -> T2, then it is sound
    */
+  @pure @opaque @inlineOnce
   def fullBetaReducesToSoundness(t1: Type, t2: Type): Unit = {
     require(fullBetaReducesTo(t1, t2).isDefined)
     fullBetaReduceSoundness(t1)
@@ -391,6 +414,7 @@ object EvalTypeReduction{
    * Completeness of fullBetaReducesTo
    * That is if fullBetaReduce(T1) = T2 then fullBetaReducesTo(T1, T2) is defined
    */
+  @pure @opaque @inlineOnce
   def fullBetaReducesToCompleteness(r: EvalReductionDerivation): Unit = {
     require(r.isSound)
     fullBetaReduceCompleteness(r)
@@ -401,6 +425,7 @@ object EvalTypeReduction{
   /**
    * 
    */
+  @pure @opaque @inlineOnce
   def reduceIffFullBetaReduce(t1: Type): Unit = {
     reduceSoundness(t1)
     (reduce(t1), fullBetaReduce(t1)) match
@@ -417,27 +442,35 @@ object EvalTypeReduction{
   type EvalEquivalence = ARSEquivalence[Type, EvalReductionDerivation]
 
   extension (s: EvalReductionStep){
+    @pure
     def isWellFormed: Boolean = s.unfold.type1 == s.t1 && s.unfold.type2 == s.t2 && s.unfold.isSound == s.isSound
+    @pure
     def isValid: Boolean = s.isSound && s.isWellFormed
   }
 
   extension (ms: MultiStepEvalReduction){
+    @pure
     def isWellFormed: Boolean =
+      decreases(ms)
       ms match
         case ARSIdentity(t) => true
         case ARSComposition(h, t) => h.isWellFormed && t.isWellFormed
+    
+    @pure
     def isValid: Boolean = ms.isSound && ms.isWellFormed
   }
 
   extension (ms: EvalEquivalence){
+    @pure
     def isWellFormed: Boolean =
-      decreases(ms.size)
+      decreases(ms)
       ms match
         case ARSReflexivity(t) => true
         case ARSBaseRelation(r) => r.isWellFormed
         case ARSTransitivity(r1, r2) => r1.isWellFormed && r2.isWellFormed
         case ARSSymmetry(r) => r.isWellFormed
 
+    @pure
     def isValid: Boolean = {
       ms.isSound && ms.isWellFormed  
     }
@@ -452,20 +485,24 @@ object EvalTypeReductionValidity{
 
   import EvalTypeReduction.*
 
+  @pure @opaque @inlineOnce
   def concatWellFormed(@induct s1: MultiStepEvalReduction, s2: MultiStepEvalReduction): Unit = {
     require(s1.isWellFormed)
     require(s2.isWellFormed)
   }.ensuring(s1.concat(s2).isWellFormed)
 
+  @pure @opaque @inlineOnce
   def toReflTransWellFormed(@induct ms: MultiStepEvalReduction): Unit = {
     require(ms.isWellFormed)
   }.ensuring(ms.toReflTrans.isWellFormed)
 
+  @pure @opaque @inlineOnce
   def kFoldInverseToReflTransWellFormed(ms: MultiStepEvalReduction): Unit = {
     require(ms.isValid)
     toReflTransWellFormed(ms)
   }.ensuring(kFoldInverseToReflTrans(ms).isWellFormed)
 
+  @pure @opaque @inlineOnce
   def reductionPreserveEquivalenceWellFormed(ms1: MultiStepEvalReduction, ms2: MultiStepEvalReduction, eq: EvalEquivalence) = {
     require(ms1.isValid)
     require(ms2.isValid)
@@ -476,6 +513,7 @@ object EvalTypeReductionValidity{
     toReflTransWellFormed(ms2)
   }.ensuring(reductionPreserveEquivalence(ms1, ms2, eq).isWellFormed)
 
+  @pure @opaque @inlineOnce
   def reductionImpliesEquivalenceWellFormed(ms1: MultiStepEvalReduction, ms2: MultiStepEvalReduction, eq: EvalEquivalence): Unit = {
     require(ms1.isValid)
     require(ms2.isValid)
@@ -486,6 +524,7 @@ object EvalTypeReductionValidity{
     kFoldInverseToReflTransWellFormed(ms2)
   }.ensuring(reductionImpliesEquivalence(ms1, ms2, eq).isWellFormed)
 
+  @pure @opaque @inlineOnce
   def reduceSameFormEquivalentWellFormed(ms1: MultiStepEvalReduction, ms2: MultiStepEvalReduction): Unit = {
     require(ms1.isValid)
     require(ms2.isValid)
@@ -494,7 +533,9 @@ object EvalTypeReductionValidity{
   }.ensuring(reduceSameFormEquivalent(ms1, ms2).isWellFormed)
 
 
+  @pure
   def isValidInd(ms: MultiStepEvalReduction): Boolean = {
+    decreases(ms)
     ms match
         case ARSIdentity(t) => true
         case ARSComposition(h, t) => h.isValid && isValidInd(t) && h.t2 == t.t1
@@ -525,7 +566,9 @@ object EvalTypeReductionProperties {
    * 
    * * The proof is constructive and outputs this step sequence
    */
+  @pure @opaque @inlineOnce
   def arrowDerivationLMap(prd1: MultiStepEvalReduction, t2: Type): MultiStepEvalReduction = {
+    decreases(prd1)
     require(prd1.isValid)
     prd1 match
       case ARSIdentity(t1) => ARSIdentity(ArrowType(t1, t2))
@@ -551,7 +594,9 @@ object EvalTypeReductionProperties {
    * 
    * * The proof is constructive and outputs this step sequence
    */
+  @pure @opaque @inlineOnce
   def arrowDerivationRMap(t1: Type, prd2: MultiStepEvalReduction): MultiStepEvalReduction = {
+    decreases(prd2)
     require(prd2.isValid)
     prd2 match
       case ARSIdentity(t2) => ARSIdentity(ArrowType(t1, t2))
@@ -577,7 +622,9 @@ object EvalTypeReductionProperties {
    * 
    * * The proof is constructive and outputs this step sequence
    */
+  @pure @opaque @inlineOnce
   def appDerivationLMap(prd1: MultiStepEvalReduction, t2: Type): MultiStepEvalReduction = {
+    decreases(prd1)
     require(prd1.isValid)
     prd1 match
       case ARSIdentity(t1) => ARSIdentity(AppType(t1, t2))
@@ -603,7 +650,9 @@ object EvalTypeReductionProperties {
    * 
    * * The proof is constructive and outputs this step sequence
    */
+  @pure @opaque @inlineOnce
   def appDerivationRMap(t1: Type, prd2: MultiStepEvalReduction): MultiStepEvalReduction = {
+    decreases(prd2)
     require(prd2.isValid)
     prd2 match
       case ARSIdentity(t2) => ARSIdentity(AppType(t1, t2))
@@ -629,7 +678,9 @@ object EvalTypeReductionProperties {
    * 
    * * The proof is constructive and outputs this step sequence
    */
+  @pure @opaque @inlineOnce
   def absDerivationMap(k: Kind, prd: MultiStepEvalReduction): MultiStepEvalReduction = {
+    decreases(prd)
     require(prd.isValid)
     prd match
       case ARSIdentity(b) => ARSIdentity(AbsType(k, b))
@@ -664,6 +715,7 @@ object EvalTypeReductionConfluence {
     *     - T41 = T42
     * * The proof is constructive and returns this pair of list
     */
+  @pure @opaque @inlineOnce
   def evalConfluence(prd1: MultiStepEvalReduction, prd2: MultiStepEvalReduction): (MultiStepEvalReduction, MultiStepEvalReduction) = {
     decreases(prd1.size + prd2.size)
     require(prd1.isValid)
@@ -697,6 +749,7 @@ object EvalTypeReductionConfluence {
     *     - T31 = T32
     * * The proof is constructive and returns this pair of list
     */
+  @pure @opaque @inlineOnce
   def churchRosser(eq: EvalEquivalence): (MultiStepEvalReduction, MultiStepEvalReduction) = {
     require(eq.isValid)
 
@@ -725,6 +778,7 @@ object EvalTypeReductionConfluence {
     * 
     * Postcondition: T2 = T3
     */
+  @pure @opaque @inlineOnce
   def uniqueNormalForm(ms1: MultiStepEvalReduction, ms2: MultiStepEvalReduction): Unit = {
     require(ms1.isValid)
     require(ms2.isValid)
@@ -755,6 +809,7 @@ object EvalTypeReductionConfluence {
     * Postcondition: T1 = T2
     * 
     */
+  @pure @opaque @inlineOnce
   def equivalentNormalFormEqual(eq: EvalEquivalence): Unit = {
     require(isEvalNormalForm(eq.t1))
     require(isEvalNormalForm(eq.t2))
@@ -788,6 +843,7 @@ object TypeEquivalenceDecidability{
    * 
    * Basic property: the step sequence witnessing T -k-> T' is valid and T' is a normal form
    */
+  @pure
   def reduceToNormalForm(t: Type): MultiStepEvalReduction = {
     reduceIffFullBetaReduce(t)
     fullBetaReduce(t) match
@@ -797,6 +853,21 @@ object TypeEquivalenceDecidability{
         ARSComposition(r.toARSStep, reduceToNormalForm(r.type2))
   }.ensuring(res => res.isValid && res.t1 == t && isEvalNormalForm(res.t2))
 
+  @pure
+  def reduceEnvToNormalForm(env: TypeEnvironment): List[MultiStepEvalReduction] = {
+    decreases(env)
+
+    env match
+      case Nil() => Nil()
+      case Cons(h, t) => Cons(reduceToNormalForm(t), reduceEnvToNormalForm(t))
+
+  }.ensuring(res.forall(_.isValid))
+
+  @pure @inlineOnce @opaque
+  def reduceEnvToNormalFormApply(@induct env: TypeEnvironment, j: BigInt): Unit = {
+    require(0 <= j)
+    require(j <= env.length)
+  }.ensuring(reduceEnvToNormalForm(env)(j).isValid && reduceEnvToNormalForm(env)(j).t1 == env(j) && isEvalNormalForm(reduceEnvToNormalForm(env)(j).t2))
 
   /**
     * Decider for type equivalence - TAPL 30.3 Decidability
@@ -804,6 +875,7 @@ object TypeEquivalenceDecidability{
     * If the inputs are equivalent the algorithm outputs a proof of the type equivalence.
     * ! Termination is not proved yet as it requires Normalization of lambda calculus
     */
+  @pure
   def isEquivalentTo(t1: Type, t2: Type): Option[ParallelEquivalence] = {
     val msr1 = reduceToNormalForm(t1)
     val msr2 = reduceToNormalForm(t2)
@@ -817,6 +889,7 @@ object TypeEquivalenceDecidability{
     * Soudness of type equivalence decision
     * That is the proof outputed by the decider witnesses T1 ≡ T2 and is valid (i.e. is accepted by the verifier)
     */
+  @pure @opaque @inlineOnce
   def isEquivalentToSoundness(t1: Type, t2: Type): Unit = {
     require(isEquivalentTo(t1, t2).isDefined)
   }.ensuring(isEquivalentTo(t1, t2).get.isValid && isEquivalentTo(t1, t2).get.t1 == t1 && isEquivalentTo(t1, t2).get.t2 == t2)
@@ -825,6 +898,7 @@ object TypeEquivalenceDecidability{
     * The equivalence procedure is complete
     * That is if two types are equivalent then the decision procedure will output a proof that witness it
     */
+  @pure @opaque @inlineOnce
   def isEquivalentToCompleteness(eq: EvalEquivalence): Unit = {
     require(eq.isValid)
     val msr1 = reduceToNormalForm(eq.t1)

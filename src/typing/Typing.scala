@@ -15,94 +15,58 @@ object Typing {
 
   sealed trait TypeDerivation {
 
-    def env: TypeEnvironment = this match {
+    @pure
+    def env: TypeEnvironment = this match 
       case VarTypingDerivation(e, _, _) => e
       case AbsTypingDerivation(e, _, _, _, _) => e
       case AppTypingDerivation(e, _, _, _, _) => e
       case EquivTypingDerivation(e, _, _, _, _, _) => e
-    }
 
-    def t: Type = this match {
+    @pure
+    def t: Type = this match 
       case VarTypingDerivation(_, t, _) => t
       case AbsTypingDerivation(_, t, _, _, _) => t
       case AppTypingDerivation(_, t, _, _, _) => t
       case EquivTypingDerivation(_, t, _, _, _, _) => t
-    }
 
-    def term: Term = this match{
+    @pure
+    def term: Term = this match
       case VarTypingDerivation(_, _, term) => term
       case AbsTypingDerivation(_, _, term, _, _) => term
       case AppTypingDerivation(_, _, term, _, _) => term
       case EquivTypingDerivation(_, _, term, _, _, _) => term
-    }
 
-    def isSound: Boolean = {
-      this match{
-        case VarTypingDerivation(env, t, Var(k)) => {
+    @pure
+    def isSound: Boolean = 
+      decreases(this)
+      this match
+        case VarTypingDerivation(env, t, Var(k)) => 
           (k < env.size) && // Variable in environment
           env(k) == t       // and has the correct type
-        }
-        case AbsTypingDerivation(env, ArrowType(typ1, typ2), Abs(typ, body), kd, btd) => {
+        case AbsTypingDerivation(env, ArrowType(typ1, typ2), Abs(typ, body), kd, btd) => 
           btd.isSound && // Premise is valid,
           btd.term == body && btd.env == typ :: env && // and has matching attributes
           typ == typ1 && btd.t == typ2 && // Types are correct
           kd.isSound && kd.typ == typ1 && kd.k == ProperKind && kd.env == Nil()
-        }
         case AbsTypingDerivation(_ ,_, _, _, _) => false // An abstraction should always have an arrow type...
-        case AppTypingDerivation(env, t, App(t1, t2), btd1, btd2) => {
+        case AppTypingDerivation(env, t, App(t1, t2), btd1, btd2) => 
           btd1.isSound && btd2.isSound && // Premises are valid
           btd1.term == t1 && btd2.term == t2 && btd1.env == env && btd2.env == env && // and have matching attributes
           btd1.t == ArrowType(btd2.t, t) // The body has expected type
-        }
-        case EquivTypingDerivation(env, typ, ter, td, eq, kd) => {
+        case EquivTypingDerivation(env, typ, ter, td, eq, kd) => 
           td.isSound && eq.isValid && kd.isSound && // Premise is valid
           td.env == env && td.term == ter && // and has matching attributes
           eq.t1 == td.t && eq.t2 == typ &&
           kd.env == Nil() && kd.typ == typ && kd.k == ProperKind
-        }
-      }
-    }
-    
-    def ===(that: TypeDerivation): Boolean = {
-      this.t == that.t && this.env == that.env
-    }
+        case _ => Unreacheable
+
+    @pure
+    def ===(that: TypeDerivation): Boolean = this.t == that.t && this.env == that.env
   }
   case class VarTypingDerivation(e: TypeEnvironment, typ: Type, ter: Var) extends TypeDerivation
   case class AbsTypingDerivation(e: TypeEnvironment, typ: Type, ter: Abs, kd: KindDerivation, btd: TypeDerivation) extends TypeDerivation
   case class AppTypingDerivation(e: TypeEnvironment, typ: Type, ter: App, btd1: TypeDerivation, btd2: TypeDerivation) extends TypeDerivation
   case class EquivTypingDerivation(e: TypeEnvironment, typ: Type, ter: Term, td: TypeDerivation, equiv: ParallelEquivalence, kd: KindDerivation) extends TypeDerivation
-
-  // def deriveType(env: TypeEnvironment, t: Term): Option[TypeDerivation] = {
-  //   t match {
-  //     case v@Var(k) => if (k < env.size) Some(VarTypingDerivation(env, env(k), v)) else None()
-  //     case abs@Abs(targ, body) => {
-  //       val k1 = deriveKind(targ)
-  //       val tb = deriveType(targ :: env, body)
-  //       (k1, tb) match {
-  //         case (_, None()) => None()
-  //         case (ProperKind, Some(tb)) => Some(AbsTypingDerivation(env, ArrowType(targ, tb.t), abs, tb))
-  //       }
-  //     }
-  //     case app@App(t1, t2) => {
-  //       (deriveType(env, t1), deriveType(env, t2)) match {
-  //         case (Some(ts1), Some(ts2)) => {
-  //           ts1.t match{
-  //             case ArrowType(targ, tres) if (targ == ts2.t) => 
-  //               Some(AppTypingDerivation(env, tres, app, ts1, ts2))
-  //             case _ => None()
-  //           }
-  //         }
-  //         case (_, _) => None()
-  //       }
-  //     }
-  //     case 
-
-  //   }
-  // }
-  
-//   def deriveType(t: Term): Option[TypeDerivation] = {
-//     deriveType(Nil(), t)
-//   }
 
 }
 
@@ -156,8 +120,9 @@ object TypingProperties {
 //   }.ensuring(td1 == td2)
 
 //   /// Progress
-  @pure
+  @pure @inlineOnce @opaque
   def callByValueProgress(td: TypeDerivation): Unit = {
+    decreases(td)
     require(td.isSound)
     require(td.env.isEmpty)
     td match
@@ -174,8 +139,9 @@ object TypingProperties {
 
   /// Preservation
 
-  @pure
+  @pure @opaque @inlineOnce
   def environmentWeakening(td: TypeDerivation, envExt: TypeEnvironment): TypeDerivation = {
+    decreases(td)
     require(td.isSound)
     td match 
       case VarTypingDerivation(env, typ, Var(k)) => 
@@ -203,7 +169,7 @@ object TypingProperties {
     res.t == td.t
   )
 
-  @pure
+  @pure @opaque @inlineOnce
   def variableEnvironmentStrengthening(k: BigInt, typ: Type, env: TypeEnvironment, envExt: TypeEnvironment): TypeDerivation = {
     require(0 <= k)
     require(k < env.length)
@@ -217,7 +183,7 @@ object TypingProperties {
     ( res.term == Var(k) )
   )
 
-  @pure
+  @pure @inlineOnce @opaque
   def variableEnvironmentUpdate(k: BigInt, typ: Type, env: TypeEnvironment, oldEnv: TypeEnvironment, newEnv: TypeEnvironment): TypeDerivation = {
     require(0 <= k)
     require(k < env.length)
@@ -231,8 +197,9 @@ object TypingProperties {
     ( res.term == Var(k) )
   )
 
-  @opaque @pure
+  @opaque @pure @inlineOnce
   def insertTypeInEnv(env1: TypeEnvironment, insert: Type, env2: TypeEnvironment, td: TypeDerivation): TypeDerivation = {
+    decreases(td)
     require(td.isSound)
     require(env1 ++ env2 == td.env)
 
@@ -268,8 +235,9 @@ object TypingProperties {
     ( td.t == res.t )
   )
 
-  @opaque @pure
+  @opaque @pure @inlineOnce
   def removeTypeInEnv(env1: TypeEnvironment, remove: Type, env2: TypeEnvironment, td: TypeDerivation): TypeDerivation = {
+    decreases(td)
     require(td.isSound)
     require(td.env == env1 ++ (remove :: env2))
     require(!td.term.hasFreeVariablesIn(env1.size, 1))
@@ -307,8 +275,9 @@ object TypingProperties {
   )
 
 
-  @opaque @pure
+  @opaque @pure @inlineOnce
   def preservationUnderSubst(td: TypeDerivation, j: BigInt, sd: TypeDerivation): TypeDerivation = {
+    decreases(td)
     require(td.isSound)
     require(sd.isSound)
     require(td.env == sd.env)
@@ -343,7 +312,7 @@ object TypingProperties {
     ( td === res )
   )
 
-  @opaque @pure
+  @opaque @pure @inlineOnce
   def preservationUnderAbsSubst(bodyTd: TypeDerivation, argTd: TypeDerivation): TypeDerivation = {
     require(bodyTd.isSound)
     require(argTd.isSound)
@@ -364,9 +333,9 @@ object TypingProperties {
     ( res.t == bodyTd.t)
   )
 
-  
-
+  @pure @opaque @inlineOnce
   def soundTypingHasProperKind(td: TypeDerivation, wf: List[KindDerivation]): KindDerivation = {
+    decreases(td)
     require(td.isSound)
     require(Kinding.isWellFormed(td.env, wf))
     
@@ -391,7 +360,9 @@ object TypingProperties {
     res.typ == td.t &&    
     res.k == ProperKind)
 
+  @pure @opaque @inlineOnce
   def inversionStrongLemmaAbs(argT: Type, body: Term, t1: Type, t2: Type, equiv: ParallelEquivalence, td: TypeDerivation, kd: KindDerivation): (ParallelEquivalence, TypeDerivation, KindDerivation) = {
+    decreases(td)
     require(td.term == Abs(argT, body))
     require(td.isSound)
     require(equiv.isValid)
@@ -409,6 +380,7 @@ object TypingProperties {
       case AbsTypingDerivation(env, ArrowType(s1, s2), _, kd2, btd) =>
         val (equiv1, equiv2) = ParallelTypeReductionProperties.arrowEquivalence(s1, s2, t1, t2, equiv)
         (ARSSymmetry(equiv1), EquivTypingDerivation(Cons(argT, env), t2, body, btd, equiv2, kd), kd2) 
+      case _ => Unreacheable
 
   }.ensuring(res =>
     res._1.isValid &&
@@ -423,6 +395,7 @@ object TypingProperties {
     res._3.k == ProperKind &&
     res._3.typ == argT)
 
+  @pure @opaque @inlineOnce
   def inversionWeakLemmaAbs(argT: Type, body: Term, t1: Type, t2: Type, td: TypeDerivation, wf: List[KindDerivation]): (ParallelEquivalence, TypeDerivation, KindDerivation) = {
     require(Kinding.isWellFormed(td.env, wf))
     require(td.isSound)
@@ -451,6 +424,7 @@ object TypingProperties {
 
   @opaque @inlineOnce @pure
   def preservation(td: TypeDerivation, red: EvalReductionDerivation, wf: List[KindDerivation]): TypeDerivation = {
+    decreases(td)
     require(td.isSound)
     require(red.isSound)
     require(red.term1 == td.term)

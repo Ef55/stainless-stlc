@@ -20,15 +20,15 @@ object TypeTransformations {
     */
   @pure
   def shift(t: Type, d: BigInt, c: BigInt): Type = {
+    decreases(t)
     require(c >= 0)
-    require(if(d < 0){!t.hasFreeVariablesIn(c, -d)} else true)
-    t match {
+    require(d < 0 ==> !t.hasFreeVariablesIn(c, -d))
+    t match 
       case BasicType(_) => t
       case ArrowType(t1, t2) => ArrowType(shift(t1, d, c), shift(t2, d, c))
       case VariableType(k) => if (k < c) VariableType(k) else VariableType(k + d)
       case AbsType(arg, body) => AbsType(arg, shift(body, d, c + 1))
       case AppType(t1, t2) => AppType(shift(t1, d, c), shift(t2, d, c))
-    }
   }.ensuring(_.size == t.size)
 
   /**
@@ -36,19 +36,18 @@ object TypeTransformations {
   */
   @pure
   def substitute(t: Type, j: BigInt, s: Type): Type = {
-    t match {
+    decreases(t)
+    t match 
       case BasicType(_) => t
       case ArrowType(t1, t2) => ArrowType(substitute(t1, j, s), substitute(t2, j, s))
       case VariableType(k) => if(j == k) s else t  
       case AbsType(k, b) => AbsType(k, substitute(b, j + 1, shift(s, 1, 0)))
       case AppType(t1, t2) => AppType(substitute(t1, j, s), substitute(t2, j, s))
-    }
   }
 
   // ↑⁻¹( [0 -> ↑¹(arg)]body )
   @pure
   def absSubstitution(body: Type, arg: Type): Type = {
-    assert(!arg.hasFreeVariablesIn(0, 0))
     boundRangeShift(arg, 1, 0, 0, 0)
     boundRangeSubstitutionLemma(body, 0, shift(arg, 1, 0))
     shift(substitute(body, 0, shift(arg, 1, 0)), -1, 0)
@@ -87,52 +86,45 @@ object TypeTransformationsProperties {
    * Postcondition:
    *   - [j -> S]t = t
    */
-  @opaque @pure
+  @inlineOnce @opaque @pure
   def boundRangeSubstitutionIdentity(t: Type, j: BigInt, typ: Type): Unit = {
+    decreases(t)
     require(j >= 0)
     require(!t.hasFreeVariablesIn(j, 1))
 
-    t match {
-      case VariableType(k) => ()
+    t match 
+      case VariableType(_) => ()
       case BasicType(_) =>  ()
-      case AbsType(_, body) => {
+      case AbsType(_, body) => 
         boundRangeSubstitutionIdentity(body, j+1, shift(typ, 1 ,0))
-      }
-      case ArrowType(t1, t2) => {
+      case ArrowType(t1, t2) => 
         boundRangeSubstitutionIdentity(t1, j, typ)
         boundRangeSubstitutionIdentity(t2, j, typ)
-      }
-      case AppType(t1, t2) => {
+      case AppType(t1, t2) => 
         boundRangeSubstitutionIdentity(t1, j, typ)
         boundRangeSubstitutionIdentity(t2, j, typ)
-      }
-    }
 
-  }.ensuring(
-    substitute(t, j, typ) == t
-  )
+  }.ensuring(substitute(t, j, typ) == t)
 
   /**
     * A 0 place shift does not affect the time
     */
-  @opaque @pure
+  @inlineOnce @opaque @pure
   def shift0Identity(t: Type, c: BigInt): Unit = {
+    decreases(t)
     require(c >= 0)
-    t match {
-      case VariableType(k) => ()
+    t match 
+      case VariableType(_) => ()
       case BasicType(_) => ()
-      case AbsType(_, body) => {
+      case AbsType(_, body) => 
         shift0Identity(body, c+1)
-      }
-      case ArrowType(t1, t2) => {
+      case ArrowType(t1, t2) => 
         shift0Identity(t1, c)
         shift0Identity(t2, c)
-      }
-      case AppType(t1, t2) => {
+      case AppType(t1, t2) => 
         shift0Identity(t1, c)
         shift0Identity(t2, c)
-      }
-    }
+
   }.ensuring(shift(t, 0, c) == t)
 
   /**
@@ -153,8 +145,9 @@ object TypeTransformationsProperties {
     *   - shift(shift(t, a, c), b, d) == shift(t, a + b, c)
     * 
     */
-  @opaque @pure
+  @inlineOnce @opaque @pure
   def boundRangeShiftComposition(t: Type, a: BigInt, b: BigInt, c: BigInt, d: BigInt): Unit = {
+    decreases(t)
     require(a >= 0)
     require(c >= 0)
     require(d >= 0)
@@ -163,40 +156,29 @@ object TypeTransformationsProperties {
     require(-b <= a)
 
 
-    if (d < c){
+    if d < c then
       boundRangeShift(t, a, c, c, 0)
       boundRangeShift(t, a, c, d, c - d)
       boundRangeConcatenation(shift(t, a, c), d, c - d, a)
       boundRangeDecrease(shift(t, a, c), d, c - d + a, a)
-    }
-    else{
+    else
       boundRangeShift(t, a, c, c, d - c)
       boundRangeIncreaseCutoff(shift(t, a, c), c, d, a + d - c)
-    }
 
-    assert(!shift(t, a, c).hasFreeVariablesIn(d, a))
-    if(b < 0){
-      boundRangeDecrease(shift(t, a, c), d, a, -b)      
-    }
-    else{
-      ()
-    }
+    if b < 0 then boundRangeDecrease(shift(t, a, c), d, a, -b) else () 
 
-    t match {
+    t match 
       case VariableType(_) => ()
       case BasicType(_) => ()
-      case AbsType(_, body) => {
+      case AbsType(_, body) => 
         boundRangeShiftComposition(body, a, b, c + 1, d + 1)
-      }
-      case ArrowType(t1, t2) => {
+      case ArrowType(t1, t2) => 
         boundRangeShiftComposition(t1, a, b, c, d)
         boundRangeShiftComposition(t2, a, b, c, d)
-      }
-      case AppType(t1, t2) => {
+      case AppType(t1, t2) => 
         boundRangeShiftComposition(t1, a, b, c, d)
         boundRangeShiftComposition(t2, a, b, c, d)
-      }
-    }
+
   }.ensuring(
     (b < 0 ==> !shift(t, a, c).hasFreeVariablesIn(d, -b)) &&
     shift(shift(t, a, c), b, d) == shift(t, a + b, c)
@@ -205,8 +187,9 @@ object TypeTransformationsProperties {
   /**
     * Describes exactly how free variables behave after shifts
     */
-  @opaque @pure
+  @inlineOnce @opaque @pure
   def boundRangeShift(t: Type, d: BigInt, c: BigInt, a: BigInt, b: BigInt): Unit = {
+    decreases(t)
     require(c >= 0)
     require(b >= 0)
     require(a >= 0)
@@ -227,17 +210,15 @@ object TypeTransformationsProperties {
   }.ensuring(
       !t.hasFreeVariablesIn(a, b)
         ==
-      (if(d >= 0){
-        (if(c >= a && c <= a + b)           {!shift(t, d, c).hasFreeVariablesIn(a, b + d)} else {true}) &&
-        (if(c <= a + b)                     {!shift(t, d, c).hasFreeVariablesIn(a + d, b)} else {true}) &&
-        (if(c >= a)                         {!shift(t, d, c).hasFreeVariablesIn(a, b)} else {true})
-      }
-      else{
-        (if(a + b <= c)                     {!shift(t, d, c).hasFreeVariablesIn(a, b)} else true) &&
-        (if(a + b >= c && a <= c)           {!shift(t, d, c).hasFreeVariablesIn(a, c - a)} else true) &&
-        (if(a + b >= -d + c && a <= -d + c) {!shift(t, d, c).hasFreeVariablesIn(c, a + b + d - c)} else true) &&
-        (if(a >= -d + c)                    {!shift(t, d, c).hasFreeVariablesIn(a + d, b)} else true) 
-      })
+      (if d >= 0 then 
+        ((c >= a && c <= a + b)           ==> !shift(t, d, c).hasFreeVariablesIn(a, b + d)) &&
+        ((c <= a + b)                     ==> !shift(t, d, c).hasFreeVariablesIn(a + d, b)) &&
+        ((c >= a)                         ==> !shift(t, d, c).hasFreeVariablesIn(a, b))
+      else
+        ((a + b <= c)                     ==> !shift(t, d, c).hasFreeVariablesIn(a, b)) &&
+        ((a + b >= c && a <= c)           ==> !shift(t, d, c).hasFreeVariablesIn(a, c - a)) &&
+        ((a + b >= -d + c && a <= -d + c) ==> !shift(t, d, c).hasFreeVariablesIn(c, a + b + d - c)) &&
+        ((a >= -d + c)                    ==> !shift(t, d, c).hasFreeVariablesIn(a + d, b)))
     )
 
   /**
@@ -252,44 +233,41 @@ object TypeTransformationsProperties {
     * Postcondition:
     *  FV([j -> S]T) ∩ [j, j + 1[ = ∅
     */
-  @opaque @pure
+  @inlineOnce @opaque @pure
   def boundRangeSubstitutionLemma(t: Type, j: BigInt, s: Type): Unit = {
+    decreases(t)
     require(j >= 0)
     require(!s.hasFreeVariablesIn(0, j+1))
 
-    t match {
+    t match 
       case BasicType(_) => ()
-      case VariableType(k) => {
+      case VariableType(_) => 
         boundRangeIncreaseCutoff(s, 0, j, j+1)
-      }
-      case AbsType(_, body) => {
+      case AbsType(_, body) => 
         boundRangeShift(s, 1, 0, 0, j+1)
         boundRangeIncreaseCutoff(shift(s, 1, 0), 0, j + 1, j+2)
         boundRangeSubstitutionLemma(body, j+1, shift(s, 1, 0))
-      }
-      case ArrowType(t1, t2) => {
+      case ArrowType(t1, t2) =>
         boundRangeSubstitutionLemma(t1, j, s)
         boundRangeSubstitutionLemma(t2, j, s)
-      }
-      case AppType(t1, t2) => {
+      case AppType(t1, t2) => 
         boundRangeSubstitutionLemma(t1, j, s)
         boundRangeSubstitutionLemma(t2, j, s)
-      }
-    }
   }.ensuring(!substitute(t, j, s).hasFreeVariablesIn(j, 1))
 
 
   /** 
     * The four following theorems state under which conditions, two shifts commute
     */
-  @opaque @pure
+  @inlineOnce @opaque @pure
   def shiftCommutativityPosPos(subs: Type, b: BigInt, c: BigInt, a: BigInt, d: BigInt) : Unit ={
+    decreases(subs)
     require(a >= 0)
     require(b >= 0)
     require(c >= 0)
     require(d >= 0)
   
-    subs match {
+    subs match 
       case BasicType(_) => ()
       case ArrowType(t1, t2) =>
         shiftCommutativityPosPos(t1, b, c, a, d)
@@ -300,15 +278,15 @@ object TypeTransformationsProperties {
       case VariableType(v) => ()
       case AbsType(_, t) => shiftCommutativityPosPos(t, b, c+1, a, d+1) 
       
-    }
   }.ensuring(
     if d <= c                then shift(shift(subs, b, c), a, d) == shift(shift(subs, a, d), b, c + a) else
     if d - b >= c            then shift(shift(subs, b, c), a, d) == shift(shift(subs, a, d - b), b, c) else
     if d >= c && d - b <= c  then shift(shift(subs, b, c), a, d) == shift(shift(subs, a, c), b, c) else
     true)
 
-  @opaque @pure
-  def shiftCommutativityPosNeg(subs: Type, b: BigInt, c: BigInt, a: BigInt, d: BigInt) : Unit ={
+  @inlineOnce @opaque @pure
+  def shiftCommutativityPosNeg(subs: Type, b: BigInt, c: BigInt, a: BigInt, d: BigInt) : Unit = {
+    decreases(subs)
     require(c >= 0)
     require(d >= 0)
     require(b >= 0)
@@ -319,7 +297,7 @@ object TypeTransformationsProperties {
             if d <= c && -a >= c - d then !shift(subs, b, c).hasFreeVariablesIn(d, -a) && !subs.hasFreeVariablesIn(d, -a) else
             true) 
 
-    subs match {
+    subs match 
       case BasicType(_) => ()
       case ArrowType(t1, t2) =>
         shiftCommutativityPosNeg(t1, b, c, a, d)
@@ -327,10 +305,9 @@ object TypeTransformationsProperties {
       case AppType(t1, t2) => 
         shiftCommutativityPosNeg(t1, b, c, a, d)
         shiftCommutativityPosNeg(t2, b, c, a, d)
-      case VariableType(v) => ()
+      case VariableType(_) => ()
       case AbsType(_, t) => shiftCommutativityPosNeg(t, b, c+1, a, d+1) 
       
-    }
   }.ensuring(
     if d >= c && b >= d - c  then !shift(subs, b, c).hasFreeVariablesIn(d, -a) && !subs.hasFreeVariablesIn(c, -a) &&
                                   shift(shift(subs, b, c), a, d) == shift(shift(subs, a, c), b, c) else
@@ -342,8 +319,9 @@ object TypeTransformationsProperties {
                                   shift(shift(subs, b, c), a, d) == shift(shift(subs, a, d), b, d)
     else true)
 
-  @opaque @pure
-  def shiftCommutativityNegPos(subs: Type, b: BigInt, c: BigInt, a: BigInt, d: BigInt) : Unit ={
+  @inlineOnce @opaque @pure
+  def shiftCommutativityNegPos(subs: Type, b: BigInt, c: BigInt, a: BigInt, d: BigInt) : Unit = {
+    decreases(subs)
     require(c >= 0)
     require(d >= 0)
     require(b < 0)
@@ -355,7 +333,7 @@ object TypeTransformationsProperties {
     //         if d <= c                then !subs.hasFreeVariablesIn(c, -b) || !shift(subs, a, d).hasFreeVariablesIn(c + a, - b) else
     //         true) 
 
-    subs match {
+    subs match 
       case BasicType(_) => ()
       case ArrowType(t1, t2) =>
         shiftCommutativityNegPos(t1, b, c, a, d)
@@ -363,10 +341,9 @@ object TypeTransformationsProperties {
       case AppType(t1, t2) => 
         shiftCommutativityNegPos(t1, b, c, a, d)
         shiftCommutativityNegPos(t2, b, c, a, d)
-      case VariableType(v) => ()
+      case VariableType(_) => ()
       case AbsType(_, t) => shiftCommutativityNegPos(t, b, c+1, a, d+1) 
       
-    }
   }.ensuring(if d >= c                then !subs.hasFreeVariablesIn(c, -b) && !shift(subs, a, d - b).hasFreeVariablesIn(c, - b) && 
                                       shift(shift(subs, b, c), a, d) == shift(shift(subs, a, d - b), b, c) else
               if d <= c                then !subs.hasFreeVariablesIn(c, -b) && !shift(subs, a, d).hasFreeVariablesIn(c + a, - b) && 
@@ -374,8 +351,9 @@ object TypeTransformationsProperties {
               true)
 
 
-  @opaque @pure
+  @inlineOnce @opaque @pure
   def shiftCommutativityNegNeg(subs: Type, b: BigInt, c: BigInt, a: BigInt, d: BigInt) : Unit ={
+    decreases(subs)
     require(c >= 0)
     require(d >= 0)
     require(a < 0)
@@ -386,7 +364,7 @@ object TypeTransformationsProperties {
                                                             !shift(subs, b, c).hasFreeVariablesIn(d, -a) else
             true) 
 
-    subs match {
+    subs match 
       case BasicType(_) => ()
       case ArrowType(t1, t2) =>
         shiftCommutativityNegNeg(t1, b, c, a, d)
@@ -394,10 +372,9 @@ object TypeTransformationsProperties {
       case AppType(t1, t2) => 
         shiftCommutativityNegNeg(t1, b, c, a, d)
         shiftCommutativityNegNeg(t2, b, c, a, d)
-      case VariableType(v) => ()
+      case VariableType(_) => ()
       case AbsType(_, t) => shiftCommutativityNegNeg(t, b, c+1, a, d+1) 
       
-    }
   }.ensuring(if d >= c                then !subs.hasFreeVariablesIn(c, -b) && !subs.hasFreeVariablesIn(d - b, -a) && 
                                             !shift(subs, a, d - b).hasFreeVariablesIn(c, -b) && !shift(subs, b, c).hasFreeVariablesIn(d, -a) &&
                                             shift(shift(subs, b, c), a, d) == shift(shift(subs, a, d - b), b, c) else
@@ -413,8 +390,9 @@ object TypeTransformationsProperties {
   /**
     * States how shift and substitution commute
     */
-  @opaque @pure
+  @inlineOnce @opaque @pure
   def shiftSubstitutionCommutativity(typ: Type, s: BigInt, c: BigInt, k: BigInt, subs: Type): Unit = {
+    decreases(typ)
     require(k >= 0)
     require(c >= 0)
     require(
@@ -422,25 +400,23 @@ object TypeTransformationsProperties {
         !typ.hasFreeVariablesIn(c, -s) && !subs.hasFreeVariablesIn(c, -s)
       else true)
 
-    typ match {
+    typ match 
       case BasicType(_) => ()
-      case ArrowType(t1, t2) => {
+      case ArrowType(t1, t2) => 
         shiftSubstitutionCommutativity(t1, s, c, k, subs)
         shiftSubstitutionCommutativity(t2, s, c, k, subs)
-      }
-      case AppType(t1, t2) => {
+      case AppType(t1, t2) => 
         shiftSubstitutionCommutativity(t1, s, c, k, subs)
         shiftSubstitutionCommutativity(t2, s, c, k, subs)
-      }
       case VariableType(v) => 
         if c >= 0 && c <= k && s < 0 then
           boundRangeShiftComposition(subs, -s, s, c, c)
-          if (v >= c && k == v + s){
+          if v >= c && k == v + s then
               boundRangeShiftComposition(subs, -s, s, c, c)
               shift0Identity(subs, c)          
-          }
+          else ()
         else ()
-      case AbsType(argK, t) => {
+      case AbsType(argK, t) => 
         if s >= 0 then
           shiftCommutativityPosPos(subs, s, c, 1, 0)
         else
@@ -450,8 +426,7 @@ object TypeTransformationsProperties {
           else
             shiftCommutativityPosPos(subs, -s, c, 1, 0)
         shiftSubstitutionCommutativity(t, s, c+1, k+1, shift(subs, 1, 0))
-      }
-    }
+
   }.ensuring(
     if s >= 0 then
       if c >= 0 && c <= k then shift(substitute(typ, k, subs), s, c) == substitute(shift(typ, s, c), k+s, shift(subs, s, c))
@@ -466,8 +441,9 @@ object TypeTransformationsProperties {
   /**
     * Describes how free variables behave after substitutions
     */
-  @opaque @pure
+  @inlineOnce @opaque @pure
   def boundRangeSubstitutionLemma(t: Type, j: BigInt, s: Type, a: BigInt, b: BigInt, c: BigInt, d: BigInt): Unit = {
+    decreases(t)
     require(j >= 0)
     require(a >= 0)
     require(b >= 0)
@@ -484,7 +460,7 @@ object TypeTransformationsProperties {
       case AppType(t1, t2) => 
         boundRangeSubstitutionLemma(t1, j, s, a, b, c, d)
         boundRangeSubstitutionLemma(t2, j, s, a, b, c, d)
-      case VariableType(v) => 
+      case VariableType(_) => 
         if c <= d then
           if c + a >= d + b then
             boundRangeIncreaseCutoff(s, c, d, a)
@@ -535,18 +511,16 @@ object TypeTransformationsProperties {
     * Postcondition:
     *   [h -> u][j -> s]t = [j -> [k -> u]s][k -> u]t
     */
-  @opaque @pure
+  @inlineOnce @opaque @pure
   def substitutionCommutativity(t: Type, j: BigInt, s: Type, k: BigInt, u: Type): Unit = {
+    decreases(t)
     require(j >= 0)
     require(k >= 0)
     require(j != k)
     require(!u.hasFreeVariablesIn(j, 1))
 
     t match 
-      case VariableType(i) => 
-        if(i == k) {
-          boundRangeSubstitutionIdentity(u, j, substitute(s, k, u))
-        }
+      case VariableType(i) => if i == k then boundRangeSubstitutionIdentity(u, j, substitute(s, k, u)) else ()
       
       case BasicType(_) => ()
       case ArrowType(t1, t2) => 
@@ -584,7 +558,7 @@ object TypeTransformationsProperties {
    * Postcondition:
    *   FV(↑⁻¹([0 -> ↑¹arg]body)) ∩ [c, c + d[ = ∅
    */
-  @opaque @pure
+  @inlineOnce @opaque @pure
   def boundRangeAbsSubst(body: Type, arg: Type, c: BigInt, d: BigInt) = {
     require(c >= 0)
     require(d >= 0)
@@ -614,7 +588,7 @@ object TypeTransformationsProperties {
     * Postcondition:
     *   shift(↑⁻¹([0 -> ↑¹arg]body), d, c) = ↑⁻¹([0 -> ↑¹shift(arg, d, c)]shift(body, d, c + 1))
     */
-  @opaque @pure
+  @inlineOnce @opaque @pure
   def shiftAbsSubstitutionCommutativity(body: Type, arg: Type, d: BigInt, c: BigInt) = {
     require(c >= 0)
     require(d < 0 ==> (!arg.hasFreeVariablesIn(c, -d) && !body.hasFreeVariablesIn(c + 1, -d)))
@@ -649,7 +623,7 @@ object TypeTransformationsProperties {
     * Postcondition:
     *   [j -> s]↑⁻¹([0 -> ↑¹arg]body) = ↑⁻¹([0 -> ↑¹[j -> s]arg][j + 1 -> ↑¹s]body
     */
-  @opaque @pure
+  @inlineOnce @opaque @pure
   def absSubstSubstCommutativity(body: Type, arg: Type, j: BigInt, s: Type): Unit = {
     require(j >= 0)
     require(!s.hasFreeVariablesIn(0, 1))

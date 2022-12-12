@@ -22,7 +22,7 @@ object TermTransformations {
   def shift(t: Term, d: BigInt, c: BigInt): Term = {
     require(c >= 0)
     require((d < 0) ==> !t.hasFreeVariablesIn(c, -d))
-    decreases(t.size)
+    decreases(t)
     t match 
       case Var(k) => if k < c then Var(k) else Var(k + d)
       case Abs(arg, body) => Abs(arg, shift(body, d, c + 1))
@@ -34,7 +34,7 @@ object TermTransformations {
   */
   @pure
   def substitute(t: Term, j: BigInt, s: Term): Term = {
-    decreases(t.size)
+    decreases(t)
     t match 
       case Var(k) => if j == k then s else t  
       case Abs(k, b) => Abs(k, substitute(b, j + 1, shift(s, 1, 0)))
@@ -68,9 +68,10 @@ object TermTransformationsProperties {
    */
   @inlineOnce @opaque @pure
   def boundRangeSubstitutionIdentity(t: Term, j: BigInt, typ: Term): Unit = {
+    decreases(t)
     require(j >= 0)
     require(!t.hasFreeVariablesIn(j, 1))
-    decreases(t.size)
+
 
     t match 
       case Var(_) => ()
@@ -87,8 +88,8 @@ object TermTransformationsProperties {
     */
   @inlineOnce @opaque @pure
   def shift0Identity(t: Term, c: BigInt): Unit = {
+    decreases(t)
     require(c >= 0)
-    decreases(t.size)
 
     t match 
       case Var(_) => ()
@@ -120,13 +121,13 @@ object TermTransformationsProperties {
     */
   @inlineOnce @opaque @pure
   def boundRangeShiftComposition(t: Term, a: BigInt, b: BigInt, c: BigInt, d: BigInt): Unit = {
+    decreases(t)
     require(a >= 0)
     require(c >= 0)
     require(d >= 0)
     require(d <= c + a)
     require(if d < c then !t.hasFreeVariablesIn(d, c - d) else !t.hasFreeVariablesIn(c, d - c))
     require(-b <= a)
-    decreases(t.size)
 
 
     if d < c then
@@ -157,11 +158,11 @@ object TermTransformationsProperties {
     */
   @inlineOnce @opaque @pure
   def boundRangeShift(t: Term, d: BigInt, c: BigInt, a: BigInt, b: BigInt): Unit = {
+    decreases(t)
     require(c >= 0)
     require(b >= 0)
     require(a >= 0)
     require(d < 0 ==> !t.hasFreeVariablesIn(c, -d))
-    decreases(t.size)
 
     t match
       case Var(_) => ()
@@ -200,9 +201,9 @@ object TermTransformationsProperties {
     */
   @inlineOnce @opaque @pure
   def boundRangeSubstitutionLemma(t: Term, j: BigInt, s: Term): Unit = {
+    decreases(t)
     require(j >= 0)
     require(!s.hasFreeVariablesIn(0, j+1))
-    decreases(t.size)
 
     t match
       case Var(_) => 
@@ -223,11 +224,11 @@ object TermTransformationsProperties {
     */
   @inlineOnce @opaque @pure
   def shiftCommutativityPosPos(subs: Term, b: BigInt, c: BigInt, a: BigInt, d: BigInt) : Unit ={
+    decreases(subs)
     require(a >= 0)
     require(b >= 0)
     require(c >= 0)
     require(d >= 0)
-    decreases(subs.size)
   
     subs match 
       case App(t1, t2) => 
@@ -243,7 +244,7 @@ object TermTransformationsProperties {
     true)
 
   @inlineOnce @opaque @pure
-  def shiftCommutativityPosNeg(subs: Term, b: BigInt, c: BigInt, a: BigInt, d: BigInt) : Unit ={
+  def shiftCommutativityPosNeg(subs: Term, b: BigInt, c: BigInt, a: BigInt, d: BigInt) : Unit = {
     require(c >= 0)
     require(d >= 0)
     require(b >= 0)
@@ -253,7 +254,7 @@ object TermTransformationsProperties {
             if -a <= c - d           then !shift(subs, b, c).hasFreeVariablesIn(d, -a) || !subs.hasFreeVariablesIn(d, -a) else
             if d <= c && -a >= c - d then !shift(subs, b, c).hasFreeVariablesIn(d, -a) && !subs.hasFreeVariablesIn(d, -a) else
             true)
-    decreases(subs.size)
+    decreases(subs)
 
     subs match 
       case App(t1, t2) => 
@@ -274,13 +275,13 @@ object TermTransformationsProperties {
     else true)
 
   @inlineOnce @opaque @pure
-  def shiftCommutativityNegPos(subs: Term, b: BigInt, c: BigInt, a: BigInt, d: BigInt) : Unit ={
+  def shiftCommutativityNegPos(subs: Term, b: BigInt, c: BigInt, a: BigInt, d: BigInt) : Unit = {
+    decreases(subs)
     require(c >= 0)
     require(d >= 0)
     require(b < 0)
     require(a >= 0)
     require(!subs.hasFreeVariablesIn(c, -b))
-    decreases(subs.size)
     
     //Weaker but more complex precond
     // require(if d >= c                then !subs.hasFreeVariablesIn(c, -b) || !shift(subs, a, d - b).hasFreeVariablesIn(c, - b) else 
@@ -303,7 +304,8 @@ object TermTransformationsProperties {
 
 
   @inlineOnce @opaque @pure
-  def shiftCommutativityNegNeg(subs: Term, b: BigInt, c: BigInt, a: BigInt, d: BigInt) : Unit ={
+  def shiftCommutativityNegNeg(subs: Term, b: BigInt, c: BigInt, a: BigInt, d: BigInt) : Unit = {
+    decreases(subs)
     require(c >= 0)
     require(d >= 0)
     require(a < 0)
@@ -313,7 +315,6 @@ object TermTransformationsProperties {
             if d <= c && -a >= c - d then !subs.hasFreeVariablesIn(c, -b) && !subs.hasFreeVariablesIn(d, -a) && 
                                                             !shift(subs, b, c).hasFreeVariablesIn(d, -a) else
             true)
-    decreases(subs.size)
 
     subs match {
       case App(t1, t2) => 
@@ -340,13 +341,13 @@ object TermTransformationsProperties {
     */
   @inlineOnce @opaque @pure
   def shiftSubstitutionCommutativity(t: Term, s: BigInt, c: BigInt, k: BigInt, subs: Term): Unit = {
+    decreases(t)
     require(k >= 0)
     require(c >= 0)
     require(
       if s < 0 then 
         !t.hasFreeVariablesIn(c, -s) && !subs.hasFreeVariablesIn(c, -s)
       else true)
-    decreases(t)
 
     t match {
       case App(t1, t2) => 
@@ -388,6 +389,7 @@ object TermTransformationsProperties {
     */
   @inlineOnce @opaque @pure
   def boundRangeSubstitutionLemma(t: Term, j: BigInt, s: Term, a: BigInt, b: BigInt, c: BigInt, d: BigInt): Unit = {
+    decreases(t)
     require(j >= 0)
     require(a >= 0)
     require(b >= 0)
@@ -395,7 +397,6 @@ object TermTransformationsProperties {
     require(d >= 0)
     require(!s.hasFreeVariablesIn(c, a))
     require(!t.hasFreeVariablesIn(d, b))
-    decreases(t.size)
 
     t match 
       case App(t1, t2) => 
@@ -454,11 +455,11 @@ object TermTransformationsProperties {
     */
   @inlineOnce @opaque @pure
   def substitutionCommutativity(t: Term, j: BigInt, s: Term, k: BigInt, u: Term): Unit = {
+    decreases(t)
     require(j >= 0)
     require(k >= 0)
     require(j != k)
     require(!u.hasFreeVariablesIn(j, 1))
-    decreases(t.size)
 
     t match 
       case Var(i) => if i == k then boundRangeSubstitutionIdentity(u, j, substitute(s, k, u)) else ()

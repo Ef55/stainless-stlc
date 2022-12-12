@@ -180,13 +180,14 @@ object ARS {
     */
   sealed trait ARSKFoldComposition[T, R]{
     @pure
-    def t1: T = this match
-      case ARSIdentity(t) => t
-      case ARSComposition(h, t) => h.t1
+    def t1: T = 
+      this match
+        case ARSIdentity(t) => t
+        case ARSComposition(h, t) => h.t1
 
     @pure
     def t2: T = 
-      decreases(size)
+      decreases(this)
       this match
         case ARSIdentity(t) => t
         case ARSComposition(h, t) => t.t2
@@ -197,7 +198,7 @@ object ARS {
       */
     @pure
     def isSound: Boolean = 
-      decreases(size)
+      decreases(this)
       this match
         case ARSIdentity(t) => true
         case ARSComposition(h, t) => h.isSound && t.isSound && h.t2 == t.t1
@@ -207,6 +208,7 @@ object ARS {
       */
     @pure
     def size: BigInt = {
+      decreases(this)
       this match
         case ARSIdentity(t) => BigInt(0)
         case ARSComposition(h, t) => t.size + 1
@@ -223,7 +225,7 @@ object ARS {
       */
     @pure
     def concat(that: ARSKFoldComposition[T, R]): ARSKFoldComposition[T, R] = {
-      decreases(size)
+      decreases(this)
       this match
         case ARSIdentity(t) => that
         case ARSComposition(h, t) => ARSComposition(h, t.concat(that))
@@ -240,7 +242,7 @@ object ARS {
       */
     @pure
     def toReflTrans: ARSEquivalence[T, R] = {
-      decreases(size)
+      decreases(this)
       this match
         case ARSIdentity(t) => ARSReflexivity[T, R](t)
         case ARSComposition(h, t) => ARSTransitivity[T, R](ARSBaseRelation(h), t.toReflTrans)
@@ -255,7 +257,7 @@ object ARS {
      */
     @pure
     def inverse: ARSKFoldComposition[T, ARSInverseStep[T, R]] = {
-      decreases(size)
+      decreases(this)
       this match
         case ARSIdentity(t) => ARSIdentity[T, ARSInverseStep[T, R]](t)
         case ARSComposition(h, t) => 
@@ -276,6 +278,7 @@ object ARS {
   extension [T, R] (ms: ARSKFoldComposition[T, ARSSymmStep[T, R]]) {
     @pure
     def isWellFormed: Boolean =
+      decreases(ms)
       ms match
         case ARSIdentity(t) => true
         case ARSComposition(h, t) => h.isWellFormed && t.isWellFormed  
@@ -288,6 +291,7 @@ object ARS {
     */
   @pure
   def isValidInd[T, R](ms: ARSKFoldComposition[T, ARSSymmStep[T, R]]) = {
+    decreases(ms)
     ms match
       case ARSIdentity(t) => true
       case ARSComposition(h, t) => h.isValid && t.isValid && h.t2 == t.t1
@@ -320,24 +324,28 @@ object ARS {
      * 
      * ! This is not a formal definition, its only purpose is to ensure measure decreaseness
      */
+    @pure
     def size: BigInt = {
+      decreases(this)
       this match
         case ARSReflexivity(t) => BigInt(1)
         case ARSTransitivity(r1, r2) => r1.size + r2.size + BigInt(1)
         case ARSSymmetry(r) => r.size + BigInt(1)
         case ARSBaseRelation(r) => BigInt(1) 
     }.ensuring(_ > BigInt(0))
-    
+  
+    @pure
     def t1: T = 
-      decreases(size)
+      decreases(this)
       this match
         case ARSReflexivity(t) => t
         case ARSBaseRelation(r) => r.t1
         case ARSTransitivity(r1, r2) => r1.t1
         case ARSSymmetry(r) => r.t2 
 
+    @pure
     def t2: T = 
-      decreases(size)
+      decreases(this)
       this match
         case ARSReflexivity(t) => t
         case ARSBaseRelation(r) => r.t2
@@ -349,8 +357,9 @@ object ARS {
       * 
       * Basically just checks if the transitivity rule is applied correctly
       */
+    @pure
     def isSound: Boolean = 
-      decreases(size)
+      decreases(this)
       this match
         case ARSReflexivity(t) => true
         case ARSBaseRelation(r) => r.isSound
@@ -363,8 +372,9 @@ object ARS {
       * Since it is a subset of equivalence, this function checks whether the witness
       * does also prove t1 ->* t2, by checking that symmetry is never used
       */
+    @pure
     def isReflTrans: Boolean = 
-      decreases(size)
+      decreases(this)
       this match
         case ARSReflexivity(t) => true
         case ARSBaseRelation(r) => true
@@ -378,8 +388,9 @@ object ARS {
       * 
       * * This proof is constructive and returns a witness that t1 -k-> t2
       */
+    @pure
     def toKFold: ARSKFoldComposition[T, R] = {
-      decreases(size)
+      decreases(this)
       this match
         case ARSReflexivity(t) => ARSIdentity[T, R](t)
         case ARSBaseRelation(r) => ARS1Fold(r)
@@ -414,6 +425,7 @@ object ARSProperties{
     * 
     * * This proof is constructive and returns such a witness 
     */
+  @pure
   def kFoldInverseToReflTrans[T, R](ms: ARSKFoldComposition[T, R]): ARSEquivalence[T, R] = {
     require(ms.isSound)
     ARSSymmetry(ms.toReflTrans)
@@ -435,6 +447,7 @@ object ARSProperties{
     * 
     * * This proof is constructive and returns such a witness 
     */
+  @pure
   def reductionPreserveEquivalence[T, R](ms1: ARSKFoldComposition[T, R], ms2: ARSKFoldComposition[T, R], eq: ARSEquivalence[T, R]) = {
     require(ms1.isSound)
     require(ms2.isSound)
@@ -460,6 +473,7 @@ object ARSProperties{
     * 
     * * This proof is constructive and returns such a witness 
     */
+  @pure
   def reductionImpliesEquivalence[T, R](ms1: ARSKFoldComposition[T, R], ms2: ARSKFoldComposition[T, R], eq: ARSEquivalence[T, R]) = {
     require(ms1.isSound)
     require(ms2.isSound)
@@ -483,7 +497,8 @@ object ARSProperties{
     *   There exist a sound proof that witnesses t1 <->* t2
     * 
     * * This proof is constructive and returns such a witness 
-    */ 
+    */
+  @pure
   def reduceSameFormEquivalent[T, R](ms1: ARSKFoldComposition[T, R], ms2: ARSKFoldComposition[T, R]): ARSEquivalence[T, R] = {
     require(ms1.isSound)
     require(ms2.isSound)
@@ -494,6 +509,7 @@ object ARSProperties{
   /**
     * * If two symmetric step sequences are well formed then their concatenation is well formed as well  
     */
+  @pure @opaque @inlineOnce
   def concatWellFormed[T, R](@induct s1: ARSKFoldComposition[T, ARSSymmStep[T, R]], s2: ARSKFoldComposition[T, ARSSymmStep[T, R]]): Unit = {
     require(s1.isWellFormed)
     require(s2.isWellFormed)
@@ -512,8 +528,10 @@ object ARSProperties{
     *   There exist a sound proof that witnesses t1 <->* t2
     * 
     * * This proof is constructive and returns such a witness 
-    */ 
+    */
+  @pure
   def symmClosureToEquivalence[T, R](ms: ARSKFoldComposition[T, ARSSymmStep[T, R]]): ARSEquivalence[T, R] = {
+    decreases(ms)
     require(ms.isValid)
     ms match
       case ARSIdentity(t) => ARSReflexivity(t)
@@ -538,9 +556,10 @@ object ARSProperties{
     * 
     * * This proof is constructive and returns such a witness 
     */ 
+  @pure
   def symmClosureInverse[T, R](ms: ARSKFoldComposition[T, ARSSymmStep[T, R]]): ARSKFoldComposition[T, ARSSymmStep[T, R]] = {
+    decreases(ms)
     require(ms.isValid)
-    decreases(ms.size)
     val res = ms match
       case ARSIdentity(t) => ARSIdentity(t)
       case ARSComposition(h, t) => 
@@ -564,8 +583,9 @@ object ARSProperties{
     * 
     * With symmClosureToEquivalence this proves that <->* = ⋃ <-n->
     */ 
+  @pure
   def equivalenceToSymmClosure[T, R](eq: ARSEquivalence[T, R]): ARSKFoldComposition[T, ARSSymmStep[T, R]] = {
-    decreases(eq.size)
+    decreases(eq)
     require(eq.isSound)
     eq match
       case ARSReflexivity(t) => ARSIdentity[T, ARSSymmStep[T, R]](t)

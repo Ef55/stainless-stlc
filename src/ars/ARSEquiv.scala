@@ -21,7 +21,9 @@ import ARS._
 
 object ARSEquivalences{
 
+  @pure @inlineOnce @opaque
   def parallelToEval(prd: ParallelReductionDerivation): MultiStepEvalReduction = {
+    decreases(prd)
     require(prd.isSound)
     prd match
       case ParallelTypeReduction.ReflDerivation(t) => ARSIdentity(t)
@@ -53,8 +55,9 @@ object ARSEquivalences{
       case _ => Unreacheable
   }.ensuring(res => res.isValid && res.t1 == prd.type1 && res.t2 == prd.type2)
 
+  @pure @inlineOnce @opaque
   def parallelToEval(prd: MultiStepParallelReduction): MultiStepEvalReduction = {
-    decreases(prd.size)
+    decreases(prd)
     require(prd.isValid)
     prd match
       case ARSIdentity(t) => ARSIdentity(t)
@@ -63,8 +66,9 @@ object ARSEquivalences{
         parallelToEval(h.unfold).concat(parallelToEval(t))
   }.ensuring(res => res.isValid && res.t1 == prd.t1 && res.t2 == prd.t2)
 
+  @pure @inlineOnce @opaque
   def parallelToEval(prd: ParallelEquivalence): EvalEquivalence = {
-    decreases(prd.size)
+    decreases(prd)
     require(prd.isValid)
     prd match
       case ARSReflexivity(t) => ARSReflexivity(t)
@@ -75,7 +79,9 @@ object ARSEquivalences{
         parallelToEval(r.unfold).toReflTrans
   }.ensuring(res => res.isValid && res.t1 == prd.t1 && res.t2 == prd.t2)
 
+  @pure @inlineOnce @opaque
   def evalToParallel(prd: EvalReductionDerivation): ParallelReductionDerivation = {
+    decreases(prd)
     require(prd.isSound)
     (prd match
       case EvalTypeReduction.ArrowTypeDerivationL(ArrowType(t11, t12), ArrowType(t21, t22), rd) => ParallelTypeReduction.ArrowTypeDerivation(ArrowType(t11, t12), ArrowType(t21, t22), evalToParallel(rd), ParallelTypeReduction.ReflDerivation(t12))
@@ -87,16 +93,18 @@ object ARSEquivalences{
     
   }.ensuring(res => res.isSound && res.type1 == prd.type1 && res.type2 == prd.type2)
 
+  @pure @inlineOnce @opaque
   def evalToParallel(prd: MultiStepEvalReduction): MultiStepParallelReduction = {
-    decreases(prd.size)
+    decreases(prd)
     require(prd.isValid)
     prd match
       case ARSIdentity(t) => ARSIdentity(t)
       case ARSComposition(h, t) => ARSComposition(evalToParallel(h.unfold).toARSStep, evalToParallel(t))
   }.ensuring(res => res.isValid && res.t1 == prd.t1 && res.t2 == prd.t2 && prd.size == res.size)
 
+  @pure @inlineOnce @opaque
   def evalToParallel(prd: EvalEquivalence): ParallelEquivalence = {
-    decreases(prd.size)
+    decreases(prd)
     require(prd.isValid)
     prd match
       case ARSReflexivity(t) => ARSReflexivity(t)

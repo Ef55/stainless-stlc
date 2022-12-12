@@ -37,7 +37,7 @@ object LambdaOmega {
       */
     @pure
     def freeVars: List[BigInt] = {
-      decreases(size)
+      decreases(this)
       this match
         case BasicType(_) => Nil()
         case ArrowType(t1, t2) => t1.freeVars ++ t2.freeVars
@@ -60,7 +60,7 @@ object LambdaOmega {
       */
     @pure
     def hasFreeVariablesIn(c: BigInt, d: BigInt): Boolean = {
-      decreases(size)
+      decreases(this)
       require(c >= 0)
       require(d >= 0)
       this match 
@@ -80,7 +80,7 @@ object LambdaOmega {
       */
     @pure
     def hasFreeVariablesAbove(c: BigInt): Boolean = {
-      decreases(size)
+      decreases(this)
       require(c >= 0)
       this match  
         case BasicType(_)         => false 
@@ -106,6 +106,7 @@ object LambdaOmega {
       */
     @pure
     def size: BigInt = {
+      decreases(this)
       this match
         case BasicType(_) => BigInt(1)
         case ArrowType(t1, t2) => t1.size + t2.size + BigInt(1)
@@ -142,7 +143,7 @@ object LambdaOmega {
       */
     @pure
     def freeVars: List[BigInt] = {
-      decreases(size)
+      decreases(this)
       this match
         case App(t1, t2) => t1.freeVars ++ t2.freeVars
         case Abs(_, b) => b.freeVars.filter(x => x > 0).map(x => x - 1)
@@ -162,7 +163,7 @@ object LambdaOmega {
       */
     @pure
     def hasFreeVariablesIn(c: BigInt, d: BigInt): Boolean = {
-      decreases(size)
+      decreases(this)
       require(c >= 0)
       require(d >= 0)
       this match
@@ -180,7 +181,7 @@ object LambdaOmega {
       * For the equivalence between this definition and the classical one cf. hasFreeVariablesAboveSoundness
       */
     def hasFreeVariablesAbove(c: BigInt): Boolean = {
-      decreases(size)
+      decreases(this)
       require(c >= 0)
       this match 
         case Var(v)      => v >= c
@@ -204,6 +205,7 @@ object LambdaOmega {
       */
     @pure
     def size: BigInt = {
+      decreases(this)
       this match
         case Var(_) => BigInt(1)
         case Abs(_, body) => body.size + BigInt(1)
@@ -236,7 +238,7 @@ object LambdaOmegaProperties{
       */
     @pure @opaque @inlineOnce
     def freeVarsNonNeg(t: Type): Unit = {
-      decreases(t.size)
+      decreases(t)
       t match
         case BasicType(_) => ()
         case VariableType(_) => ()
@@ -264,7 +266,7 @@ object LambdaOmegaProperties{
      */
     @pure @opaque @inlineOnce
     def hasFreeVariablesInSoundness(t: Type, c: BigInt, d: BigInt): Unit = {
-      decreases(t.size)
+      decreases(t)
       require(c >= 0)
       require(d >= 0)
       filterSplitGeLt(t.freeVars, c, c + d)
@@ -306,7 +308,7 @@ object LambdaOmegaProperties{
      */
     @inlineOnce @opaque @pure
     def hasFreeVariablesAboveSoundness(t: Type, c: BigInt): Unit = {
-      decreases(t.size)
+      decreases(t)
       require(c >= 0)
       t match
         case BasicType(_) => ()
@@ -318,7 +320,7 @@ object LambdaOmegaProperties{
           hasFreeVariablesAboveSoundness(t1, c)
           hasFreeVariablesAboveSoundness(t2, c)
           concatFilter(t1.freeVars, t2.freeVars, _ >= c)
-        case VariableType(j) => ()
+        case VariableType(_) => ()
         case AbsType(_, b) => 
           hasFreeVariablesAboveSoundness(b, c + 1)
           mapAddSub(b.freeVars.filter(_ > 0), 1)
@@ -354,7 +356,7 @@ object LambdaOmegaProperties{
       */
     @inlineOnce @opaque @pure
     def boundRangeDecrease(t: Type, c: BigInt, d1: BigInt, d2: BigInt): Unit = {
-      decreases(t.size)
+      decreases(t)
       require(d2 >= 0)
       require(d1 >= d2)
       require(c >= 0)
@@ -365,7 +367,7 @@ object LambdaOmegaProperties{
         case ArrowType(t1, t2) => 
           boundRangeDecrease(t1, c, d1, d2)
           boundRangeDecrease(t2, c, d1, d2)
-        case VariableType(v) => ()
+        case VariableType(_) => ()
         case AbsType(_, body) => 
           boundRangeDecrease(body, c+1, d1, d2)
         case AppType(t1, t2) => 
@@ -389,7 +391,7 @@ object LambdaOmegaProperties{
       */
     @inlineOnce @opaque @pure
     def boundRangeIncreaseCutoff(t: Type, c1: BigInt, c2: BigInt, d: BigInt): Unit = {
-      decreases(t.size)
+      decreases(t)
       require(0 <= c1)
       require(c1 <= c2)
       require(c2 <= c1 + d)
@@ -424,7 +426,7 @@ object LambdaOmegaProperties{
       */
     @inlineOnce @opaque @pure
     def boundRangeConcatenation(t: Type, a: BigInt, b: BigInt, c: BigInt): Unit = {
-      decreases(t.size)
+      decreases(t)
       require(a >= 0)
       require(b >= 0)
       require(c >= 0)
@@ -453,7 +455,7 @@ object LambdaOmegaProperties{
       */
     @pure @opaque @inlineOnce
     def freeVarsNonNeg(t: Term): Unit = {
-      decreases(t.size)
+      decreases(t)
       t match
         case Var(_) => ()
         case App(t1, t2) =>
@@ -476,7 +478,7 @@ object LambdaOmegaProperties{
      */
     @pure @opaque @inlineOnce
     def hasFreeVariablesInSoundness(t: Term, c: BigInt, d: BigInt): Unit = {
-      decreases(t.size)
+      decreases(t)
       require(c >= 0)
       require(d >= 0)
       filterSplitGeLt(t.freeVars, c, c + d)
@@ -510,7 +512,7 @@ object LambdaOmegaProperties{
      */
     @inlineOnce @opaque @pure
     def hasFreeVariablesAboveSoundness(t: Term, c: BigInt): Unit = {
-      decreases(t.size)
+      decreases(t)
       require(c >= 0)
       t match
         case App(t1, t2) => 
@@ -552,7 +554,7 @@ object LambdaOmegaProperties{
       */
     @inlineOnce @opaque @pure
     def boundRangeDecrease(t: Term, c: BigInt, d1: BigInt, d2: BigInt): Unit = {
-      decreases(t.size)
+      decreases(t)
       require(d1 >= 0 && d2 >= 0)
       require(c >= 0)
       require(d2 <= d1)
@@ -583,7 +585,7 @@ object LambdaOmegaProperties{
       */
     @inlineOnce @opaque @pure
     def boundRangeIncreaseCutoff(t: Term, c1: BigInt, c2: BigInt, d: BigInt): Unit = {
-      decreases(t.size)
+      decreases(t)
       require(c1 >= 0 && c2 >= 0)
       require(0 <= d && c2 - c1 <= d)
       require(c1 <= c2)
@@ -613,7 +615,7 @@ object LambdaOmegaProperties{
       */
     @inlineOnce @opaque @pure
     def boundRangeConcatenation(t: Term, a: BigInt, b: BigInt, c: BigInt): Unit = {
-      decreases(t.size)
+      decreases(t)
       require(a >= 0)
       require(b >= 0)
       require(c >= 0)

@@ -25,6 +25,7 @@ object ParallelTypeReduction{
 
     @pure
     def type1: Type = 
+      decreases(this)
       this match
         case ReflDerivation(t) => t 
         case ArrowTypeDerivation(t1, _, _, _) => t1
@@ -34,6 +35,7 @@ object ParallelTypeReduction{
 
     @pure
     def type2: Type = 
+      decreases(this)
       this match
         case ReflDerivation(t) => t 
         case ArrowTypeDerivation(_, t2, _, _) => t2
@@ -48,6 +50,7 @@ object ParallelTypeReduction{
       */
     @pure
     def size: BigInt = {
+      decreases(this)
       this match
         case ReflDerivation(_) => BigInt(1)
         case ArrowTypeDerivation(_, _, ed1, ed2) => ed1.size + ed2.size + BigInt(1)
@@ -66,6 +69,7 @@ object ParallelTypeReduction{
       */
     @pure
     def isSound: Boolean = 
+      decreases(this)
       this match 
         case ReflDerivation(_) => true
         case ArrowTypeDerivation(ArrowType(t11, t12), ArrowType(t21, t22), prd1, prd2) =>
@@ -171,7 +175,7 @@ object ParallelTypeReductionValidity{
   extension (eq: ParallelEquivalenceSeq) {
     @pure
     def isDeepValid: Boolean =
-      decreases(eq.size)
+      decreases(eq)
       eq match
         case ARSIdentity(t) => true
         case ARSComposition(h, t) => h.unfold.isDeepValid && t.isDeepValid
@@ -179,7 +183,7 @@ object ParallelTypeReductionValidity{
 
   @pure
   def isValidInd(ms: MultiStepParallelReduction): Boolean = {
-    decreases(ms.size)
+    decreases(ms)
     ms match
         case ARSIdentity(t) => true
         case ARSComposition(h, t) => h.isValid && isValidInd(t) && h.t2 == t.t1
@@ -187,7 +191,7 @@ object ParallelTypeReductionValidity{
 
   @pure
   def isValidInd(eq: ParallelEquivalence): Boolean = {
-    decreases(eq.size)
+    decreases(eq)
     eq match
       case ARSReflexivity(t) => true
       case ARSBaseRelation(r) => r.isValid
@@ -195,12 +199,13 @@ object ParallelTypeReductionValidity{
       case ARSSymmetry(r) => isValid(r)
   }.ensuring(_ == eq.isValid)
 
-  @pure
+  @pure @inlineOnce @opaque
   def concatWellFormed(@induct s1: MultiStepParallelReduction, s2: MultiStepParallelReduction): Unit = {
     require(s1.isWellFormed)
     require(s2.isWellFormed)
-  }.ensuring(_ => s1.concat(s2).isWellFormed)
+  }.ensuring(s1.concat(s2).isWellFormed)
 
+  @pure @inlineOnce @opaque
   def toReflTransWellFormed(@induct ms: MultiStepParallelReduction): Unit = {
     require(ms.isWellFormed)
   }.ensuring(ms.toReflTrans.isWellFormed)
@@ -211,6 +216,7 @@ object ParallelTypeReductionValidity{
     toReflTransWellFormed(ms)
   }.ensuring(kFoldInverseToReflTrans(ms).isWellFormed)
 
+  @pure @opaque @inlineOnce
   def reductionImpliesEquivalenceWellFormed(ms1: MultiStepParallelReduction, ms2: MultiStepParallelReduction, eq: ParallelEquivalence): Unit = {
     require(ms1.isValid)
     require(ms2.isValid)
@@ -221,6 +227,7 @@ object ParallelTypeReductionValidity{
     kFoldInverseToReflTransWellFormed(ms2)
   }.ensuring(reductionImpliesEquivalence(ms1, ms2, eq).isWellFormed)
 
+  @pure @opaque @inlineOnce
   def reduceSameFormEquivalentWellFormed(ms1: MultiStepParallelReduction, ms2: MultiStepParallelReduction): Unit = {
     require(ms1.isValid)
     require(ms2.isValid)
@@ -228,17 +235,20 @@ object ParallelTypeReductionValidity{
     reductionImpliesEquivalenceWellFormed(ms1, ms2, ARSReflexivity(ms1.t2))
   }.ensuring(reduceSameFormEquivalent(ms1, ms2).isWellFormed)
 
-
+  @pure @opaque @inlineOnce
   def concatDeepValid(@induct s1: ParallelEquivalenceSeq, s2: ParallelEquivalenceSeq): Unit = {
     require(s1.isDeepValid)
     require(s2.isDeepValid  )
   }.ensuring(_ => s1.concat(s2).isDeepValid)
 
+  @pure @opaque @inlineOnce
   def inverseDeepValid(@induct s: ARSSymmStep[Type, ParallelReductionDerivation]): Unit = {
     require(s.isDeepValid)
   }.ensuring(s.inverse.isDeepValid)
 
+  @pure @opaque @inlineOnce
   def symmClosureInverseDeepValid(eq: ParallelEquivalenceSeq): Unit = {
+    decreases(eq)
     require(eq.isValid && eq.isDeepValid)
     eq match
       case ARSIdentity(_) => ()
@@ -250,8 +260,9 @@ object ParallelTypeReductionValidity{
         concatDeepValid(symmClosureInverse(t), ARS1Fold(h.unfold.inverse.toARSStep))
   }.ensuring(symmClosureInverse(eq).isDeepValid)
 
+  @pure @opaque @inlineOnce
   def equivalenceToSymmClosureDeepValid(eq: ParallelEquivalence): Unit ={
-    decreases(eq.size)
+    decreases(eq)
     require(eq.isValid)
     
     isValidInd(eq)
@@ -296,8 +307,9 @@ object ParallelTypeReductionProperties {
     *   - FV(T2) ∩ [a, a + b[ = ∅
     * 
     */
-  @opaque @pure
+  @inlineOnce @opaque @pure
   def reduceBoundRange(sd: ParallelReductionDerivation, a: BigInt, b: BigInt): Unit = {
+    decreases(sd)
     require(sd.isSound)
     require(a >= 0)
     require(b >= 0)
@@ -334,11 +346,12 @@ object ParallelTypeReductionProperties {
     *   There exists a sound derivation tree witnessing shift(T1, d, c) => shift(T2, d, c)
     * * The proof is constructive and returns this derivation tree
     */
-  @opaque @pure
+  @inlineOnce @opaque @pure
   def reduceShift(sd: ParallelReductionDerivation, d: BigInt, c: BigInt): ParallelReductionDerivation = {
+    decreases(sd)
     require(sd.isSound)
     require(c >= 0)
-    require(if d < 0 then !sd.type1.hasFreeVariablesIn(c, -d) else true)
+    require(d < 0 ==> !sd.type1.hasFreeVariablesIn(c, -d))
 
     if d < 0 then 
       reduceBoundRange(sd, c, -d) 
@@ -389,8 +402,9 @@ object ParallelTypeReductionProperties {
     *   There exists a sound derivation tree witnessing T[j := S1] => T[j := S2]
     * * The proof is constructive and returns this derivation tree
     */
-  @opaque @pure
+  @inlineOnce @opaque @pure
   def reduceReflSubst(t: Type, j: BigInt, sd: ParallelReductionDerivation): ParallelReductionDerivation = {
+    decreases(t)
     require(sd.isSound)
     require(j >= 0)
     t match
@@ -427,8 +441,9 @@ object ParallelTypeReductionProperties {
     *   There exists a sound derivation tree witnessing T1[j := S1] => T2[j := S2]
     * * The proof is constructive and returns this derivation tree
     */
-  @opaque @pure
+  @inlineOnce @opaque @pure
   def reduceSubst(td: ParallelReductionDerivation, j: BigInt, sd: ParallelReductionDerivation): ParallelReductionDerivation = {
+    decreases(td)
     require(td.isSound)
     require(sd.isSound)
     require(j >= 0)
@@ -476,7 +491,7 @@ object ParallelTypeReductionProperties {
     *   There exists a sound derivation tree witnessing absSubstitution(B1, A1) => absSubstitution(B2, A2)
     * * The proof is constructive and returns this list
     */
-  @opaque @pure
+  @inlineOnce @opaque @pure
   def reduceAbsSubst(bd: ParallelReductionDerivation, ad: ParallelReductionDerivation): ParallelReductionDerivation = {
     require(bd.isSound)
     require(ad.isSound)
@@ -511,6 +526,7 @@ object ParallelTypeReductionProperties {
     *     - T41 = T42
     * * The proof is constructive and returns this pair of derivations trees
     */
+  @inlineOnce @opaque @pure
   def diamondProperty(prd1: ParallelReductionDerivation, prd2: ParallelReductionDerivation): (ParallelReductionDerivation, ParallelReductionDerivation) = {
     decreases(prd1.size + prd2.size)
     require(prd1.isSound)
@@ -585,8 +601,9 @@ object ParallelTypeReductionProperties {
     *     - T41 = T42
     * * The proof is constructive and returns this pair of list
     */
+  @pure @inlineOnce @opaque
   def semiConfluence(prd1: MultiStepParallelReduction, h2: ParallelReductionStep): (ParallelReductionStep, MultiStepParallelReduction) = {
-    decreases(prd1.size)
+    decreases(prd1)
     require(prd1.isValid)
     require(h2.isValid)
     require(h2.t1 == prd1.t1)
@@ -626,6 +643,7 @@ object ParallelTypeReductionProperties {
     *     - T41 = T42
     * * The proof is constructive and returns this pair of list
     */
+  @pure @inlineOnce @opaque
   def confluence(prd1: MultiStepParallelReduction, prd2: MultiStepParallelReduction): (MultiStepParallelReduction, MultiStepParallelReduction) = {
     decreases(prd1.size + prd2.size)
     require(prd1.isValid)
@@ -665,8 +683,11 @@ object ParallelTypeReductionProperties {
     *     - T31 = T32
     * * The proof is constructive and returns this pair of list
     */
+  @pure @inlineOnce @opaque
   def churchRosser(eq: ParallelEquivalenceSeq): (MultiStepParallelReduction, MultiStepParallelReduction) = {
+    decreases(eq)
     require(eq.isValid && eq.isDeepValid)
+
     ARS.isValidInd(eq)
 
     eq match
@@ -695,6 +716,7 @@ object ParallelTypeReductionProperties {
   /**
     * Same theorem as above with an equivalent definition of equivalence instead
     */
+  @pure @inlineOnce @opaque
   def churchRosser(eq: ParallelEquivalence): (MultiStepParallelReduction, MultiStepParallelReduction) = {
     require(eq.isValid)
     equivalenceToSymmClosureDeepValid(eq)
@@ -707,7 +729,9 @@ object ParallelTypeReductionProperties {
     res._1.isValid && res._2.isValid
   )
 
+  @pure @inlineOnce @opaque
   def arrowMultiStepReduction(s1: Type, s2: Type, red: MultiStepParallelReduction): (MultiStepParallelReduction, MultiStepParallelReduction) = {
+    decreases(red)
     require(red.isValid)
     require(red.t1 == ArrowType(s1, s2))
 
@@ -716,11 +740,14 @@ object ParallelTypeReductionProperties {
     red match
       case ARSIdentity(_) => (ARSIdentity(s1), ARSIdentity(s2))
       case ARSComposition(h, t) =>
-        assert(h.isValid)
+        assert(h.isValid) //needed
+        assert(h.unfold.type1.isInstanceOf[ArrowType]) //needed
         h.unfold match
           case ReflDerivation(_) => arrowMultiStepReduction(s1, s2, t)
           case ArrowTypeDerivation(_, ArrowType(s3, s4), br1, br2) =>
             val (sdr1, sdr2) = arrowMultiStepReduction(s3, s4, t)
+            assert(br1.toARSStep.isValid) //needed
+            assert(br2.toARSStep.isValid) //needed
             (ARSComposition(br1.toARSStep, sdr1), ARSComposition(br2.toARSStep, sdr2))
           case _ => Unreacheable
     
@@ -733,6 +760,7 @@ object ParallelTypeReductionProperties {
       red.t2 == ArrowType(res._1.t2, res._2.t2)
   )
 
+  @opaque @inlineOnce @pure
   def arrowEquivalence(s1: Type, s2: Type, s3: Type, s4: Type, eq: ParallelEquivalence): (ParallelEquivalence, ParallelEquivalence) = {
     require(eq.isValid)
     require(eq.t1 == ArrowType(s1, s2))

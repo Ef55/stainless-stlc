@@ -49,6 +49,7 @@ object EvalTermReduction{
       */
     @pure
     def size: BigInt = {
+      decreases(this)
       this match
         case AbsDerivation(_, _, rd) => rd.size + 1
         case AppDerivationL(_, _, rd) => rd.size + 1
@@ -66,6 +67,7 @@ object EvalTermReduction{
       */
     @pure
     def isSound: Boolean = 
+      decreases(this)
       this match
         case AbsDerivation(Abs(k1, b1), Abs(k2, b2), rd) => 
           rd.isSound && rd.term1 == b1 && rd.term2 == b2 && k1 == k2
@@ -89,7 +91,9 @@ object EvalTermReduction{
    * 
    * ! Lists are used here instead of sets since their are easier to deal with in Stainless
    */
+  @pure 
   def reduce(t: Term): List[EvalReductionDerivation] = {
+    decreases(t)
     t match
       case Var(_) => Nil()
       case abs@Abs(k, b) => reduce(b).map(b2 => AbsDerivation(abs, Abs(k, b2.term2), b2))
@@ -107,6 +111,7 @@ object EvalTermReduction{
     * Decider procedure for reduction
     * If t1 -> t2 then the algorithm output a proof that witnesses the reduction
     */
+  @pure
   def reducesTo(t1: Term, t2: Term): Option[EvalReductionDerivation] = {
     reduce(t1).filter((r: EvalReductionDerivation) => r.term2 == t2) match
       case Nil() => None()
@@ -116,18 +121,21 @@ object EvalTermReduction{
   /**
     * List of technical lemmas needed to prove soundness of reduce
     */
+  @pure @opaque @inlineOnce
   def reduceSoundnessLemmaAbs(@induct l: List[EvalReductionDerivation], k: Type, b: Term): Unit = {
     require(l.forall(_.isSound))
     require(l.forall(_.term1 == b))
   }.ensuring(l.forall(b2 => AbsDerivation(Abs(k, b), Abs(k, b2.term2), b2).isSound) &&
              l.forall(b2 => AbsDerivation(Abs(k, b), Abs(k, b2.term2), b2).term1 == Abs(k, b)))
 
+  @pure @opaque @inlineOnce
   def reduceSoundnessLemmaAppL(@induct l: List[EvalReductionDerivation], t1: Term, t2: Term): Unit = {
     require(l.forall(_.isSound))
     require(l.forall(_.term1 == t1))
   }.ensuring(l.forall(t1d => AppDerivationL(App(t1, t2), App(t1d.term2, t2), t1d).isSound) &&
              l.forall(t1d => AppDerivationL(App(t1, t2), App(t1d.term2, t2), t1d).term1 == App(t1, t2)))
 
+  @pure @opaque @inlineOnce
   def reduceSoundnessLemmaAppR(@induct l: List[EvalReductionDerivation], t1: Term, t2: Term): Unit = {
     require(l.forall(_.isSound))
     require(l.forall(_.term1 == t2))
@@ -138,7 +146,9 @@ object EvalTermReduction{
     * Soudness of reduce
     * That is all the proofs in the set outputed by reduce are sound and they all witness T -> T' for some T'
     */
+  @pure @opaque @inlineOnce
   def reduceSoundness(t: Term): Unit = {
+    decreases(t)
     t match
       case Var(_) => ()
       case abs@Abs(k, b) => 
@@ -182,8 +192,10 @@ object EvalTermReduction{
    * Completeness of reduce
    * That is if T1 -> T2 then T2 ∈ reduce(T1)
    */
+  @pure @opaque @inlineOnce
   def reduceCompleteness(r: EvalReductionDerivation): Unit = {
     require(r.isSound)
+    decreases(r)
     
     r match
       case AbsDerivation(Abs(k1, b1), Abs(k2, b2), rd) => 
@@ -225,13 +237,13 @@ object EvalTermReduction{
             case abs@Abs(k, b) =>
               Cons(AppAbsDerivation(abs, t12), Nil())
             case _ => Nil()
-        assert(l3.contains)
         ListProperties.concatContains(l1 ++ l2, l3, r)
   }.ensuring(reduce(r.term1).contains(r))
 
   /**
    * Normal form - TRAT Section 2.1.1
    */
+  @pure
   def isEvalNormalForm(t: Term): Boolean = {
     reduce(t).isEmpty
   }
@@ -241,7 +253,9 @@ object EvalTermReduction{
     * Reduction strategy where lambda abstractions are not reduced
     * The procedure outputs a proof witnessing the reduction
     */
+  @pure
   def callByValueReduce(t: Term): Option[EvalReductionDerivation] = {
+    decreases(t)
     t match
       case (at@App(t11, t12)) =>
         callByValueReduce(t11) match 
@@ -258,7 +272,9 @@ object EvalTermReduction{
    * Full beta reduction soudness
    * That is the proof witnessing T -> T' is sound
    */
+  @pure @opaque @inlineOnce
   def callByValueReduceSoundness(t: Term): Unit = {
+    decreases(t)
     require(callByValueReduce(t).isDefined)
     t match
       case at@App(t11, t12) =>
@@ -277,6 +293,7 @@ object EvalTermReduction{
     * Outputs if T1 -> T2 according to full beta reduction
     * If it is the case, outputs a proof of the reduction
     */
+  @pure
   def callByValueReducesTo(t1: Term, t2: Term): Option[EvalReductionDerivation] = {
     callByValueReduce(t1) match
       case Some(prd) => if prd.term2 == t2 then Some(prd) else None()
@@ -287,6 +304,7 @@ object EvalTermReduction{
    * Soudness of callByValueReducesTo
    * That is if the procedure outputs a proof of T1 -> T2, then it is sound
    */
+  @pure @opaque @inlineOnce
   def callByValueReducesToSoundness(t1: Term, t2: Term): Unit = {
     require(callByValueReducesTo(t1, t2).isDefined)
     callByValueReduceSoundness(t1)

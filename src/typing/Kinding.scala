@@ -8,6 +8,7 @@ object Kinding {
 
   sealed trait KindDerivation{
 
+    @pure
     def env: KindEnvironment = this match
       case BasicKindingDerivation(e, _) => e
       case VariableKindingDerivation(e, _, _) => e
@@ -15,8 +16,7 @@ object Kinding {
       case AppKindingDerivation(e, _, _, _, _) => e
       case ArrowKindingDerivation(e, _, _, _, _) => e
 
-    
-
+    @pure
     def k: Kind = this match
       case BasicKindingDerivation(_, _) => ProperKind
       case VariableKindingDerivation(_, k, _) => k
@@ -24,15 +24,28 @@ object Kinding {
       case AppKindingDerivation(_, k, _, _, _) => k
       case ArrowKindingDerivation(_, k, _, _, _) => k
   
-
+    @pure
     def typ: Type = this match
       case BasicKindingDerivation(_, typ) => typ
       case VariableKindingDerivation(_, _, typ) => typ
       case AbsKindingDerivation(_, _, typ, _) => typ
       case AppKindingDerivation(_, _, typ, _, _) => typ
       case ArrowKindingDerivation(_, _, typ, _, _) => typ
+
+    @pure
+    def size: BigInt = {
+      decreases(this)
+      this match
+        case BasicKindingDerivation(_, _) => BigInt(1)
+        case VariableKindingDerivation(_, _, _) => BigInt(1)
+        case AbsKindingDerivation(_, _, _, bkd) => bkd.size + BigInt(1)
+        case AppKindingDerivation(_, _, _, kd1, kd2) => kd1.size + kd2.size + BigInt(1)
+        case ArrowKindingDerivation(_, _, _, kd1, kd2) => kd1.size + kd2.size + BigInt(1)
+    }.ensuring(_ > BigInt(0))
     
+    @pure
     def isSound: Boolean = 
+      decreases(this)
       this match
         case BasicKindingDerivation(_, _) => true
         case VariableKindingDerivation(env, k, VariableType(j)) => 
@@ -56,6 +69,7 @@ object Kinding {
           bkd1.k == ArrowKind(bkd2.k, k) // The body has expected type 
         case _ => Unreacheable   
     
+    @pure
     def ===(that: KindDerivation): Boolean = 
       this.k == that.k && this.env == that.env
   }
@@ -66,48 +80,9 @@ object Kinding {
   case class AppKindingDerivation(e: KindEnvironment, k: Kind, typ: AppType, bkd1: KindDerivation, bkd2: KindDerivation) extends KindDerivation
   case class ArrowKindingDerivation(e: KindEnvironment, k: Kind, typ: ArrowType, bkd1: KindDerivation, bkd2: KindDerivation) extends KindDerivation
 
-  def deriveKind(env: KindEnvironment, t: Type): Option[KindDerivation] = 
-    t match 
-      case bt@BasicType(_) => Some(BasicKindingDerivation(env, bt))
-      case v@VariableType(j) => if (j < env.size) Some(VariableKindingDerivation(env, env(j), v)) else None()
-      case arr@ArrowType(t1, t2) => 
-        (deriveKind(env, t1), deriveKind(env, t2)) match 
-          case (Some(kd1), Some(kd2)) => 
-            if(kd1.k == ProperKind && kd2.k == ProperKind)
-              Some(ArrowKindingDerivation(env, ProperKind, arr, kd1, kd2))
-            
-            else
-              None()
-            
-          
-          case (_, _) => None()
-        
-      
-      case abs@AbsType(argK, body) => 
-        deriveKind(argK :: env, body) match 
-          case None() => None()
-          case Some(kb) => Some(AbsKindingDerivation(env, ArrowKind(argK, kb.k), abs, kb))
-        
-      
-      case app@AppType(t1, t2) => 
-        (deriveKind(env, t1), deriveKind(env, t2)) match 
-          case (Some(kd1), Some(kd2)) => 
-            kd1.k match
-              case ArrowKind(argK, bodyK) if (argK == kd2.k) => 
-                Some(AppKindingDerivation(env, bodyK, app, kd1, kd2))
-              case _ => None()
-            
-          
-          case (_, _) => None()
-        
-      
-    
-  
-  
-  def deriveKind(t: Type): Option[KindDerivation] = deriveKind(Nil(), t)
-  
-
+  @pure
   def isWellFormed(env: TypeEnvironment, wf: List[KindDerivation]): Boolean = {
+    decreases(env.length + wf.length)
     (env, wf) match
       case (Nil(), Nil()) => true
       case (Cons(h1, t1), Cons(h2, t2)) => h2.isSound && h1 == h2.typ && h2.env == Nil() && h2.k == ProperKind && isWellFormed(t1, t2)
@@ -115,8 +90,6 @@ object Kinding {
   }.ensuring(_ ==> (wf.length == env.length))
 
 }
- 
-
 
 object KindingProperties{
   import LambdaOmega._
@@ -127,53 +100,33 @@ object KindingProperties{
   import ParallelTypeReductionValidity._
   import ARS._
 
-  /// Type derivations
-  @opaque @pure
-  def deriveKindCompleteness(@induct kd: KindDerivation): Unit = {
-    require(kd.isSound)
-  }.ensuring(deriveKind(kd.env, kd.typ) == Some(kd))
-
-  @opaque @pure
-  def deriveKindSoundness(env: KindEnvironment, t: Type): Unit = {
-    require(deriveKind(env, t).isDefined)
-    t match 
-      case BasicType(_) => ()
-      case VariableType(_) => ()
-      case AbsType(argK, body) => 
-        deriveKindSoundness(argK :: env, body)
-      
-      case ArrowType(t1, t2) => 
-        deriveKindSoundness(env, t1)
-        deriveKindSoundness(env, t2)
-      
-      case AppType(t1, t2) => 
-        deriveKindSoundness(env, t1)
-        deriveKindSoundness(env, t2)
-      
-    
-  }.ensuring(
-    deriveKind(env, t).get.isSound && 
-    deriveKind(env, t).get.typ == t && 
-    deriveKind(env, t).get.env == env
-  )
-
-  @opaque @pure
+  @inlineOnce @opaque @pure
   def kindDerivationUniqueness(kd1: KindDerivation, kd2: KindDerivation): Unit = {
     require(kd1.isSound)
     require(kd2.isSound)
     require(kd1.typ == kd2.typ)
     require(kd1.env == kd2.env)
-
-    deriveKindCompleteness(kd1)
-    deriveKindCompleteness(kd2)
+    (kd1, kd2) match
+      case (BasicKindingDerivation(_, _), BasicKindingDerivation(_, _)) => ()
+      case (VariableKindingDerivation(_, _, _), VariableKindingDerivation(_, _, _)) => ()
+      case (ArrowKindingDerivation(_, _, _, kd11, kd12), ArrowKindingDerivation(_, _, _, kd21, kd22)) => 
+        kindDerivationUniqueness(kd11, kd21)
+        kindDerivationUniqueness(kd21, kd22)
+      case (AppKindingDerivation(_, _, _, kd11, kd12), AppKindingDerivation(_, _, _, kd21, kd22)) => 
+        kindDerivationUniqueness(kd11, kd21)
+        kindDerivationUniqueness(kd21, kd22)
+      case (AbsKindingDerivation(_, _, _, bkd1), AbsKindingDerivation(_, _, _, bkd2)) => 
+        kindDerivationUniqueness(bkd1, bkd2)
   }.ensuring(kd1 == kd2)
 
-
+  @inlineOnce @opaque @pure
   def arrowKindingInversion(kd: KindDerivation): Unit = {
     require(kd.typ.isInstanceOf[ArrowType])
   }.ensuring(kd.isInstanceOf[ArrowKindingDerivation])
 
+  @inlineOnce @opaque @pure
   def isWellFormedApply(env: TypeEnvironment, wf: List[KindDerivation], j: BigInt): Unit = {
+    decreases(env.length + wf.length)
     require(Kinding.isWellFormed(env, wf))
     require(j < env.length)
     require(0 <= j) 
@@ -186,6 +139,7 @@ object KindingProperties{
 
   @opaque @inlineOnce @pure
   def kindEnvironmentWeakening(kd: KindDerivation, envExt: KindEnvironment): KindDerivation = {
+    decreases(kd)
     require(kd.isSound)
     kd match 
       case BasicKindingDerivation(env, bt) => BasicKindingDerivation(env ++ envExt, bt)
@@ -244,6 +198,7 @@ object KindingProperties{
 
   @opaque @inlineOnce @pure
   def insertKindInEnv(env1: KindEnvironment, insert: Kind, env2: KindEnvironment, kd: KindDerivation): KindDerivation = {
+    decreases(kd)
     require(kd.isSound)
     require(env1 ++ env2 == kd.env)
 
@@ -286,6 +241,7 @@ object KindingProperties{
 
   @opaque @inlineOnce @pure
   def insertKindEnvInEnv(env1: KindEnvironment, insert: KindEnvironment, env2: KindEnvironment, kd: KindDerivation): KindDerivation = {
+    decreases(insert)
     require(kd.isSound)
     require(env1 ++ env2 == kd.env)
     
@@ -308,6 +264,7 @@ object KindingProperties{
 
   @opaque @inlineOnce @pure
   def removeKindInEnv(env1: KindEnvironment, remove: Kind, env2: KindEnvironment, kd: KindDerivation): KindDerivation = {
+    decreases(kd)
     require(kd.isSound)
     require(kd.env == env1 ++ (remove :: env2))
     require(!kd.typ.hasFreeVariablesIn(env1.size, 1))
@@ -354,6 +311,7 @@ object KindingProperties{
 
   @opaque @inlineOnce @pure
   def kindPreservationUnderSubst(td: KindDerivation, j: BigInt, sd: KindDerivation): KindDerivation = { 
+    decreases(td)
     require(td.isSound)
     require(sd.isSound)
     require(td.env == sd.env)
@@ -406,6 +364,7 @@ object KindingProperties{
 
   @opaque @inlineOnce @pure
   def kindPreservation(kd: KindDerivation, red: ParallelReductionDerivation): KindDerivation = {
+    decreases(kd.size + red.size)
     require(kd.isSound)
     require(red.isSound)
     require(red.type1 == kd.typ)
@@ -437,6 +396,7 @@ object KindingProperties{
 
   @opaque @inlineOnce @pure
   def kindMultiStepPreservation(kd: KindDerivation, red: MultiStepParallelReduction): KindDerivation = {
+    decreases(red)
     require(kd.isSound)
     require(red.isValid)
     require(red.t1 == kd.typ)
