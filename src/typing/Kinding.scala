@@ -413,6 +413,22 @@ object KindingProperties{
     ( res.env == kd.env ) &&
     ( res.k == kd.k)
   )
+
+  @opaque @inlineOnce @pure
+  def kindEvalMultiStepPreservation(kd: KindDerivation, red: EvalTypeReduction.MultiStepEvalReduction): KindDerivation = {
+    require(kd.isSound)
+    require(red.isValid)
+    require(red.t1 == kd.typ)
+
+    kindMultiStepPreservation(kd, ARSEquivalences.evalToParallel(red))
+
+  }.ensuring(res => 
+    res.isSound &&
+    ( res.typ == red.t2 ) &&
+    ( res.env == kd.env ) &&
+    ( res.k == kd.k)
+  )
+
   @opaque @inlineOnce @pure
   def kindEquivalencePreservation(kd1: KindDerivation, kd2: KindDerivation, eq: ParallelEquivalenceSeq): Unit  = {
     require(kd1.isSound)

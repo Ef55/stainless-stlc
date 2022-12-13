@@ -314,6 +314,28 @@ object EvalTypeReduction{
     reduce(t).isEmpty
   }
 
+  @pure @inlineOnce @pure
+  def isEvalNormalFormArrowMap(t1: Type, t2: Type): Unit = {
+    require(isEvalNormalForm(t1))
+    require(isEvalNormalForm(t2))
+    val l1: List[EvalReductionDerivation] = reduce(t1).map(t1d => ArrowTypeDerivationL(ArrowType(t1, t2), ArrowType(t1d.type2, t2), t1d))
+    assert(l1.isEmpty)
+    val l2: List[EvalReductionDerivation] = reduce(t2).map(t2d => ArrowTypeDerivationR(ArrowType(t1, t2), ArrowType(t1, t2d.type2), t2d))
+    assert(l2.isEmpty)
+    assert((l1 ++ l2).isEmpty)
+    assert(reduce(ArrowType(t1, t2)) == l1 ++ l2)
+  }.ensuring(isEvalNormalForm(ArrowType(t1, t2)))
+
+  @pure @inlineOnce @pure
+  def isEvalNormalFormInnerMap(t: Type): Unit = {
+    require(isEvalNormalForm(t))
+  }.ensuring(t match
+    case ArrowType(t1, t2) => isEvalNormalForm(t1) && isEvalNormalForm(t2)
+    case AppType(t1, t2) => isEvalNormalForm(t1) && isEvalNormalForm(t2)
+    case AbsType(_, b) => isEvalNormalForm(b)
+    case _ => true
+  )
+
   /**
     * Full Beta Reduction - TAPL 5.1 Operational Semantics
     * Reduction strategy where reduction is applied whenever it is possible
@@ -827,86 +849,3 @@ object EvalTypeReductionConfluence {
   }.ensuring(eq.t1 == eq.t2)
 
 }
-
-object TypeEquivalenceDecidability{
-
-  import ARSEquivalences._
-  import ParallelTypeReduction._
-  import EvalTypeReduction._
-  import EvalTypeReductionConfluence._
-  import EvalTypeReductionValidity._
-
-  /**
-   * Procedure that reduces a type to its normal form.
-   * Outputs a sequence of steps witnessing the reduction.
-   * ! Termination is not proved yet as it requires Normalization of lambda calculus
-   * 
-   * Basic property: the step sequence witnessing T -k-> T' is valid and T' is a normal form
-   */
-  @pure
-  def reduceToNormalForm(t: Type): MultiStepEvalReduction = {
-    reduceIffFullBetaReduce(t)
-    fullBetaReduce(t) match
-      case None() => ARSIdentity(t)
-      case Some(r) => 
-        fullBetaReduceSoundness(t)
-        ARSComposition(r.toARSStep, reduceToNormalForm(r.type2))
-  }.ensuring(res => res.isValid && res.t1 == t && isEvalNormalForm(res.t2))
-
-  @pure
-  def reduceEnvToNormalForm(env: TypeEnvironment): List[MultiStepEvalReduction] = {
-    decreases(env)
-
-    env match
-      case Nil() => Nil()
-      case Cons(h, t) => Cons(reduceToNormalForm(t), reduceEnvToNormalForm(t))
-
-  }.ensuring(res.forall(_.isValid))
-
-  @pure @inlineOnce @opaque
-  def reduceEnvToNormalFormApply(@induct env: TypeEnvironment, j: BigInt): Unit = {
-    require(0 <= j)
-    require(j <= env.length)
-  }.ensuring(reduceEnvToNormalForm(env)(j).isValid && reduceEnvToNormalForm(env)(j).t1 == env(j) && isEvalNormalForm(reduceEnvToNormalForm(env)(j).t2))
-
-  /**
-    * Decider for type equivalence - TAPL 30.3 Decidability
-    * 
-    * If the inputs are equivalent the algorithm outputs a proof of the type equivalence.
-    * ! Termination is not proved yet as it requires Normalization of lambda calculus
-    */
-  @pure
-  def isEquivalentTo(t1: Type, t2: Type): Option[ParallelEquivalence] = {
-    val msr1 = reduceToNormalForm(t1)
-    val msr2 = reduceToNormalForm(t2)
-    if msr1.t2 == msr2.t2 then
-      reduceSameFormEquivalentWellFormed(msr1, msr2)
-      Some(evalToParallel(ARSProperties.reduceSameFormEquivalent(msr1, msr2)))
-    else None()
-  }
-
-  /**
-    * Soudness of type equivalence decision
-    * That is the proof outputed by the decider witnesses T1 ≡ T2 and is valid (i.e. is accepted by the verifier)
-    */
-  @pure @opaque @inlineOnce
-  def isEquivalentToSoundness(t1: Type, t2: Type): Unit = {
-    require(isEquivalentTo(t1, t2).isDefined)
-  }.ensuring(isEquivalentTo(t1, t2).get.isValid && isEquivalentTo(t1, t2).get.t1 == t1 && isEquivalentTo(t1, t2).get.t2 == t2)
-
-  /**
-    * The equivalence procedure is complete
-    * That is if two types are equivalent then the decision procedure will output a proof that witness it
-    */
-  @pure @opaque @inlineOnce
-  def isEquivalentToCompleteness(eq: EvalEquivalence): Unit = {
-    require(eq.isValid)
-    val msr1 = reduceToNormalForm(eq.t1)
-    val msr2 = reduceToNormalForm(eq.t2)
-    reductionPreserveEquivalenceWellFormed(msr1, msr2, eq)
-    val eqf = reductionPreserveEquivalence(msr1, msr2, eq)
-    equivalentNormalFormEqual(eqf)
-  }.ensuring(isEquivalentTo(eq.t1, eq.t2).isDefined)
-
-}
-

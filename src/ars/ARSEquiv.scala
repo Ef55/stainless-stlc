@@ -112,4 +112,11 @@ object ARSEquivalences{
       case ARSTransitivity(r1, r2) => ARSTransitivity(evalToParallel(r1), evalToParallel(r2))
       case ARSBaseRelation(r) => ARSBaseRelation(evalToParallel(r.unfold).toARSStep)
   }.ensuring(res => res.isValid && res.t1 == prd.t1 && res.t2 == prd.t2)
+
+  def evalMultiStepToParallelEq(erd: MultiStepEvalReduction): ParallelEquivalence = {
+    require(erd.isValid)
+    val prd = evalToParallel(erd)
+    ParallelTypeReductionValidity.toReflTransWellFormed(prd)
+    prd.toReflTrans
+  }.ensuring(res => res.isValid && res.t1 == erd.t1 && res.t2 == erd.t2)
 }

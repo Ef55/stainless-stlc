@@ -16,3 +16,6 @@ smt-sessions
 
 # Scripts
 *.sh
+
+# Stainless 
+stainless

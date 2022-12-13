@@ -458,4 +458,20 @@ object TypingProperties {
     ( res.t == td.t)
   )
 
+  // @opaque @inlineOnce @pure
+  // def preservationUnderTypeReduction(td: TypeDerivation, red: EvalTypeReduction.EvalReductionDerivation): TypeDerivation = {
+  //   require(td.isSound)
+  //   require(red.isSound)
+  //   require(td.t == red.t1)
+
+  //   (td, red) match
+  //     case (AbsTypingDerivation(env, ArrowType(typ1, typ2), term, kd, btd), ArrowTypeDerivationL(_, ArrowType(typ3, _), brd)) =>
+  //       val redBtd = preservationUnderAbsSubst()
+
+  // }.ensuring(res =>
+  //   res.isSound &&
+  //   res.env  == td.env &&
+  //   res.term == td.term &&
+  //   res.t    == red.t2)
+
 }

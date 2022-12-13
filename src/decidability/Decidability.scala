@@ -8,10 +8,10 @@ import LambdaOmega._
 object TypeReductionDecidability{
 
   import ARSEquivalences._
-  import ParallelTypeReduction._
   import EvalTypeReduction._
   import EvalTypeReductionConfluence._
   import EvalTypeReductionValidity._
+  import EvalTypeReductionProperties._
 
   /**
    * Procedure that reduces a type to its normal form.
@@ -24,27 +24,27 @@ object TypeReductionDecidability{
   def reduceToNormalForm(t: Type): MultiStepEvalReduction = {
     reduceIffFullBetaReduce(t)
     fullBetaReduce(t) match
-      case None() => ARSIdentity(t)
+      case None() => ARS.ARSIdentity(t)
       case Some(r) => 
         fullBetaReduceSoundness(t)
-        ARSComposition(r.toARSStep, reduceToNormalForm(r.type2))
+        ARS.ARSComposition(r.toARSStep, reduceToNormalForm(r.type2))
   }.ensuring(res => res.isValid && res.t1 == t && isEvalNormalForm(res.t2))
 
   @pure
-  def reduceEnvToNormalForm(env: TypeEnvironment): List[MultiStepEvalReduction] = {
+  def reduceToNormalForm(env: TypeEnvironment): List[MultiStepEvalReduction] = {
     decreases(env)
 
     env match
       case Nil() => Nil()
-      case Cons(h, t) => Cons(reduceToNormalForm(t), reduceEnvToNormalForm(t))
+      case Cons(h, t) => Cons(reduceToNormalForm(h), reduceToNormalForm(t))
 
-  }.ensuring(res.forall(_.isValid))
+  }.ensuring(res => res.forall(_.isValid))
 
   @pure @inlineOnce @opaque
-  def reduceEnvToNormalFormApply(@induct env: TypeEnvironment, j: BigInt): Unit = {
+  def reduceToNormalFormApply(@induct env: TypeEnvironment, j: BigInt): Unit = {
     require(0 <= j)
     require(j <= env.length)
-  }.ensuring(reduceEnvToNormalForm(env)(j).isValid && reduceEnvToNormalForm(env)(j).t1 == env(j) && isEvalNormalForm(reduceEnvToNormalForm(env)(j).t2))
+  }.ensuring(reduceToNormalForm(env)(j).isValid && reduceToNormalForm(env)(j).t1 == env(j) && isEvalNormalForm(reduceToNormalForm(env)(j).t2))
 
   /**
     * Decider for type equivalence - TAPL 30.3 Decidability
@@ -55,7 +55,7 @@ object TypeReductionDecidability{
     * The prodcedure is sound, that is the proof outputed by the decider witnesses T1 ≡ T2 and is valid (i.e. is accepted by the verifier)
     */
   @pure
-  def isEquivalentTo(t1: Type, t2: Type): Option[ParallelEquivalence] = {
+  def isEquivalentTo(t1: Type, t2: Type): Option[ParallelTypeReduction.ParallelEquivalence] = {
     val msr1 = reduceToNormalForm(t1)
     val msr2 = reduceToNormalForm(t2)
     if msr1.t2 == msr2.t2 then
@@ -74,10 +74,10 @@ object TypeReductionDecidability{
   @pure @opaque @inlineOnce
   def isEquivalentToCompleteness(eq: EvalEquivalence): Unit = {
     require(eq.isValid)
-    val msr1 = reduceToNormalForm(eq.t1)
-    val msr2 = reduceToNormalForm(eq.t2)
+    val msr1: MultiStepEvalReduction = reduceToNormalForm(eq.t1)
+    val msr2: MultiStepEvalReduction = reduceToNormalForm(eq.t2)
     reductionPreserveEquivalenceWellFormed(msr1, msr2, eq)
-    val eqf = reductionPreserveEquivalence(msr1, msr2, eq)
+    val eqf = ARSProperties.reductionPreserveEquivalence(msr1, msr2, eq)
     equivalentNormalFormEqual(eqf)
   }.ensuring(isEquivalentTo(eq.t1, eq.t2).isDefined)
 
@@ -128,7 +128,12 @@ object KindingDecidability {
      res.get.env == env))
         
   @pure
-  def decideKind(t: Type): Option[KindDerivation] = decideKind(Nil(), t)
+  def decideKind(t: Type): Option[KindDerivation] = {
+    decideKind(Nil(), t)
+  }.ensuring(res => (res.isDefined ==>
+    (res.get.isSound && 
+     res.get.typ == t && 
+     res.get.env == Nil())))
   
 
   @inlineOnce @opaque @pure
@@ -140,9 +145,9 @@ object KindingDecidability {
   def decideWellFormedness(env: TypeEnvironment): Option[List[KindDerivation]] = {
     decreases(env)
     env match
-      case Nil() => Nil()
+      case Nil() => Some(Nil())
       case Cons(h, t) => 
-        (h, decideWellFormedness(t)) match
+        (decideKind(h), decideWellFormedness(t)) match
           case (None(), _)          => None()
           case (_, None())          => None()
           case (Some(sh), Some(st)) => Some(Cons(sh, st))
@@ -152,32 +157,75 @@ object KindingDecidability {
 
 object TypingDecidability {
   
+  import Typing._
+  import Kinding._
+  import KindingProperties._
+  import KindingDecidability._
+  import TypeReductionDecidability._
+  import EvalTypeReduction._
+  import EvalTypeReductionProperties._
+  import EvalTypeReductionConfluence._
+  import ARSEquivalences._
+  
+  @pure
   def decideType(env: TypeEnvironment, t: Term): Option[TypeDerivation] = {
     decreases(t)
 
-    val wf = decideWellFormedness(env)
+    decideWellFormedness(env) match
+      case Some(wf) =>
+        t match
+          case v@Var(j) => 
+            if j < env.length then 
+              val envIdxRed: MultiStepEvalReduction = reduceToNormalForm(env(j))
+              val envIdxEquiv: ParallelTypeReduction.ParallelEquivalence = evalMultiStepToParallelEq(envIdxRed)
+              isWellFormedApply(env, wf, j)
+              Some(EquivTypingDerivation(env, envIdxEquiv.t2, v, VarTypingDerivation(env, env(j), v), envIdxEquiv, kindEvalMultiStepPreservation(wf(j), envIdxRed)))
+            else 
+              None()
+          case abs@Abs(argT, body) => 
+            val reducedArgT: MultiStepEvalReduction = reduceToNormalForm(argT)
+            decideType(Cons(reducedArgT.t2, env), body) match
+              case None() => None()
+              case Some(btd) => 
+                assert(decideType(Cons(reducedArgT.t2, env), body).isDefined)
+                assert(isEvalNormalForm(decideType(Cons(reducedArgT.t2, env), body).get.t))
+                assert(isEvalNormalForm(btd.t))
+                isEvalNormalFormArrowMap(reducedArgT.t2, btd.t)
+                val reducedArrow: MultiStepEvalReduction = arrowDerivationLMap(reducedArgT, btd.t)
+                decideKind(argT) match
+                  case Some(kd) if kd.k == ProperKind => 
+                    Some(EquivTypingDerivation(env, ArrowType(reducedArgT.t2, btd.t), abs, AbsTypingDerivation(env, ArrowType(argT, btd.t), abs, kd, btd), evalMultiStepToParallelEq(reducedArrow), kindEvalMultiStepPreservation(kd, reducedArgT)))
+                  case _ => None()
+          case app@App(t1, t2) => 
+            (decideType(env, t1), decideType(env, t2)) match
+              case (None(), _)            => None()
+              case (_, None())            => None()
+              case (Some(td1), Some(td2)) => 
+                td1.t match 
+                  case ArrowType(typ1, typ2) if typ1 == td2.t => 
+                    assert(isEvalNormalForm(decideType(env, t1).get.t))
+                    assert(isEvalNormalForm(decideType(env, t2).get.t))
+                    assert(decideType(env, t1).get.t == td1.t)
+                    assert(decideType(env, t2).get.t == td2.t)
+                    assert(isEvalNormalForm(td1.t))
+                    assert(isEvalNormalForm(td2.t))
+                    Some(AppTypingDerivation(env, typ2, app, td1, td2))
+                  case _ => None()
+      case None() => None()
 
-    t match
-      case Var(j) => if j < env.length then Some(reduceToNormalForm(env(j))) else None()
-      case Abs(argT, body) => 
-        val reducedArgT: Type = reduceToNormalForm(argT)
-        decideType(Cons(reducedArgT, env), body) match
-          case None() => None()
-          case ArrowType(reducedArgT, tb)
-      case App(t1, t2) => 
-        (decideType(Cons(reducedArgT, env), body), decideType(Cons(reducedArgT, env), body)) match =>
-          case (None(), _)            => None()
-          case (_, None())            => None()
-          case (Some(td1), Some(td2)) => 
-            td1.t match 
-              case _ => ArrowType(typ1, typ2) 
-              case _ => None()
-      
-
-  }
+  }.ensuring(res => (res.isDefined ==> 
+    (res.get.env  == env         &&
+     res.get.term == t           &&
+     isEvalNormalForm(res.get.t) &&
+     res.get.isSound)))
   
+  @pure
   def decideType(t: Term): Option[TypeDerivation] = {
-    deriveType(Nil(), t)
-  }
+    decideType(Nil(), t)
+  }.ensuring(res => (res.isDefined ==> 
+    (res.get.env  == Nil()       &&
+     res.get.term == t           &&
+     isEvalNormalForm(res.get.t) &&
+     res.get.isSound)))
 
 }
