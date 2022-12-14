@@ -329,6 +329,29 @@ object EvalTypeReduction{
   @pure @inlineOnce @pure
   def isEvalNormalFormInnerMap(t: Type): Unit = {
     require(isEvalNormalForm(t))
+    t match
+      case abs@AbsType(k, b) => 
+        val l = reduce(b).map(b2 => AbsTypeDerivation(abs, AbsType(k, b2.type2), b2))
+        assert(l.isEmpty)
+      case arr@ArrowType(t1, t2) => 
+        val l1: List[EvalReductionDerivation] = reduce(t1).map(t1d => ArrowTypeDerivationL(arr, ArrowType(t1d.type2, t2), t1d)) 
+        val l2: List[EvalReductionDerivation] = reduce(t2).map(t2d => ArrowTypeDerivationR(arr, ArrowType(t1, t2d.type2), t2d))    
+        assert((l1 ++ l2).isEmpty)
+        assert(l1.isEmpty)
+        assert(l2.isEmpty)     
+      case app@AppType(t1, t2) =>
+        val l1: List[EvalReductionDerivation] = reduce(t1).map(t1d => AppTypeDerivationL(app, AppType(t1d.type2, t2), t1d))    
+        val l2: List[EvalReductionDerivation] = reduce(t2).map(t2d => AppTypeDerivationR(app, AppType(t1, t2d.type2), t2d))
+        val l3: List[EvalReductionDerivation] = t1 match
+          case abs@AbsType(k, b) =>
+            Cons(AppAbsTypeDerivation(abs, t2), Nil())
+          case _ => Nil()
+        assert(((l1 ++ l2) ++ l3).isEmpty)
+        assert((l1 ++ l2).isEmpty)
+        assert(l1.isEmpty)
+        assert(l2.isEmpty)
+      case _ => ()
+    
   }.ensuring(t match
     case ArrowType(t1, t2) => isEvalNormalForm(t1) && isEvalNormalForm(t2)
     case AppType(t1, t2) => isEvalNormalForm(t1) && isEvalNormalForm(t2)
@@ -848,4 +871,16 @@ object EvalTypeReductionConfluence {
 
   }.ensuring(eq.t1 == eq.t2)
 
+  @pure @opaque @inlineOnce
+  def equivalenceToReductionNormalForm(eq: ParallelEquivalence): MultiStepEvalReduction = {
+    require(eq.isValid)
+    require(isEvalNormalForm(eq.t2))
+    val eeq = parallelToEval(eq)
+    val (erd1, erd2) = churchRosser(eeq)
+    erd1
+  }.ensuring(res =>
+    res.isValid && 
+    eq.t1 == res.t1 &&
+    eq.t2 == res.t2  
+  )
 }

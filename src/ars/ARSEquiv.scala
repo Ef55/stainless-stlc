@@ -43,11 +43,11 @@ object ARSEquivalences{
         app1.concat(app2)
       case ParallelTypeReduction.AbsTypeDerivation(AbsType(k1, b1), AbsType(k2, b2), prd) =>
         val conv = parallelToEval(prd)
-        absDerivationMap(k1, conv)
+        EvalTypeReductionProperties.absDerivationMap(k1, conv)
       case ParallelTypeReduction.AppAbsTypeDerivation(AbsType(k, body1), arg1, body2, arg2, prd1, prd2) =>
         val conv1 = parallelToEval(prd1)
         val conv2 = parallelToEval(prd2)
-        val step1 = appDerivationLMap(absDerivationMap(k, conv1), arg1)
+        val step1 = appDerivationLMap(EvalTypeReductionProperties.absDerivationMap(k, conv1), arg1)
         val step2 = appDerivationRMap(AbsType(k, body2), conv2)
         EvalTypeReductionValidity.concatWellFormed(step1, step2)
         EvalTypeReductionValidity.concatWellFormed(step1.concat(step2), ARS1Fold(EvalTypeReduction.AppAbsTypeDerivation(AbsType(k, body2), arg2).toARSStep))

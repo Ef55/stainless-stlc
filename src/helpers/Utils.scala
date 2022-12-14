@@ -167,6 +167,8 @@ def Unreacheable: Nothing =
   require(false)
   ???
 
+def max(a: BigInt, b: BigInt): BigInt = if a > b then a else b
+
 
 object OptionProperties {
   

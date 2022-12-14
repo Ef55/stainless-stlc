@@ -783,4 +783,147 @@ object ParallelTypeReductionProperties {
       res._2.t2 == s4
   )
 
+  /**
+   * Soudness of reduction mapping for ArrowTypeDerivation
+   * 
+   * * Short version: If T1 =k=> T1' and T2 =k'=> T2' then (T1 -> T2) =max(k, k')=> (T1' -> T2')
+   * 
+   * Long version:
+   *
+   * Preconditions:
+   *   - prd1, the step sequence witnessing T1 =k=> T1' isValid
+   *   - prd2, the step sequence witnessing T2 =k=> T2' isValid
+   * 
+   * Postcondition:
+   *   There exists a step sequence witnessing (T -> S) =n=> (T' -> S') such that:
+   *     - T  = T1
+   *     - T' = T1'
+   *     - S  = T2
+   *     - S' = T2'
+   *     - n  = max(k, k')
+   * 
+   * * The proof is constructive and outputs this step sequence
+   */
+  @pure @opaque @inlineOnce
+  def arrowDerivationMap(prd1: MultiStepParallelReduction, prd2: MultiStepParallelReduction): MultiStepParallelReduction = {
+    decreases(prd1.size + prd2.size)
+    require(prd1.isValid)
+    require(prd2.isValid)
+
+    (prd1, prd2) match
+      case (ARSIdentity(t1), ARSIdentity(t2))               => ARSIdentity(ArrowType(t1, t2))
+      case (ARSComposition(h1, t1), ARSIdentity(t2))        => 
+        assert(max(t1.size, prd2.size) + 1 == prd1.size )
+        ARSComposition(ArrowTypeDerivation(ArrowType(h1.t1, t2), ArrowType(h1.t2, t2), h1.unfold, ReflDerivation(t2)).toARSStep, arrowDerivationMap(t1, prd2))
+      case (ARSIdentity(t1), ARSComposition(h2, t2))        => 
+        assert(max(prd1.size, t2.size) + 1 == prd2.size )
+        ARSComposition(ArrowTypeDerivation(ArrowType(t1, h2.t1), ArrowType(t1, h2.t2), ReflDerivation(t1), h2.unfold).toARSStep, arrowDerivationMap(prd1, t2))
+      case (ARSComposition(h1, t1), ARSComposition(h2, t2)) => ARSComposition(ArrowTypeDerivation(ArrowType(h1.t1, h2.t1), ArrowType(h1.t2, h2.t2), h1.unfold, h2.unfold).toARSStep, arrowDerivationMap(t1, t2))
+    
+  }.ensuring(res => res.isValid && res.t1 == ArrowType(prd1.t1, prd2.t1) && res.t2 == ArrowType(prd1.t2, prd2.t2) && res.size == max(prd1.size, prd2.size))
+  
+  /**
+   * Soudness of reduction mapping for AppTypeDerivation
+   * 
+   * * Short version: If T1 =k=> T1' and T2 =k'=> T2' then T1 T2 =max(k, k')=> T1' T2'
+   * 
+   * Long version:
+   *
+   * Preconditions:
+   *   - prd1, the step sequence witnessing T1 =k=> T1' isValid
+   *   - prd2, the step sequence witnessing T2 =k=> T2' isValid
+   * 
+   * Postcondition:
+   *   There exists a step sequence witnessing T S =n=> T' S' such that:
+   *     - T  = T1
+   *     - T' = T1'
+   *     - S  = T2
+   *     - S' = T2'
+   *     - n  = max(k, k')
+   * 
+   * * The proof is constructive and outputs this step sequence
+   */
+  @pure @opaque @inlineOnce
+  def appDerivationMap(prd1: MultiStepParallelReduction, prd2: MultiStepParallelReduction): MultiStepParallelReduction = {
+    decreases(prd1.size + prd2.size)
+    require(prd1.isValid)
+    require(prd2.isValid)
+
+    (prd1, prd2) match
+      case (ARSIdentity(t1), ARSIdentity(t2))               => ARSIdentity(ArrowType(t1, t2))
+      case (ARSComposition(h1, t1), ARSIdentity(t2))        => 
+        assert(max(t1.size, prd2.size) + 1 == prd1.size )
+        ARSComposition(AppTypeDerivation(AppType(h1.t1, t2), AppType(h1.t2, t2), h1.unfold, ReflDerivation(t2)).toARSStep, appDerivationMap(t1, prd2))
+      case (ARSIdentity(t1), ARSComposition(h2, t2))        => 
+        assert(max(prd1.size, t2.size) + 1 == prd2.size )
+        ARSComposition(AppTypeDerivation(AppType(t1, h2.t1), AppType(t1, h2.t2), ReflDerivation(t1), h2.unfold).toARSStep, appDerivationMap(prd1, t2))
+      case (ARSComposition(h1, t1), ARSComposition(h2, t2)) => ARSComposition(AppTypeDerivation(AppType(h1.t1, h2.t1), AppType(h1.t2, h2.t2), h1.unfold, h2.unfold).toARSStep, appDerivationMap(t1, t2))
+    
+  }.ensuring(res => res.isValid && res.t1 == AppType(prd1.t1, prd2.t1) && res.t2 == AppType(prd1.t2, prd2.t2) && res.size == max(prd1.size, prd2.size))
+ 
+  /**
+   * Soudness of reduction mapping for AbsTypeDerivation
+   * 
+   * * Short version: If T1 =k=> T2 then λ.T1 =k=> λ.T2
+   * 
+   * Long version:
+   *
+   * Preconditions:
+   *   - prd, the step sequence witnessing T1 =k=> T2 isValid
+   * 
+   * Postcondition:
+   *   There exists a step sequence witnessing λ.T =k'=> λ.T' such that:
+   *     - T  = T1
+   *     - T' = T2
+   *     - k  = k'
+   * 
+   * * The proof is constructive and outputs this step sequence
+   */
+  @pure @opaque @inlineOnce
+  def absDerivationMap(k: Kind, prd: MultiStepParallelReduction): MultiStepParallelReduction = {
+    decreases(prd)
+    require(prd.isValid)
+    prd match
+      case ARSIdentity(b) => ARSIdentity(AbsType(k, b))
+      case ARSComposition(h, t) => ARSComposition(AbsTypeDerivation(AbsType(k, h.t1), AbsType(k, h.t2), h.unfold).toARSStep, absDerivationMap(k, t))
+    
+  }.ensuring(res => res.isValid && res.t1 == AbsType(k, prd.t1) && res.t2 == AbsType(k, prd.t2) && res.size == prd.size)
+
+  @pure @opaque @inlineOnce
+  def arrowEquivalenceMap(eq1: ParallelEquivalence, eq2: ParallelEquivalence): ParallelEquivalence = {
+    require(eq1.isValid)
+    require(eq2.isValid)
+    val (prd11, prd12) = churchRosser(eq1)
+    val (prd21, prd22) = churchRosser(eq2)
+    val arrowPrd1 = arrowDerivationMap(prd11, prd21)
+    val arrowPrd2 = arrowDerivationMap(prd12, prd22)
+    reduceSameFormEquivalentWellFormed(arrowPrd1, arrowPrd2)
+    reduceSameFormEquivalent(arrowPrd1, arrowPrd2)
+
+  }.ensuring(res => res.isValid && res.t1 == ArrowType(eq1.t1, eq2.t1) && res.t2 == ArrowType(eq1.t2, eq2.t2))
+
+  @pure @opaque @inlineOnce
+  def appEquivalenceMap(eq1: ParallelEquivalence, eq2: ParallelEquivalence): ParallelEquivalence = {
+    require(eq1.isValid)
+    require(eq2.isValid)
+    val (prd11, prd12) = churchRosser(eq1)
+    val (prd21, prd22) = churchRosser(eq2)
+    val appPrd1 = appDerivationMap(prd11, prd21)
+    val appPrd2 = appDerivationMap(prd12, prd22)
+    reduceSameFormEquivalentWellFormed(appPrd1, appPrd2)
+    reduceSameFormEquivalent(appPrd1, appPrd2)
+
+  }.ensuring(res => res.isValid && res.t1 == AppType(eq1.t1, eq2.t1) && res.t2 == AppType(eq1.t2, eq2.t2))
+   
+  @pure @opaque @inlineOnce
+  def absEquivalenceMap(k: Kind, eq: ParallelEquivalence): ParallelEquivalence = {
+    require(eq.isValid)
+    val (prd1, prd2) = churchRosser(eq)
+    val absPrd1 = absDerivationMap(k, prd1)
+    val absPrd2 = absDerivationMap(k, prd2)
+    reduceSameFormEquivalentWellFormed(absPrd1, absPrd2)
+    reduceSameFormEquivalent(absPrd1, absPrd2)
+
+  }.ensuring(res => res.isValid && res.t1 == AbsType(k, eq.t1) && res.t2 == AbsType(k, eq.t2))
+   
 }
