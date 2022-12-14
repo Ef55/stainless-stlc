@@ -32,6 +32,7 @@ object ParallelTypeReduction{
         case AbsTypeDerivation(t1, _, _) => t1
         case AppTypeDerivation(t1, _, _, _) => t1
         case AppAbsTypeDerivation(abs, arg, _, _, _, _) => AppType(abs, arg)
+        case UniversalTypeDerivation(t1, _, _) => t1
 
     @pure
     def type2: Type = 
@@ -42,7 +43,7 @@ object ParallelTypeReduction{
         case AbsTypeDerivation(_, t2, _) => t2
         case AppTypeDerivation(_, t2, _, _) => t2
         case AppAbsTypeDerivation(_, _, body2, arg2, _, _) => absSubstitution(body2, arg2)
-
+        case UniversalTypeDerivation(_, t2, _) => t2
 
     /**
       * Measure for parallel reduction derivation trees
@@ -57,6 +58,7 @@ object ParallelTypeReduction{
         case AbsTypeDerivation(_, _, ed) => ed.size + BigInt(1)
         case AppTypeDerivation(_, _, ed1, ed2) => ed1.size + ed2.size + BigInt(1)
         case AppAbsTypeDerivation(_, _, _, _, tt1, tt2) => tt1.size + tt2.size + BigInt(1)
+        case UniversalTypeDerivation(_, _, ed) => ed.size + BigInt(1)
     }.ensuring(_ > BigInt(0))
 
     /**
@@ -82,7 +84,9 @@ object ParallelTypeReduction{
           prd1.type2 == t21 && prd2.type1 == t12 && prd2.type2 == t22
         case AppAbsTypeDerivation(AbsType(argK, body1), arg1, body2, arg2, tt1, tt2) => 
           tt1.isSound && tt2.isSound && tt1.type1 == body1 && tt1.type2 == body2 &&
-          tt2.type1 == arg1 && tt2.type2 == arg2 
+          tt2.type1 == arg1 && tt2.type2 == arg2
+        case UniversalTypeDerivation(UniversalType(k1, b1), UniversalType(k2, b2), prd) => 
+          prd.isSound && prd.type1 == b1 && prd.type2 == b2 && k1 == k2
 
     /**
       * Converts the tree into parallel type reduction step
@@ -105,6 +109,7 @@ object ParallelTypeReduction{
   case class AbsTypeDerivation(t1: AbsType, t2: AbsType, ed: ParallelReductionDerivation) extends ParallelReductionDerivation
   case class AppTypeDerivation(t1: AppType, t2: AppType, ed: ParallelReductionDerivation, ed2: ParallelReductionDerivation) extends ParallelReductionDerivation
   case class AppAbsTypeDerivation(abs1: AbsType, arg1: Type, body2: Type, arg2: Type , tt1: ParallelReductionDerivation, tt2: ParallelReductionDerivation) extends ParallelReductionDerivation
+  case class UniversalTypeDerivation(t1: UniversalType, t2: UniversalType, ed: ParallelReductionDerivation) extends ParallelReductionDerivation
 
   type ParallelReductionStep = ARSStep[Type, ParallelReductionDerivation]
   type MultiStepParallelReduction = ARSKFoldComposition[Type, ParallelReductionDerivation]
@@ -325,6 +330,8 @@ object ParallelTypeReductionProperties {
         reduceBoundRange(prd2, a, b)
       case AbsTypeDerivation(_, _, prd) =>
         reduceBoundRange(prd, a + 1, b)
+      case UniversalTypeDerivation(_, _, prd) =>
+        reduceBoundRange(prd, a + 1, b)
       case AppAbsTypeDerivation(_, _, _, _, prd1, prd2) =>
         reduceBoundRange(prd1, a + 1, b)
         reduceBoundRange(prd2, a, b)  
@@ -367,6 +374,9 @@ object ParallelTypeReductionProperties {
       case AbsTypeDerivation(AbsType(k1, b1), AbsType(k2, b2), prd) =>
         val res1 = reduceShift(prd, d, c + 1)
         AbsTypeDerivation(AbsType(k1, res1.type1), AbsType(k2, res1.type2), res1)
+      case UniversalTypeDerivation(UniversalType(k1, b1), UniversalType(k2, b2), prd) =>
+        val res1 = reduceShift(prd, d, c + 1)
+        UniversalTypeDerivation(UniversalType(k1, res1.type1), UniversalType(k2, res1.type2), res1)
       case AppTypeDerivation(AppType(t11, t12), AppType(t21, t22), prd1, prd2) =>
         val res1 = reduceShift(prd1, d, c)
         val res2 = reduceShift(prd2, d, c)
@@ -419,6 +429,9 @@ object ParallelTypeReductionProperties {
       case AbsType(k, body) =>
         val bd = reduceReflSubst(body, j + 1, reduceShift(sd, 1, 0))
         AbsTypeDerivation(AbsType(k, bd.type1), AbsType(k, bd.type2), bd)
+      case UniversalType(k, body) =>
+        val bd = reduceReflSubst(body, j + 1, reduceShift(sd, 1, 0))
+        UniversalTypeDerivation(UniversalType(k, bd.type1), UniversalType(k, bd.type2), bd)
       case BasicType(_) => ReflDerivation(t)
       case VariableType(v) => if j == v then sd else ReflDerivation(t)
   }.ensuring(res => 
@@ -466,6 +479,9 @@ object ParallelTypeReductionProperties {
       case AbsTypeDerivation(AbsType(k1, b1), AbsType(k2, b2), bd) =>
         val rs = reduceSubst(bd, j + 1, reduceShift(sd, 1, 0))
         AbsTypeDerivation(AbsType(k1, rs.type1), AbsType(k2, rs.type2), rs)
+      case UniversalTypeDerivation(UniversalType(k1, b1), UniversalType(k2, b2), bd) =>
+        val rs = reduceSubst(bd, j + 1, reduceShift(sd, 1, 0))
+        UniversalTypeDerivation(UniversalType(k1, rs.type1), UniversalType(k2, rs.type2), rs)
       case AppAbsTypeDerivation(AbsType(argK, body), arg1, body2, arg2, td1, td2) => 
         val rsh = reduceShift(sd, 1, 0)
         val rs1 = reduceSubst(td1, j + 1, rsh)
@@ -546,6 +562,9 @@ object ParallelTypeReductionProperties {
         case (AbsTypeDerivation(AbsType(k1, b1), AbsType(k2, b2), prd11), AbsTypeDerivation(AbsType(k3, b3), AbsType(k4, b4), prd12)) =>
           val (dP1, dP2) = diamondProperty(prd11, prd12)
           (AbsTypeDerivation(AbsType(k2, dP1.type1), AbsType(k2, dP1.type2), dP1), AbsTypeDerivation(AbsType(k2, dP2.type1), AbsType(k2, dP2.type2), dP2))
+        case (UniversalTypeDerivation(UniversalType(k1, b1), UniversalType(k2, b2), prd11), UniversalTypeDerivation(UniversalType(k3, b3), UniversalType(k4, b4), prd12)) =>
+          val (dP1, dP2) = diamondProperty(prd11, prd12)
+          (UniversalTypeDerivation(UniversalType(k2, dP1.type1), UniversalType(k2, dP1.type2), dP1), UniversalTypeDerivation(UniversalType(k2, dP2.type1), UniversalType(k2, dP2.type2), dP2))
         case (AppTypeDerivation(AppType(t11, t12), AppType(t21, t22), prd11, prd12), AppTypeDerivation(AppType(t31, t32), AppType(t41, t42), prd21, prd22)) =>
           val (dP11, dP12) = diamondProperty(prd11, prd21)
           val (dP21, dP22) = diamondProperty(prd12, prd22)
@@ -850,7 +869,7 @@ object ParallelTypeReductionProperties {
     require(prd2.isValid)
 
     (prd1, prd2) match
-      case (ARSIdentity(t1), ARSIdentity(t2))               => ARSIdentity(ArrowType(t1, t2))
+      case (ARSIdentity(t1), ARSIdentity(t2))               => ARSIdentity(AppType(t1, t2))
       case (ARSComposition(h1, t1), ARSIdentity(t2))        => 
         assert(max(t1.size, prd2.size) + 1 == prd1.size )
         ARSComposition(AppTypeDerivation(AppType(h1.t1, t2), AppType(h1.t2, t2), h1.unfold, ReflDerivation(t2)).toARSStep, appDerivationMap(t1, prd2))
@@ -889,6 +908,34 @@ object ParallelTypeReductionProperties {
     
   }.ensuring(res => res.isValid && res.t1 == AbsType(k, prd.t1) && res.t2 == AbsType(k, prd.t2) && res.size == prd.size)
 
+  /**
+   * Soudness of reduction mapping for AbsTypeDerivation
+   * 
+   * * Short version: If T1 =k=> T2 then ∀.T1 =k=> ∀.T2
+   * 
+   * Long version:
+   *
+   * Preconditions:
+   *   - prd, the step sequence witnessing T1 =k=> T2 isValid
+   * 
+   * Postcondition:
+   *   There exists a step sequence witnessing ∀.T =k'=> ∀.T' such that:
+   *     - T  = T1
+   *     - T' = T2
+   *     - k  = k'
+   * 
+   * * The proof is constructive and outputs this step sequence
+   */
+  @pure @opaque @inlineOnce
+  def universalDerivationMap(k: Kind, prd: MultiStepParallelReduction): MultiStepParallelReduction = {
+    decreases(prd)
+    require(prd.isValid)
+    prd match
+      case ARSIdentity(b) => ARSIdentity(UniversalType(k, b))
+      case ARSComposition(h, t) => ARSComposition(UniversalTypeDerivation(UniversalType(k, h.t1), UniversalType(k, h.t2), h.unfold).toARSStep, universalDerivationMap(k, t))
+    
+  }.ensuring(res => res.isValid && res.t1 == UniversalType(k, prd.t1) && res.t2 == UniversalType(k, prd.t2) && res.size == prd.size)
+
   @pure @opaque @inlineOnce
   def arrowEquivalenceMap(eq1: ParallelEquivalence, eq2: ParallelEquivalence): ParallelEquivalence = {
     require(eq1.isValid)
@@ -925,5 +972,16 @@ object ParallelTypeReductionProperties {
     reduceSameFormEquivalent(absPrd1, absPrd2)
 
   }.ensuring(res => res.isValid && res.t1 == AbsType(k, eq.t1) && res.t2 == AbsType(k, eq.t2))
+
+  @pure @opaque @inlineOnce
+  def universalEquivalenceMap(k: Kind, eq: ParallelEquivalence): ParallelEquivalence = {
+    require(eq.isValid)
+    val (prd1, prd2) = churchRosser(eq)
+    val universalPrd1 = universalDerivationMap(k, prd1)
+    val universalPrd2 = universalDerivationMap(k, prd2)
+    reduceSameFormEquivalentWellFormed(universalPrd1, universalPrd2)
+    reduceSameFormEquivalent(universalPrd1, universalPrd2)
+
+  }.ensuring(res => res.isValid && res.t1 == UniversalType(k, eq.t1) && res.t2 == UniversalType(k, eq.t2))
    
 }

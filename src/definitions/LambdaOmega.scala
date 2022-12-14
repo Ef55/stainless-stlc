@@ -2,7 +2,7 @@
   *  References: 
   *    - [TAPL] Types and Programming Languages, Benjamin C. Pierce, 2002, The MIT Press
   * 
-  *  This file defines the basic bloc of simply typed lambda calculus with type operators (TAPL Chap 29)
+  *  This file defines the basic bloc of System F with type operators (TAPL Chap 29)
   *  Kinds, terms, types and environments are defined.
   * 
   * 
@@ -15,14 +15,14 @@ import stainless.annotation._
 object LambdaOmega {
 
   /**
-    * Kind syntax as defined in Figure 29-1 of TAPL
+    * Kind syntax as defined in Figure 30-1 of TAPL
     */
   sealed trait Kind
   case object ProperKind extends Kind
   case class ArrowKind(k1: Kind, k2: Kind) extends Kind
 
   /**
-    * Types syntax as defined in Figure 29-1 of TAPL
+    * Types syntax as defined in Figure 30-1 of TAPL
     * De Bruijn indices are used to represent type variables (TAPL Chap 6)
     */
   sealed trait Type {
@@ -43,6 +43,7 @@ object LambdaOmega {
         case ArrowType(t1, t2) => t1.freeVars ++ t2.freeVars
         case AppType(t1, t2) => t1.freeVars ++ t2.freeVars
         case AbsType(_, b) => b.freeVars.filter(x => x > 0).map(x => x - 1)
+        case UniversalType(_, b) => b.freeVars.filter(x => x > 0).map(x => x - 1)
         case VariableType(j) => Cons(j, Nil())
     }
     
@@ -64,11 +65,12 @@ object LambdaOmega {
       require(c >= 0)
       require(d >= 0)
       this match 
-        case BasicType(_)         => false
-        case ArrowType(t1, t2)    => t1.hasFreeVariablesIn(c, d) || t2.hasFreeVariablesIn(c, d)
-        case VariableType(v)      => (c <= v) && (v < c+d)
-        case AbsType(_, body)     => body.hasFreeVariablesIn(c+1, d)
-        case AppType(t1, t2)      => t1.hasFreeVariablesIn(c, d) || t2.hasFreeVariablesIn(c, d)
+        case BasicType(_)           => false
+        case ArrowType(t1, t2)      => t1.hasFreeVariablesIn(c, d) || t2.hasFreeVariablesIn(c, d)
+        case VariableType(v)        => (c <= v) && (v < c+d)
+        case AbsType(_, body)       => body.hasFreeVariablesIn(c+1, d)
+        case UniversalType(_, body) => body.hasFreeVariablesIn(c+1, d)
+        case AppType(t1, t2)        => t1.hasFreeVariablesIn(c, d) || t2.hasFreeVariablesIn(c, d)
     }.ensuring(res => (d == 0) ==> !res)
 
     /**
@@ -83,11 +85,12 @@ object LambdaOmega {
       decreases(this)
       require(c >= 0)
       this match  
-        case BasicType(_)         => false 
-        case ArrowType(t1, t2)    => t1.hasFreeVariablesAbove(c) || t2.hasFreeVariablesAbove(c)
-        case VariableType(v)      => v >= c
-        case AbsType(_, body)     => body.hasFreeVariablesAbove(c+1)
-        case AppType(t1, t2)      => t1.hasFreeVariablesAbove(c) || t2.hasFreeVariablesAbove(c)
+        case BasicType(_)           => false 
+        case ArrowType(t1, t2)      => t1.hasFreeVariablesAbove(c) || t2.hasFreeVariablesAbove(c)
+        case VariableType(v)        => v >= c
+        case AbsType(_, body)       => body.hasFreeVariablesAbove(c+1)
+        case UniversalType(_, body) => body.hasFreeVariablesAbove(c+1)
+        case AppType(t1, t2)        => t1.hasFreeVariablesAbove(c) || t2.hasFreeVariablesAbove(c)
     }
 
     /**
@@ -112,6 +115,7 @@ object LambdaOmega {
         case ArrowType(t1, t2) => t1.size + t2.size + BigInt(1)
         case VariableType(_) => BigInt(1)
         case AbsType(_, body) => body.size + BigInt(1)
+        case UniversalType(_, body) => body.size + BigInt(1)
         case AppType(t1, t2) => t1.size + t2.size + BigInt(1)
     }.ensuring(_ > BigInt(0))
   }
@@ -121,6 +125,7 @@ object LambdaOmega {
   case class VariableType(j: BigInt) extends Type {require(j >= 0)}
   case class AbsType(argKind: Kind, body: Type) extends Type
   case class AppType(t1: Type, t2: Type) extends Type
+  case class UniversalType(argKind: Kind, body: Type) extends Type
 
   /**
     * Terms syntax as defined in Figure 29-1 of TAPL
@@ -147,6 +152,8 @@ object LambdaOmega {
       this match
         case App(t1, t2) => t1.freeVars ++ t2.freeVars
         case Abs(_, b) => b.freeVars.filter(x => x > 0).map(x => x - 1)
+        case TApp(b, _) => b.freeVars
+        case TAbs(_, b) => b.freeVars
         case Var(j) => Cons(j, Nil())
     }            
     /**
@@ -170,6 +177,8 @@ object LambdaOmega {
         case Var(k)         => (c <= k) && (k < c+d)
         case Abs(_, body)   => body.hasFreeVariablesIn(c+1, d)
         case App(t1, t2)    => t1.hasFreeVariablesIn(c, d) || t2.hasFreeVariablesIn(c, d)
+        case TApp(b, _)     => b.hasFreeVariablesIn(c, d)
+        case TAbs(_, b)     => b.hasFreeVariablesIn(c, d)
 
     }.ensuring(res => (d == 0) ==> !res)
 
@@ -187,6 +196,8 @@ object LambdaOmega {
         case Var(v)      => v >= c
         case Abs(_, body)     => body.hasFreeVariablesAbove(c+1)
         case App(t1, t2)      => t1.hasFreeVariablesAbove(c) || t2.hasFreeVariablesAbove(c)
+        case TApp(b, _)       => b.hasFreeVariablesAbove(c)
+        case TAbs(_, b)       => b.hasFreeVariablesAbove(c)
     }
 
     /**
@@ -210,12 +221,16 @@ object LambdaOmega {
         case Var(_) => BigInt(1)
         case Abs(_, body) => body.size + BigInt(1)
         case App(t1, t2) => t1.size + t2.size + BigInt(1)
+        case TApp(b, t)  => b.size + t.size + BigInt(1)
+        case TAbs(_, b)  => b.size + BigInt(1)
     }.ensuring(_ > BigInt(0))
 
   }
   case class Var(k: BigInt) extends Term { require(k >= 0) }
   case class Abs(argType: Type, body: Term) extends Term
   case class App(t1: Term, t2: Term) extends Term
+  case class TApp(body: Term, typ: Type) extends Term
+  case class TAbs(argKind: Kind, body: Term) extends Term
 
   /**
    * Kinding and typing contexts
@@ -251,6 +266,13 @@ object LambdaOmegaProperties{
           freeVarsNonNeg(t2)
           ListSpecs.listAppendValidProp(t2.freeVars, t1.freeVars, _ >= 0)
         case AbsType(k, body) => 
+          freeVarsNonNeg(body)
+          filterGtGe(body.freeVars, 0)
+          mapAddSub(body.freeVars.filter(_ >= 1), 1)
+          filterMapAddGe(body.freeVars, -1, 0)
+          mapAddSub(body.freeVars, 1)
+          filterGeTwice(body.freeVars.map(_ - 1), 0, 0)
+        case UniversalType(k, body) => 
           freeVarsNonNeg(body)
           filterGtGe(body.freeVars, 0)
           mapAddSub(body.freeVars.filter(_ >= 1), 1)
@@ -298,7 +320,17 @@ object LambdaOmegaProperties{
           filterGeLe(b.freeVars, c + 1)
           filterSplitGeLt(b.freeVars, c + 1, c + 1 + d)
           assert(t.freeVars.filter(x => c <= x && x < c + d) == b.freeVars.filter(x => c + 1 <= x && x < c + 1 + d).map(_ + - 1)) //needed
-          
+        case UniversalType(_, b) => 
+          hasFreeVariablesInSoundness(b, c + 1, d)
+          filterGeLe(b.freeVars.filter(_ > 0).map(_ - 1), c)
+          mapAddSub(b.freeVars.filter(_ > 0), 1)
+          filterMapAddGe(b.freeVars.filter(_ > 0), -1, c)
+          filterGtGe(b.freeVars, 0)
+          filterGeTwice(b.freeVars, 1, c + 1)  
+          filterMapAddLt(b.freeVars.filter(_ >= c + 1), -1, c + d)     
+          filterGeLe(b.freeVars, c + 1)
+          filterSplitGeLt(b.freeVars, c + 1, c + 1 + d)
+          assert(t.freeVars.filter(x => c <= x && x < c + d) == b.freeVars.filter(x => c + 1 <= x && x < c + 1 + d).map(_ + - 1)) //needed              
     }.ensuring(t.freeVars.filter(x => c <= x && x < c + d).isEmpty == !t.hasFreeVariablesIn(c, d))
 
     /**
@@ -322,6 +354,12 @@ object LambdaOmegaProperties{
           concatFilter(t1.freeVars, t2.freeVars, _ >= c)
         case VariableType(_) => ()
         case AbsType(_, b) => 
+          hasFreeVariablesAboveSoundness(b, c + 1)
+          mapAddSub(b.freeVars.filter(_ > 0), 1)
+          mapAddSub(b.freeVars.filter(_ > 0).filter(_ >= c + 1), 1)
+          filterMapAddGe(b.freeVars.filter(_ > 0), -1, c)
+          filterCommutative(b.freeVars, _ > 0, _ >= c + 1)
+        case UniversalType(_, b) => 
           hasFreeVariablesAboveSoundness(b, c + 1)
           mapAddSub(b.freeVars.filter(_ > 0), 1)
           mapAddSub(b.freeVars.filter(_ > 0).filter(_ >= c + 1), 1)
@@ -370,6 +408,8 @@ object LambdaOmegaProperties{
         case VariableType(_) => ()
         case AbsType(_, body) => 
           boundRangeDecrease(body, c+1, d1, d2)
+        case UniversalType(_, body) => 
+          boundRangeDecrease(body, c+1, d1, d2)
         case AppType(t1, t2) => 
           boundRangeDecrease(t1, c, d1, d2)
           boundRangeDecrease(t2, c, d1, d2)
@@ -404,6 +444,8 @@ object LambdaOmegaProperties{
           boundRangeIncreaseCutoff(t2, c1, c2, d)
         case VariableType(v) => ()
         case AbsType(_, body) => 
+          boundRangeIncreaseCutoff(body, c1 + 1, c2 + 1, d)
+        case UniversalType(_, body) => 
           boundRangeIncreaseCutoff(body, c1 + 1, c2 + 1, d)
         case AppType(t1, t2) => 
           boundRangeIncreaseCutoff(t1, c1, c2, d)
@@ -440,6 +482,7 @@ object LambdaOmegaProperties{
           boundRangeConcatenation(t2, a, b, c)
         case VariableType(v) => ()
         case AbsType(_, body) => boundRangeConcatenation(body, a + 1, b, c)
+        case UniversalType(_, body) => boundRangeConcatenation(body, a + 1, b, c)
         case AppType(t1, t2) => 
           boundRangeConcatenation(t1, a, b, c)
           boundRangeConcatenation(t2, a, b, c)
@@ -469,6 +512,8 @@ object LambdaOmegaProperties{
           filterMapAddGe(body.freeVars, -1, 0)
           mapAddSub(body.freeVars, 1)
           filterGeTwice(body.freeVars.map(_ - 1), 0, 0)
+        case TApp(b, _) => freeVarsNonNeg(b)
+        case TAbs(_, b) => freeVarsNonNeg(b)
     }.ensuring(t.freeVars.forall(_ >= 0))
   
     /**
@@ -502,7 +547,8 @@ object LambdaOmegaProperties{
           filterGeLe(b.freeVars, c + 1)
           filterSplitGeLt(b.freeVars, c + 1, c + 1 + d)
           assert(t.freeVars.filter(x => c <= x && x < c + d) == b.freeVars.filter(x => c + 1 <= x && x < c + 1 + d).map(_ + - 1)) //needed
-          
+        case TApp(b, _) => hasFreeVariablesInSoundness(b, c, d)
+        case TAbs(_, b) => hasFreeVariablesInSoundness(b, c, d)
     }.ensuring(t.freeVars.filter(x => c <= x && x < c + d).isEmpty == !t.hasFreeVariablesIn(c, d))
 
     /**
@@ -526,6 +572,8 @@ object LambdaOmegaProperties{
           mapAddSub(b.freeVars.filter(_ > 0).filter(_ >= c + 1), 1)
           filterMapAddGe(b.freeVars.filter(_ > 0), -1, c)
           filterCommutative(b.freeVars, _ > 0, _ >= c + 1)
+        case TApp(b, _) => hasFreeVariablesAboveSoundness(b, c)
+        case TAbs(_, b) => hasFreeVariablesAboveSoundness(b, c)
     }.ensuring(t.freeVars.filter(_ >= c).isEmpty == !t.hasFreeVariablesAbove(c))
 
     /**
@@ -567,6 +615,8 @@ object LambdaOmegaProperties{
         case App(t1, t2) => 
           boundRangeDecrease(t1, c, d1, d2)
           boundRangeDecrease(t2, c, d1, d2)
+        case TApp(b, _) => boundRangeDecrease(b, c, d1, d2)
+        case TAbs(_, b) => boundRangeDecrease(b, c, d1, d2)
 
     }.ensuring(!t.hasFreeVariablesIn(c, d2))
 
@@ -597,6 +647,8 @@ object LambdaOmegaProperties{
         case App(t1, t2) => 
           boundRangeIncreaseCutoff(t1, c1, c2, d)
           boundRangeIncreaseCutoff(t2, c1, c2, d)
+        case TApp(b, _) => boundRangeIncreaseCutoff(b, c1, c2, d)
+        case TAbs(_, b) => boundRangeIncreaseCutoff(b, c1, c2, d)
         
     }.ensuring(!t.hasFreeVariablesIn(c2, d - (c2 - c1)))
 
@@ -628,6 +680,8 @@ object LambdaOmegaProperties{
         case App(t1, t2) => 
           boundRangeConcatenation(t1, a, b, c)
           boundRangeConcatenation(t2, a, b, c)
+        case TApp(bt, _) => boundRangeConcatenation(bt, a, b, c)
+        case TAbs(_, bt) => boundRangeConcatenation(bt, a, b, c)
 
     }.ensuring(!t.hasFreeVariablesIn(a, b + c))
     

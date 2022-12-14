@@ -29,6 +29,7 @@ object TypeTransformations {
       case VariableType(k) => if (k < c) VariableType(k) else VariableType(k + d)
       case AbsType(arg, body) => AbsType(arg, shift(body, d, c + 1))
       case AppType(t1, t2) => AppType(shift(t1, d, c), shift(t2, d, c))
+      case UniversalType(arg, body) => UniversalType(arg, shift(body, d, c + 1))
   }.ensuring(_.size == t.size)
 
   /**
@@ -43,6 +44,7 @@ object TypeTransformations {
       case VariableType(k) => if(j == k) s else t  
       case AbsType(k, b) => AbsType(k, substitute(b, j + 1, shift(s, 1, 0)))
       case AppType(t1, t2) => AppType(substitute(t1, j, s), substitute(t2, j, s))
+      case UniversalType(k, b) => UniversalType(k, substitute(b, j + 1, shift(s, 1, 0)))
   }
 
   // ↑⁻¹( [0 -> ↑¹(arg)]body )
@@ -103,6 +105,8 @@ object TypeTransformationsProperties {
       case AppType(t1, t2) => 
         boundRangeSubstitutionIdentity(t1, j, typ)
         boundRangeSubstitutionIdentity(t2, j, typ)
+      case UniversalType(_, body) => 
+        boundRangeSubstitutionIdentity(body, j+1, shift(typ, 1 ,0))
 
   }.ensuring(substitute(t, j, typ) == t)
 
@@ -124,6 +128,8 @@ object TypeTransformationsProperties {
       case AppType(t1, t2) => 
         shift0Identity(t1, c)
         shift0Identity(t2, c)
+      case UniversalType(_, body) => 
+        shift0Identity(body, c+1)
 
   }.ensuring(shift(t, 0, c) == t)
 
@@ -178,6 +184,8 @@ object TypeTransformationsProperties {
       case AppType(t1, t2) => 
         boundRangeShiftComposition(t1, a, b, c, d)
         boundRangeShiftComposition(t2, a, b, c, d)
+      case UniversalType(_, body) => 
+        boundRangeShiftComposition(body, a, b, c + 1, d + 1)
 
   }.ensuring(
     (b < 0 ==> !shift(t, a, c).hasFreeVariablesIn(d, -b)) &&
@@ -206,6 +214,8 @@ object TypeTransformationsProperties {
       case AppType(t1, t2)    => 
         boundRangeShift(t1, d, c, a, b)
         boundRangeShift(t2, d, c, a, b)
+      case UniversalType(_, body)   => 
+        boundRangeShift(body, d, c+1, a + 1, b)
 
   }.ensuring(
       !t.hasFreeVariablesIn(a, b)
@@ -253,6 +263,10 @@ object TypeTransformationsProperties {
       case AppType(t1, t2) => 
         boundRangeSubstitutionLemma(t1, j, s)
         boundRangeSubstitutionLemma(t2, j, s)
+      case UniversalType(_, body) => 
+        boundRangeShift(s, 1, 0, 0, j+1)
+        boundRangeIncreaseCutoff(shift(s, 1, 0), 0, j + 1, j+2)
+        boundRangeSubstitutionLemma(body, j+1, shift(s, 1, 0))
   }.ensuring(!substitute(t, j, s).hasFreeVariablesIn(j, 1))
 
 
@@ -277,6 +291,7 @@ object TypeTransformationsProperties {
         shiftCommutativityPosPos(t2, b, c, a, d)
       case VariableType(v) => ()
       case AbsType(_, t) => shiftCommutativityPosPos(t, b, c+1, a, d+1) 
+      case UniversalType(_, t) => shiftCommutativityPosPos(t, b, c+1, a, d+1) 
       
   }.ensuring(
     if d <= c                then shift(shift(subs, b, c), a, d) == shift(shift(subs, a, d), b, c + a) else
@@ -307,6 +322,7 @@ object TypeTransformationsProperties {
         shiftCommutativityPosNeg(t2, b, c, a, d)
       case VariableType(_) => ()
       case AbsType(_, t) => shiftCommutativityPosNeg(t, b, c+1, a, d+1) 
+      case UniversalType(_, t) => shiftCommutativityPosNeg(t, b, c+1, a, d+1) 
       
   }.ensuring(
     if d >= c && b >= d - c  then !shift(subs, b, c).hasFreeVariablesIn(d, -a) && !subs.hasFreeVariablesIn(c, -a) &&
@@ -343,6 +359,7 @@ object TypeTransformationsProperties {
         shiftCommutativityNegPos(t2, b, c, a, d)
       case VariableType(_) => ()
       case AbsType(_, t) => shiftCommutativityNegPos(t, b, c+1, a, d+1) 
+      case UniversalType(_, t) => shiftCommutativityNegPos(t, b, c+1, a, d+1) 
       
   }.ensuring(if d >= c                then !subs.hasFreeVariablesIn(c, -b) && !shift(subs, a, d - b).hasFreeVariablesIn(c, - b) && 
                                       shift(shift(subs, b, c), a, d) == shift(shift(subs, a, d - b), b, c) else
@@ -374,6 +391,7 @@ object TypeTransformationsProperties {
         shiftCommutativityNegNeg(t2, b, c, a, d)
       case VariableType(_) => ()
       case AbsType(_, t) => shiftCommutativityNegNeg(t, b, c+1, a, d+1) 
+      case UniversalType(_, t) => shiftCommutativityNegNeg(t, b, c+1, a, d+1) 
       
   }.ensuring(if d >= c                then !subs.hasFreeVariablesIn(c, -b) && !subs.hasFreeVariablesIn(d - b, -a) && 
                                             !shift(subs, a, d - b).hasFreeVariablesIn(c, -b) && !shift(subs, b, c).hasFreeVariablesIn(d, -a) &&
@@ -417,6 +435,16 @@ object TypeTransformationsProperties {
           else ()
         else ()
       case AbsType(argK, t) => 
+        if s >= 0 then
+          shiftCommutativityPosPos(subs, s, c, 1, 0)
+        else
+          boundRangeShift(subs, 1, 0, c, -s)
+          if c > k then
+            shiftCommutativityNegPos(subs, s, c, 1, 0)
+          else
+            shiftCommutativityPosPos(subs, -s, c, 1, 0)
+        shiftSubstitutionCommutativity(t, s, c+1, k+1, shift(subs, 1, 0))
+      case UniversalType(argK, t) => 
         if s >= 0 then
           shiftCommutativityPosPos(subs, s, c, 1, 0)
         else
@@ -484,6 +512,13 @@ object TypeTransformationsProperties {
           boundRangeShift(s, 1, 0, 0, a)
           boundRangeIncreaseCutoff(shift(s, 1, 0), 0, 1 , a + 1)
         boundRangeSubstitutionLemma(body, j + 1, shift(s, 1, 0), a, b, c + 1, d + 1)
+      case UniversalType(_, body) =>
+        if c > 0 then
+          boundRangeShift(s, 1, 0, c, a)
+        else
+          boundRangeShift(s, 1, 0, 0, a)
+          boundRangeIncreaseCutoff(shift(s, 1, 0), 0, 1 , a + 1)
+        boundRangeSubstitutionLemma(body, j + 1, shift(s, 1, 0), a, b, c + 1, d + 1)
   }.ensuring(
     if c <= d then
       if c + a >= d + b               then !substitute(t, j, s).hasFreeVariablesIn(d, b) else
@@ -532,6 +567,10 @@ object TypeTransformationsProperties {
         substitutionCommutativity(t2, j, s, k, u)
       
       case AbsType(_, b) => 
+        shiftSubstitutionCommutativity(s, 1, 0, k, u)
+        boundRangeShift(u, 1, 0, j, 1)
+        substitutionCommutativity(b, j+1, shift(s, 1, 0), k+1, shift(u, 1, 0))
+      case UniversalType(_, b) => 
         shiftSubstitutionCommutativity(s, 1, 0, k, u)
         boundRangeShift(u, 1, 0, j, 1)
         substitutionCommutativity(b, j+1, shift(s, 1, 0), k+1, shift(u, 1, 0))
