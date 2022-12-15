@@ -850,7 +850,7 @@ object ParallelTypeReductionProperties {
     require(prd2.isValid)
 
     (prd1, prd2) match
-      case (ARSIdentity(t1), ARSIdentity(t2))               => ARSIdentity(ArrowType(t1, t2))
+      case (ARSIdentity(t1), ARSIdentity(t2))               => ARSIdentity(AppType(t1, t2))
       case (ARSComposition(h1, t1), ARSIdentity(t2))        => 
         assert(max(t1.size, prd2.size) + 1 == prd1.size )
         ARSComposition(AppTypeDerivation(AppType(h1.t1, t2), AppType(h1.t2, t2), h1.unfold, ReflDerivation(t2)).toARSStep, appDerivationMap(t1, prd2))

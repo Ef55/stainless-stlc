@@ -38,12 +38,17 @@ object TypeReductionDecidability{
       case Nil() => Nil()
       case Cons(h, t) => Cons(reduceToNormalForm(h), reduceToNormalForm(t))
 
-  }.ensuring(res => res.forall(_.isValid))
+  }.ensuring(res => res.forall(_.isValid) && res.length == env.length)
 
   @pure @inlineOnce @opaque
-  def reduceToNormalFormApply(@induct env: TypeEnvironment, j: BigInt): Unit = {
+  def reduceToNormalFormApply(env: TypeEnvironment, j: BigInt): Unit = {
     require(0 <= j)
-    require(j <= env.length)
+    require(j < env.length)
+    decreases(env)
+    env match
+      case Nil() => Unreacheable
+      case Cons(typ, tail) => if j > 0 then reduceToNormalFormApply(tail, j - 1) else ()
+    
   }.ensuring(reduceToNormalForm(env)(j).isValid && reduceToNormalForm(env)(j).t1 == env(j) && isEvalNormalForm(reduceToNormalForm(env)(j).t2))
 
   /**
@@ -150,7 +155,11 @@ object KindingDecidability {
         (decideKind(h), decideWellFormedness(t)) match
           case (None(), _)          => None()
           case (_, None())          => None()
-          case (Some(sh), Some(st)) => Some(Cons(sh, st))
+          case (Some(sh), Some(st)) if sh.k == ProperKind => 
+            assert(decideWellFormedness(t).isDefined)
+            assert(decideKind(h).isDefined)
+
+            Some(Cons(sh, st))
   }.ensuring(res => res.isDefined ==> isWellFormed(env, res.get))
 
   @pure
@@ -262,17 +271,18 @@ object TypingDecidability {
       case AppTypingDerivation(env, typ, App(t1, t2), td1, td2) =>
         val arrowEq = decideTypeCompleteness(td1, wf)
         decideTypeCompleteness(td2, wf)
+        
+        assert(decideType(env, t1).isDefined)
+        assert(decideType(env, t2).isDefined)
+        
         val arrowRed = evalToParallel(equivalenceToReductionNormalForm(arrowEq))
         td1.t match
           case ArrowType(typ1, typ2) if typ1 == td2.t => 
             val (arrLRed, arrRRed) = ParallelTypeReductionProperties.arrowMultiStepReduction(typ1, typ2, arrowRed)
-            assert(decideType(env, t1).isDefined)
-            assert(decideType(env, t2).isDefined)
-            assert(decideType(env, App(t1, t2)).isDefined)
-            assert(decideType(env, App(t1, t2)).get.isSound)
-            assert(decideType(env, App(t1, t2)).get.isInstanceOf[AppTypingDerivation])
-            assert(decideType(env, t1).get.isSound)
+            assert(arrowRed.t2.isInstanceOf[ArrowType])
+            assert(arrowEq.t2.isInstanceOf[ArrowType])
             assert(decideType(env, t1).get.t.isInstanceOf[ArrowType])
+            
             (arrowEq.t1, arrowEq.t2) match
               case (ArrowType(t11, t12), ArrowType(t21, t22)) =>
                 val (arrEq1, arrEq2) = ParallelTypeReductionProperties.arrowEquivalence(t11, t12, t21, t22, arrowEq)

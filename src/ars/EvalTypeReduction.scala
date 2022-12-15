@@ -877,7 +877,12 @@ object EvalTypeReductionConfluence {
     require(isEvalNormalForm(eq.t2))
     val eeq = parallelToEval(eq)
     val (erd1, erd2) = churchRosser(eeq)
-    erd1
+    erd2 match
+      case ARSIdentity(_) => erd1
+      case ARSComposition(h, t) =>
+        assert(h.isValid) 
+        reduceCompleteness(h.unfold) 
+        Unreacheable
   }.ensuring(res =>
     res.isValid && 
     eq.t1 == res.t1 &&
