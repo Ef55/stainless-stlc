@@ -880,9 +880,9 @@ object EvalTypeReductionConfluence {
     erd2 match
       case ARSIdentity(_) => erd1
       case ARSComposition(h, t) =>
-        assert(h.isValid) 
-        reduceCompleteness(h.unfold) 
-        Unreachable
+        assert(h.isValid)
+        reduceCompleteness(h.unfold)
+        erd1
   }.ensuring(res =>
     res.isValid && 
     eq.t1 == res.t1 &&

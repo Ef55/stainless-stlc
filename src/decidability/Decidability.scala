@@ -153,7 +153,7 @@ object KindingDecidability {
     require(kd.isSound)
   }.ensuring(decideKind(kd.env, kd.typ) == Some(kd))
 
-  @inlineOnce @opaque @pure
+  @pure
   def decideWellFormedness(env: TypeEnvironment): Option[List[KindDerivation]] = {
     decreases(env)
     env match
@@ -177,7 +177,8 @@ object KindingDecidability {
       case (Cons(h1, t1), Cons(h2, t2)) => 
         decideKindCompleteness(h2)
         decideWellFormednessCompleteness(t1, t2)
-      case _ => ()
+      case (Nil(), Nil()) => ()
+      case _ => Unreachable
   }.ensuring(res => decideWellFormedness(env) == Some(wf))
 
 }
@@ -278,13 +279,6 @@ object TypingDecidability {
               case Some(dK) if dK == kd && dK.k == ProperKind =>
                 val argEq = evalMultiStepToParallelEq(reduceToNormalForm(argT))
                 ParallelTypeReductionProperties.arrowEquivalenceMap(argEq, bodyEq)
-                // assert(decideType(td.env, td.term) match
-                //   case Some(dT) =>
-                //     ress.isValid &&
-                //     ress.t1 == td.t &&
-                //     ress.t2 == dT.t
-                //   case _ => false)
-                // ress
               case _ => Unreachable
           case _ => Unreachable
 
