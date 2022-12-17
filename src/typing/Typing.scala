@@ -58,7 +58,7 @@ object Typing {
           td.env == env && td.term == ter && // and has matching attributes
           eq.t1 == td.t && eq.t2 == typ &&
           kd.env == Nil() && kd.typ == typ && kd.k == ProperKind
-        case _ => Unreacheable
+        case _ => Unreachable
 
     @pure
     def ===(that: TypeDerivation): Boolean = this.t == that.t && this.env == that.env
@@ -160,7 +160,7 @@ object TypingProperties {
       case EquivTypingDerivation(env, typ, ter, td, eq, kd) => 
         val resTd = environmentWeakening(td, envExt)
         EquivTypingDerivation(env ++ envExt, typ, ter, resTd, eq, kd)
-      case _ => Unreacheable
+      case _ => Unreachable
 
   }.ensuring(res => 
     res.isSound && 
@@ -226,7 +226,7 @@ object TypingProperties {
         val resEtd: TypeDerivation = insertTypeInEnv(env1, insert, env2, btd)
         EquivTypingDerivation(newEnv, typ, resEtd.term, resEtd, equiv, kd)
 
-      case _ => Unreacheable
+      case _ => Unreachable
     
   }.ensuring(res =>
     res.isSound &&
@@ -265,7 +265,7 @@ object TypingProperties {
         val resEtd: TypeDerivation = removeTypeInEnv(env1, remove, env2, btd)
         EquivTypingDerivation(newEnv, typ, resEtd.term, resEtd, equiv, kd)
 
-      case _ => Unreacheable
+      case _ => Unreachable
       
   }.ensuring(res =>
     res.isSound &&
@@ -304,7 +304,7 @@ object TypingProperties {
         val substD = preservationUnderSubst(btd, j, sd)
         EquivTypingDerivation(env, typ, substD.term, substD, equiv, kd)
       
-      case _ => Unreacheable
+      case _ => Unreachable
 
   }.ensuring(res =>
     res.isSound &&
@@ -350,9 +350,9 @@ object TypingProperties {
         arrowKindingInversion(kd1)
         kd1 match
           case ArrowKindingDerivation(_, _, _, _, kd12) => kd12
-          case _ => Unreacheable
+          case _ => Unreachable
       case EquivTypingDerivation(_, _, _, _, _, kd) => kd
-      case _ => Unreacheable
+      case _ => Unreachable
 
   }.ensuring(res => 
     res.isSound &&
@@ -380,7 +380,7 @@ object TypingProperties {
       case AbsTypingDerivation(env, ArrowType(s1, s2), _, kd2, btd) =>
         val (equiv1, equiv2) = ParallelTypeReductionProperties.arrowEquivalence(s1, s2, t1, t2, equiv)
         (ARSSymmetry(equiv1), EquivTypingDerivation(Cons(argT, env), t2, body, btd, equiv2, kd), kd2) 
-      case _ => Unreacheable
+      case _ => Unreachable
 
   }.ensuring(res =>
     res._1.isValid &&
@@ -407,7 +407,7 @@ object TypingProperties {
     arrowKd match
       case ArrowKindingDerivation(_, _, _, _, kd2) =>
         inversionStrongLemmaAbs(argT, body, t1, t2, ARSReflexivity(ArrowType(t1, t2)), td, kd2)
-      case _ => Unreacheable
+      case _ => Unreachable
 
   }.ensuring(res =>
     res._1.isValid &&
@@ -449,8 +449,8 @@ object TypingProperties {
             val (equiv, bodyDeriv, kd) = inversionWeakLemmaAbs(argT1, body11, t1, t2, absTd, wf)
             val argDeriv = EquivTypingDerivation(env, argT1, arg11, td2, equiv,kd)
             preservationUnderAbsSubst(bodyDeriv, argDeriv)
-          case _ => Unreacheable 
-      case _ => Unreacheable
+          case _ => Unreachable 
+      case _ => Unreachable
   }.ensuring(res => 
     res.isSound &&
     ( res.term == red.term2 ) &&

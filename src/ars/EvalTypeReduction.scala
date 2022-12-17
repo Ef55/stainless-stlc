@@ -882,7 +882,7 @@ object EvalTypeReductionConfluence {
       case ARSComposition(h, t) =>
         assert(h.isValid) 
         reduceCompleteness(h.unfold) 
-        Unreacheable
+        Unreachable
   }.ensuring(res =>
     res.isValid && 
     eq.t1 == res.t1 &&

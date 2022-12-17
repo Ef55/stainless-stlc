@@ -67,7 +67,7 @@ object Kinding {
           bkd1.isSound && bkd2.isSound && // Premises are valid
           bkd1.typ == t1 && bkd2.typ == t2 && bkd1.env == env && bkd2.env == env && // and have matching attributes
           bkd1.k == ArrowKind(bkd2.k, k) // The body has expected type 
-        case _ => Unreacheable   
+        case _ => Unreachable   
     
     @pure
     def ===(that: KindDerivation): Boolean = 
@@ -135,7 +135,7 @@ object KindingProperties{
       case (Nil(), Nil()) => ()
       case (Cons(h1, t1), Cons(h2, t2)) => 
         if j > 0 then isWellFormedApply(t1, t2, j - 1) else ()
-      case _ => Unreacheable
+      case _ => Unreachable
   }.ensuring(wf(j).isSound && wf(j).env == Nil() && wf(j).k == ProperKind && wf(j).typ == env(j))
 
   @opaque @inlineOnce @pure
@@ -160,7 +160,7 @@ object KindingProperties{
         val resBk1 = kindEnvironmentWeakening(bk1, envExt)
         val resBk2 = kindEnvironmentWeakening(bk2, envExt)
         ArrowKindingDerivation(env ++ envExt, k, at, resBk1, resBk2)
-      case _ => Unreacheable
+      case _ => Unreachable
     
   }.ensuring(res => 
     res.isSound && 
@@ -229,7 +229,7 @@ object KindingProperties{
         val resKd1 = insertKindInEnv(env1, insert, env2, kd1)
         val resKd2 = insertKindInEnv(env1, insert, env2, kd2)
         ArrowKindingDerivation(newEnv, k, ArrowType(resKd1.typ, resKd2.typ), resKd1, resKd2)
-      case _ => Unreacheable
+      case _ => Unreachable
       
     
     
@@ -300,7 +300,7 @@ object KindingProperties{
         val resKd2 = removeKindInEnv(env1, remove, env2, kd2)
         val res = ArrowKindingDerivation(newEnv, k, ArrowType(resKd1.typ, resKd2.typ), resKd1, resKd2)
         res
-      case _ => Unreacheable
+      case _ => Unreachable
 
   }.ensuring(res =>
     res.isSound &&
@@ -336,7 +336,7 @@ object KindingProperties{
         val td1p = kindPreservationUnderSubst(kd1, j, sd)
         val td2p = kindPreservationUnderSubst(kd2, j, sd)
         ArrowKindingDerivation(env, typ, ArrowType(td1p.typ, td2p.typ), td1p, td2p)
-      case _ => Unreacheable
+      case _ => Unreachable
   }.ensuring(res =>
     res.isSound &&
     ( res.typ == TypeTransformations.substitute(td.typ, j, sd.typ) ) &&
@@ -387,7 +387,7 @@ object KindingProperties{
         val bodyPreservation = kindPreservation(bkd, rdBody)
         val argPreservation = kindPreservation(kd2, rdArg)
         kindPreservationUnderAbsSubst(bodyPreservation, argPreservation)
-      case _ => Unreacheable
+      case _ => Unreachable
   }.ensuring(res => 
     res.isSound &&
     ( res.typ == red.type2 ) &&

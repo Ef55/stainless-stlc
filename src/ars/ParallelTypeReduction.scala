@@ -563,7 +563,7 @@ object ParallelTypeReductionProperties {
             case ReflDerivation(body) => 
               val (dP21, dP22) = diamondProperty(prd12, prd22)
               (reduceAbsSubst(ReflDerivation(body2), dP21), AppAbsTypeDerivation(AbsType(k, body1), dP22.type1, body2, dP22.type2, prd11, dP22))
-            case _ => Unreacheable
+            case _ => Unreachable
           
         case (AppTypeDerivation(AppType(AbsType(_, t11), t12), AppType(AbsType(_, t21), t22), prd, prd12), AppAbsTypeDerivation(AbsType(k, body1), arg1, body2, arg2, prd21, prd22)) => 
           prd match
@@ -574,9 +574,9 @@ object ParallelTypeReductionProperties {
             case ReflDerivation(body) => 
               val (dP21, dP22) = diamondProperty(prd12, prd22)
               (AppAbsTypeDerivation(AbsType(k, body1), dP21.type1, body2, dP21.type2, prd21, dP21), reduceAbsSubst(ReflDerivation(body2), dP22))
-            case _ => Unreacheable
+            case _ => Unreachable
           
-        case _ => Unreacheable
+        case _ => Unreachable
   }.ensuring(res => res._1.type1 == prd1.type2 &&
                     res._2.type1 == prd2.type2 &&
                     res._1.type2 == res._2.type2 &&
@@ -749,7 +749,7 @@ object ParallelTypeReductionProperties {
             assert(br1.toARSStep.isValid) //needed
             assert(br2.toARSStep.isValid) //needed
             (ARSComposition(br1.toARSStep, sdr1), ARSComposition(br2.toARSStep, sdr2))
-          case _ => Unreacheable
+          case _ => Unreachable
     
   }.ensuring(
     res => 

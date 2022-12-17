@@ -52,7 +52,7 @@ object ARSEquivalences{
         EvalTypeReductionValidity.concatWellFormed(step1, step2)
         EvalTypeReductionValidity.concatWellFormed(step1.concat(step2), ARS1Fold(EvalTypeReduction.AppAbsTypeDerivation(AbsType(k, body2), arg2).toARSStep))
         (step1.concat(step2)).concat(ARS1Fold(EvalTypeReduction.AppAbsTypeDerivation(AbsType(k, body2), arg2).toARSStep))
-      case _ => Unreacheable
+      case _ => Unreachable
   }.ensuring(res => res.isValid && res.t1 == prd.type1 && res.t2 == prd.type2)
 
   @pure @inlineOnce @opaque
