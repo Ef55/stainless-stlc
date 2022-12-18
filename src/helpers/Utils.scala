@@ -163,11 +163,17 @@ object BigIntListProperties{
 
 }
 
-def Unreacheable: Nothing =
+def Unreachable: Nothing =
   require(false)
   ???
 
-def max(a: BigInt, b: BigInt): BigInt = if a > b then a else b
+object MathProperties {
+  def max(a: BigInt, b: BigInt): BigInt = if a > b then a else b
+
+  def maxAdd(a: BigInt, b: BigInt, p: BigInt): Unit = {
+  }.ensuring(max(a + p, b + p) == max(a, b) + p)
+}
+
 
 
 object OptionProperties {

@@ -280,13 +280,13 @@ object TypingDecidability {
                 assert(arrEq2.t1 == typ)
                 assert(arrEq2.t2 == decideType(env, App(t1, t2)).get.t)
                 arrEq2
-              case _ => Unreacheable
-          case _ => Unreacheable
+              case _ => Unreachable
+          case _ => Unreachable
 
       case EquivTypingDerivation(env, typ, term, btd, equiv, kd) => 
         val bodyEq = decideTypeCompleteness(btd, wf)
         ARS.ARSTransitivity(ARS.ARSSymmetry(equiv), bodyEq)
-      case _ => Unreacheable
+      case _ => Unreachable
       
 
   }.ensuring(res => 

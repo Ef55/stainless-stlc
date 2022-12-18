@@ -1,0 +1,10 @@
+java.lang.NullPointerException: Cannot invoke "Object.toString()" because the return value of "inox.Reporter$Message.msg()" is null
+	at inox.DefaultReporter.emit(Reporter.scala:168)
+	at stainless.DefaultReporter.emit(Reporter.scala:23)
+	at inox.Reporter.error(Reporter.scala:49)
+	at inox.Reporter.error(Reporter.scala:108)
+	at stainless.MainHelpers.watchRunCycle$1(MainHelpers.scala:225)
+	at stainless.MainHelpers.main(MainHelpers.scala:238)
+	at stainless.MainHelpers.main$(MainHelpers.scala:16)
+	at stainless.Main$.main(Main.scala:3)
+	at stainless.Main.main(Main.scala)
