@@ -88,10 +88,10 @@ object EvalTypeReduction{
           rd.isSound && rd.type1 == t12 && rd.type2 == t22 && t11 == t21
         case AppAbsTypeDerivation(_, _) => true
 
-    @pure
+    @pure @opaque @inlineOnce
     def toARSStep: EvalReductionStep = {
       (this, type1, type2, isSound)
-    }.ensuring(_.isWellFormed)
+    }.ensuring(res => res.isWellFormed && res.unfold == this)
   }
 
   /**
@@ -502,7 +502,12 @@ object EvalTypeReduction{
         case ARSComposition(h, t) => h.isWellFormed && t.isWellFormed
     
     @pure
-    def isValid: Boolean = ms.isSound && ms.isWellFormed
+    def isValid: Boolean = {   
+      decreases(ms)
+      ms match
+          case ARSIdentity(t) => true
+          case ARSComposition(h, t) => h.isValid && t.isValid && h.t2 == t.t1
+    }.ensuring(_ == (ms.isSound && ms.isWellFormed))
   }
 
   extension (ms: EvalEquivalence){
@@ -576,15 +581,6 @@ object EvalTypeReductionValidity{
     require(ms1.t2 == ms2.t2)
     reductionImpliesEquivalenceWellFormed(ms1, ms2, ARSReflexivity(ms1.t2))
   }.ensuring(reduceSameFormEquivalent(ms1, ms2).isWellFormed)
-
-
-  @pure
-  def isValidInd(ms: MultiStepEvalReduction): Boolean = {
-    decreases(ms)
-    ms match
-        case ARSIdentity(t) => true
-        case ARSComposition(h, t) => h.isValid && isValidInd(t) && h.t2 == t.t1
-  }.ensuring(_ == ms.isValid)
 
 }
 
