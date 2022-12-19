@@ -96,10 +96,10 @@ object ParallelTypeReduction{
       * 
       * * Basic property: the resulting reduction step is well formed
       */
-    @pure    
+    @opaque @pure @inlineOnce
     def toARSStep: ParallelReductionStep = {
       (this, type1, type2, isSound)
-    }.ensuring(_.isWellFormed)
+    }.ensuring(res => res.isWellFormed && res.unfold == this)
   }
 
   /**
@@ -144,8 +144,11 @@ object ParallelTypeReduction{
         case ARSComposition(h, t) => h.isWellFormed && t.isWellFormed
     @pure
     def isValid: Boolean = {
-      ms.isSound && ms.isWellFormed  
-    }
+      decreases(ms)
+      ms match
+          case ARSIdentity(t) => true
+          case ARSComposition(h, t) => h.isValid && t.isValid && h.t2 == t.t1
+    }.ensuring(_ == (ms.isSound && ms.isWellFormed))
   }
 
   extension (ms: ParallelEquivalence){
@@ -159,8 +162,13 @@ object ParallelTypeReduction{
         case ARSSymmetry(r) => r.isWellFormed
     @pure
     def isValid: Boolean = {
-      ms.isSound && ms.isWellFormed  
-    }
+      decreases(ms)
+      ms match
+        case ARSReflexivity(t) => true
+        case ARSBaseRelation(r) => r.isValid
+        case ARSTransitivity(r1, r2) => r1.isValid && r2.isValid && r1.t2 == r2.t1
+        case ARSSymmetry(r) => r.isValid 
+    }.ensuring(_ == (ms.isSound && ms.isWellFormed))
   }
 
 }
@@ -186,24 +194,6 @@ object ParallelTypeReductionValidity{
         case ARSIdentity(t) => true
         case ARSComposition(h, t) => h.unfold.isDeepValid && t.isDeepValid
   }
-
-  @pure
-  def isValidInd(ms: MultiStepParallelReduction): Boolean = {
-    decreases(ms)
-    ms match
-        case ARSIdentity(t) => true
-        case ARSComposition(h, t) => h.isValid && isValidInd(t) && h.t2 == t.t1
-  }.ensuring(_ == ms.isValid)
-
-  @pure
-  def isValidInd(eq: ParallelEquivalence): Boolean = {
-    decreases(eq)
-    eq match
-      case ARSReflexivity(t) => true
-      case ARSBaseRelation(r) => r.isValid
-      case ARSTransitivity(r1, r2) => isValidInd(r1) && isValid(r2) && r1.t2 == r2.t1
-      case ARSSymmetry(r) => isValid(r)
-  }.ensuring(_ == eq.isValid)
 
   @pure @inlineOnce @opaque
   def concatWellFormed(@induct s1: MultiStepParallelReduction, s2: MultiStepParallelReduction): Unit = {
@@ -271,7 +261,6 @@ object ParallelTypeReductionValidity{
     decreases(eq)
     require(eq.isValid)
     
-    isValidInd(eq)
     eq match
       case ARSReflexivity(t) => ()
       case ARSSymmetry(r) => 
@@ -636,8 +625,7 @@ object ParallelTypeReductionProperties {
         assert(h.isValid) //needed
         val (dP1, dP2) = diamondProperty(h.unfold, h2.unfold)
         val (conf1, conf2) = semiConfluence(t, dP1.toARSStep)
-        assert(dP2.toARSStep.isValid) //needed
-        isValidInd(ARSComposition(dP2.toARSStep, conf2))
+        //assert(dP2.toARSStep.isValid) //needed
         (conf1, ARSComposition(dP2.toARSStep, conf2))
   }.ensuring(res =>
     res._1.t2 == res._2.t2 &&
@@ -719,11 +707,7 @@ object ParallelTypeReductionProperties {
         assert(h.isValid) //needed
         assert(h.unfold.t1 == eq.t1) //needed
         h.unfold match
-          case ARSBaseStepClass(s) => 
-            isValidInd(cr1)
-            isValidInd(ARSComposition(s, cr1))
-            (ARSComposition(s, cr1), cr2)
-
+          case ARSBaseStepClass(s) => (ARSComposition(s, cr1), cr2)
           case ARSSymmStepClass(s) => 
             val (sc1, sc2) = semiConfluence(cr1, s)
             concatWellFormed(cr2, ARS1Fold(sc1))
@@ -758,37 +742,17 @@ object ParallelTypeReductionProperties {
     require(red.isValid)
     require(red.t1 == ArrowType(s1, s2))
 
-    //isValidInd(red)
-
     red match
       case ARSIdentity(_) => (ARSIdentity(s1), ARSIdentity(s2))
-      case ARSComposition(h, t) => Unreachable
-        // assert(h.isValid) //needed
-        // assert(h.unfold.type1.isInstanceOf[ArrowType]) //needed
-        // h.unfold match
-        //   case ReflDerivation(_) => Unreachable
-        //     // assert(h.t1 == h.t2)
-        //     // assert(arrowMultiStepReduction(s1, s2, t)._1.isValid)
-        //     // assert(arrowMultiStepReduction(s1, s2, t)._2.isValid) 
-        //     // assert(arrowMultiStepReduction(s1, s2, t)._1.t1 == s1)
-        //     // assert(arrowMultiStepReduction(s1, s2, t)._2.t1 == s2)
-        //     // assert(red.t2 == ArrowType(arrowMultiStepReduction(s1, s2, t)._1.t2, arrowMultiStepReduction(s1, s2, t)._2.t2))
-        //     // arrowMultiStepReduction(s1, s2, t)
-        //   case ArrowTypeDerivation(_, ArrowType(s3, s4), br1, br2) => Unreachable
-        //     // val (sdr1, sdr2) = arrowMultiStepReduction(s3, s4, t)
-        //     // assert(br1.isSound)
-        //     // assert(br2.isSound)
-        //     // assert(br1.toARSStep.isSound) //needed
-        //     // assert(br2.toARSStep.isSound) //needed
-        //     // assert(br1.toARSStep.isValid) //needed
-        //     // assert(br2.toARSStep.isValid) //needed
-        //     // assert(ARSComposition(br1.toARSStep, sdr1).isValid)
-        //     // assert(ARSComposition(br2.toARSStep, sdr2).isValid)
-        //     // assert(ARSComposition(br1.toARSStep, sdr1).t1 == s1)
-        //     // assert(ARSComposition(br2.toARSStep, sdr2).t1 == s2)
-        //     // assert(red.t2 == ArrowType(ARSComposition(br1.toARSStep, sdr1).t2, ARSComposition(br2.toARSStep, sdr2).t2))
-        //     // (ARSComposition(br1.toARSStep, sdr1), ARSComposition(br2.toARSStep, sdr2))
-        //   case _ => Unreachable
+      case ARSComposition(h, t) =>
+        assert(h.isValid) //needed
+        assert(h.unfold.type1.isInstanceOf[ArrowType]) //needed
+        h.unfold match
+          case ReflDerivation(_) => arrowMultiStepReduction(s1, s2, t)
+          case ArrowTypeDerivation(_, ArrowType(s3, s4), br1, br2) =>
+            val (sdr1, sdr2) = arrowMultiStepReduction(s3, s4, t)
+            (ARSComposition(br1.toARSStep, sdr1), ARSComposition(br2.toARSStep, sdr2))
+          case _ => Unreachable
     
   }.ensuring(
     res => 

@@ -183,4 +183,8 @@ object OptionProperties {
     require(defOpt.isDefined)
     require(defOpt == otherOpt)
   }.ensuring(otherOpt.isDefined)
+
+  @inlineOnce @opaque @pure
+  def someIsDefined[T](inner: T): Unit = {
+  }.ensuring(Some(inner).isDefined)
 }

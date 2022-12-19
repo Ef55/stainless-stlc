@@ -102,6 +102,7 @@ object KindingProperties{
 
   @inlineOnce @opaque @pure
   def kindDerivationUniqueness(kd1: KindDerivation, kd2: KindDerivation): Unit = {
+    decreases(kd1.size + kd2.size)
     require(kd1.isSound)
     require(kd2.isSound)
     require(kd1.typ == kd2.typ)
@@ -111,10 +112,10 @@ object KindingProperties{
       case (VariableKindingDerivation(_, _, _), VariableKindingDerivation(_, _, _)) => ()
       case (ArrowKindingDerivation(_, _, _, kd11, kd12), ArrowKindingDerivation(_, _, _, kd21, kd22)) => 
         kindDerivationUniqueness(kd11, kd21)
-        kindDerivationUniqueness(kd21, kd22)
+        kindDerivationUniqueness(kd12, kd22)
       case (AppKindingDerivation(_, _, _, kd11, kd12), AppKindingDerivation(_, _, _, kd21, kd22)) => 
         kindDerivationUniqueness(kd11, kd21)
-        kindDerivationUniqueness(kd21, kd22)
+        kindDerivationUniqueness(kd12, kd22)
       case (AbsKindingDerivation(_, _, _, bkd1), AbsKindingDerivation(_, _, _, bkd2)) => 
         kindDerivationUniqueness(bkd1, bkd2)
   }.ensuring(kd1 == kd2)

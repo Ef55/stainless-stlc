@@ -38,12 +38,17 @@ object TypeReductionDecidability{
       case Nil() => Nil()
       case Cons(h, t) => Cons(reduceToNormalForm(h), reduceToNormalForm(t))
 
-  }.ensuring(res => res.forall(_.isValid))
+  }.ensuring(res => res.forall(_.isValid) && res.length == env.length)
 
   @pure @inlineOnce @opaque
-  def reduceToNormalFormApply(@induct env: TypeEnvironment, j: BigInt): Unit = {
+  def reduceToNormalFormApply(env: TypeEnvironment, j: BigInt): Unit = {
     require(0 <= j)
-    require(j <= env.length)
+    require(j < env.length)
+    decreases(env)
+    env match
+      case Nil() => Unreachable
+      case Cons(typ, tail) => if j > 0 then reduceToNormalFormApply(tail, j - 1) else ()
+    
   }.ensuring(reduceToNormalForm(env)(j).isValid && reduceToNormalForm(env)(j).t1 == env(j) && isEvalNormalForm(reduceToNormalForm(env)(j).t2))
 
   /**
@@ -62,24 +67,27 @@ object TypeReductionDecidability{
       reduceSameFormEquivalentWellFormed(msr1, msr2)
       Some(evalToParallel(ARSProperties.reduceSameFormEquivalent(msr1, msr2)))
     else None()
-  }.ensuring(res => res.isDefined ==>
-    (res.get.isValid &&
-     res.get.t1 == t1 &&
-     res.get.t2 == t2))
+  }.ensuring(res => res match
+    case Some(resEq) =>
+      resEq.isValid &&
+      resEq.t1 == t1 &&
+      resEq.t2 == t2
+    case None() => true)
 
   /**
     * The equivalence procedure is complete
     * That is if two types are equivalent then the decision procedure will output a proof that witness it
     */
   @pure @opaque @inlineOnce
-  def isEquivalentToCompleteness(eq: EvalEquivalence): Unit = {
-    require(eq.isValid)
+  def isEquivalentToCompleteness(equiv: ParallelTypeReduction.ParallelEquivalence): Unit = {
+    require(equiv.isValid)
+    val eq = parallelToEval(equiv)
     val msr1: MultiStepEvalReduction = reduceToNormalForm(eq.t1)
     val msr2: MultiStepEvalReduction = reduceToNormalForm(eq.t2)
     reductionPreserveEquivalenceWellFormed(msr1, msr2, eq)
     val eqf = ARSProperties.reductionPreserveEquivalence(msr1, msr2, eq)
     equivalentNormalFormEqual(eqf)
-  }.ensuring(isEquivalentTo(eq.t1, eq.t2).isDefined)
+  }.ensuring(isEquivalentTo(equiv.t1, equiv.t2).isDefined)
 
 }
 
@@ -122,18 +130,22 @@ object KindingDecidability {
             
           
           case (_, _) => None()
-  }.ensuring(res => res.isDefined ==>
-    (res.get.isSound && 
-     res.get.typ == t && 
-     res.get.env == env))
+  }.ensuring(res => res match
+    case Some(resTd) => 
+      resTd.isSound && 
+      resTd.typ == t && 
+      resTd.env == env
+    case None() => true)
         
   @pure
   def decideKind(t: Type): Option[KindDerivation] = {
     decideKind(Nil(), t)
-  }.ensuring(res => (res.isDefined ==>
-    (res.get.isSound && 
-     res.get.typ == t && 
-     res.get.env == Nil())))
+  }.ensuring(res => res match
+    case Some(resTd) => 
+      resTd.isSound && 
+      resTd.typ == t && 
+      resTd.env == Nil()
+    case None() => true)
   
 
   @inlineOnce @opaque @pure
@@ -148,10 +160,14 @@ object KindingDecidability {
       case Nil() => Some(Nil())
       case Cons(h, t) => 
         (decideKind(h), decideWellFormedness(t)) match
-          case (None(), _)          => None()
-          case (_, None())          => None()
-          case (Some(sh), Some(st)) => Some(Cons(sh, st))
-  }.ensuring(res => res.isDefined ==> isWellFormed(env, res.get))
+          case (Some(sh), Some(st)) if sh.k == ProperKind => 
+            Some(Cons(sh, st))
+          case _ =>  None()
+  }.ensuring(res => res match
+    case Some(wf) => 
+      isWellFormed(env, wf)
+    case None() => true)
+
 
   @pure
   def decideWellFormednessCompleteness(env: TypeEnvironment, wf: List[KindDerivation]): Unit = {
@@ -161,7 +177,8 @@ object KindingDecidability {
       case (Cons(h1, t1), Cons(h2, t2)) => 
         decideKindCompleteness(h2)
         decideWellFormednessCompleteness(t1, t2)
-      case _ => ()
+      case (Nil(), Nil()) => ()
+      case _ => Unreachable
   }.ensuring(res => decideWellFormedness(env) == Some(wf))
 
 }
@@ -185,7 +202,6 @@ object TypingDecidability {
 
     decideWellFormedness(env) match
       case Some(wf) =>
-        assert(decideWellFormedness(env).isDefined) //needed
         t match
           case v@Var(j) => 
             if j < env.length then 
@@ -200,13 +216,11 @@ object TypingDecidability {
             decideType(Cons(argT, env), body) match
               case None() => None()
               case Some(btd) => 
-                assert(decideType(Cons(argT, env), body).isDefined)
                 assert(btd.isSound) //needed
                 isEvalNormalFormArrowMap(reducedArgT.t2, btd.t)
                 val reducedArrow: MultiStepEvalReduction = arrowDerivationLMap(reducedArgT, btd.t)
                 decideKind(argT) match
                   case Some(kd) if kd.k == ProperKind => 
-                    assert(decideKind(argT).isDefined)
                     val td: TypeDerivation = AbsTypingDerivation(env, ArrowType(argT, btd.t), abs, kd, btd)
                     val arrKd: KindDerivation = ArrowKindingDerivation(Nil(), ProperKind, ArrowType(reducedArgT.t2, btd.t), kindEvalMultiStepPreservation(kd, reducedArgT), soundTypingHasProperKind(btd, Cons(kd, wf)))
                     assert(td.isSound) //needed
@@ -220,27 +234,29 @@ object TypingDecidability {
               case (Some(td1), Some(td2)) => 
                 td1.t match 
                   case ArrowType(typ1, typ2) if typ1 == td2.t => 
-                    assert(decideType(env, t1).isDefined)
-                    assert(decideType(env, t2).isDefined)
                     isEvalNormalFormInnerMap(ArrowType(typ1, typ2))
                     Some(AppTypingDerivation(env, typ2, app, td1, td2))
                   case _ => None()
       case None() => None()
 
-  }.ensuring(res => (res.isDefined ==> 
-    (res.get.env  == env         &&
-     res.get.term == t           &&
-     isEvalNormalForm(res.get.t) &&
-     res.get.isSound)))
+  }.ensuring(res => res match
+    case Some(resTd) => 
+      resTd.env  == env         &&
+      isEvalNormalForm(resTd.t) &&
+      resTd.term == t           &&
+      resTd.isSound
+    case None() => true)
   
   @pure
   def decideType(t: Term): Option[TypeDerivation] = {
     decideType(Nil(), t)
-  }.ensuring(res => (res.isDefined ==> 
-    (res.get.env  == Nil()       &&
-     res.get.term == t           &&
-     isEvalNormalForm(res.get.t) &&
-     res.get.isSound)))
+  }.ensuring(res => res match
+    case Some(resTd) => 
+      resTd.env  == Nil()       &&
+      isEvalNormalForm(resTd.t) &&
+      resTd.term == t           &&
+      resTd.isSound
+    case None() => true)
 
   @pure @inlineOnce @opaque
   def decideTypeCompleteness(td: TypeDerivation, wf: List[KindDerivation]): ParallelTypeReduction.ParallelEquivalence = {
@@ -253,46 +269,129 @@ object TypingDecidability {
     td match
       case VarTypingDerivation(env, typ, Var(j)) => 
         val envIdxRed: MultiStepEvalReduction = reduceToNormalForm(env(j))
-        val envIdxEquiv: ParallelTypeReduction.ParallelEquivalence = evalMultiStepToParallelEq(envIdxRed)   
-        envIdxEquiv
+        evalMultiStepToParallelEq(envIdxRed)  
       case AbsTypingDerivation(env, ArrowType(typ1, typ2), Abs(argT, body), kd, btd) =>
         val bodyEq = decideTypeCompleteness(btd, Cons(kd, wf))
-        val argEq = evalMultiStepToParallelEq(reduceToNormalForm(argT))
-        ParallelTypeReductionProperties.arrowEquivalenceMap(argEq, bodyEq)
+        decideType(Cons(argT, env), body) match
+          case Some(dT) =>
+            decideKindCompleteness(kd)
+            decideKind(argT) match
+              case Some(dK) if dK == kd && dK.k == ProperKind =>
+                val argEq = evalMultiStepToParallelEq(reduceToNormalForm(argT))
+                ParallelTypeReductionProperties.arrowEquivalenceMap(argEq, bodyEq)
+              case _ => Unreachable
+          case _ => Unreachable
+
       case AppTypingDerivation(env, typ, App(t1, t2), td1, td2) =>
-        val arrowEq = decideTypeCompleteness(td1, wf)
-        decideTypeCompleteness(td2, wf)
-        val arrowRed = evalToParallel(equivalenceToReductionNormalForm(arrowEq))
-        td1.t match
-          case ArrowType(typ1, typ2) if typ1 == td2.t => 
-            val (arrLRed, arrRRed) = ParallelTypeReductionProperties.arrowMultiStepReduction(typ1, typ2, arrowRed)
-            assert(decideType(env, t1).isDefined)
-            assert(decideType(env, t2).isDefined)
-            assert(decideType(env, App(t1, t2)).isDefined)
-            assert(decideType(env, App(t1, t2)).get.isSound)
-            assert(decideType(env, App(t1, t2)).get.isInstanceOf[AppTypingDerivation])
-            assert(decideType(env, t1).get.isSound)
-            assert(decideType(env, t1).get.t.isInstanceOf[ArrowType])
-            (arrowEq.t1, arrowEq.t2) match
-              case (ArrowType(t11, t12), ArrowType(t21, t22)) =>
-                val (arrEq1, arrEq2) = ParallelTypeReductionProperties.arrowEquivalence(t11, t12, t21, t22, arrowEq)
-                assert(arrEq2.isValid)
-                assert(arrEq2.t1 == typ)
-                assert(arrEq2.t2 == decideType(env, App(t1, t2)).get.t)
-                arrEq2
+
+        val t1Eq = decideTypeCompleteness(td1, wf)
+        val t2Eq = decideTypeCompleteness(td2, wf)
+
+        (decideType(env, t1), decideType(env, t2)) match
+          case (Some(dT1), Some(dT2)) => 
+            
+            val t1EvalRed = equivalenceToReductionNormalForm(t1Eq)
+            val t2EvalRed = equivalenceToReductionNormalForm(t2Eq)
+            val t1ParaRed = evalToParallel(t1EvalRed)
+            val t2ParaRed = evalToParallel(t2EvalRed)
+
+            td1.t match
+              case ArrowType(typ1, typ2) if typ1 == td2.t => 
+                val (arrLParaRed, arrRParaRed) = ParallelTypeReductionProperties.arrowMultiStepReduction(typ1, typ2, t1ParaRed)
+                val arrLEvalRed = parallelToEval(arrLParaRed)
+                val arrREvalRed = parallelToEval(arrRParaRed)
+
+                dT1.t match 
+                  case ArrowType(dTyp1, dTyp2)  => 
+                    isEvalNormalFormInnerMap(t1ParaRed.t2)
+                    uniqueNormalForm(arrLEvalRed, t2EvalRed)
+
+                    decideType(env, App(t1, t2)) match
+                      case Some(AppTypingDerivation(env0, dTyp20, App(t10, t20), dT10, dT20)) 
+                      if env == env0 && dTyp2 == dTyp20 && t10 == t1 && t20 == t2 && dT10 == dT1 && dT20 == dT2=>
+                        val (arrEq1, arrEq2) = ParallelTypeReductionProperties.arrowEquivalence(typ1, typ2, dTyp1, dTyp2, t1Eq)
+                        arrEq2
+                      case _ => Unreachable 
+                  case _ => Unreachable
               case _ => Unreachable
           case _ => Unreachable
 
       case EquivTypingDerivation(env, typ, term, btd, equiv, kd) => 
         val bodyEq = decideTypeCompleteness(btd, wf)
-        ARS.ARSTransitivity(ARS.ARSSymmetry(equiv), bodyEq)
-      case _ => Unreachable
-      
 
-  }.ensuring(res => 
-    decideType(td.env, td.term).isDefined &&
-    res.isValid &&
-    res.t1 == td.t &&
-    res.t2 == decideType(td.env, td.term).get.t)
+        decideType(env, btd.term) match
+          case Some(dT) =>
+            assert(ARS.ARSSymmetry(equiv).isValid)
+            assert(ARS.ARSSymmetry(equiv).t1 == typ)
+            assert(ARS.ARSSymmetry(equiv).t2 == btd.t)
+            ARS.ARSTransitivity(ARS.ARSSymmetry(equiv), bodyEq)  
+          case _ => Unreachable    
+      case _ => Unreachable
+
+  }.ensuring(res => decideType(td.env, td.term) match
+    case Some(dT) =>
+      res.isValid &&
+      res.t1 == td.t &&
+      res.t2 == dT.t
+    case _ => false)
+
+  @pure
+  def decideTypeChecking(env: TypeEnvironment, t: Term, found: Type): Option[TypeDerivation] = {
+    decideKind(found) match
+      case Some(kd) if kd.k == ProperKind => 
+        decideType(env, t) match
+          case Some(normalFormDer) =>
+            isEquivalentTo(normalFormDer.t, found) match
+              case Some(equiv) => 
+                assert(normalFormDer.term == t)
+                assert(normalFormDer.t == equiv.t1)
+                assert(found == equiv.t2)
+                Some(EquivTypingDerivation(env, found, t, normalFormDer, equiv, kd))
+              case _ => None()
+          case _ => None()
+      case _ => None()
+
+  }.ensuring(res => res match
+    case Some(resTd) => 
+      resTd.env  == env   &&
+      resTd.t    == found &&
+      resTd.term == t     &&
+      resTd.isSound
+    case None() => true)
+
+  @pure
+  def decideTypeChecking(t: Term, found: Type): Option[TypeDerivation] = {
+    decideTypeChecking(Nil(), t, found)
+  }.ensuring(res => res match
+    case Some(resTd) => 
+      resTd.env  == Nil()   &&
+      resTd.t    == found   &&
+      resTd.term == t       &&
+      resTd.isSound
+    case None() => true)
+
+  @pure @inlineOnce @opaque
+  def decideTypeCheckingCompleteness(td: TypeDerivation, wf: List[KindDerivation]): Unit = {
+    require(td.isSound)
+    require(Kinding.isWellFormed(td.env, wf))
+    val kd = soundTypingHasProperKind(td, wf)
+    decideKindCompleteness(kd)
+    decideKind(td.t) match
+      case Some(kd) if kd.k == ProperKind => 
+        val equiv = decideTypeCompleteness(td, wf)
+        decideType(td.env, td.term) match
+          case Some(normalFormDer) =>
+            isEquivalentToCompleteness(equiv) 
+            isEquivalentTo(normalFormDer.t, td.t) match
+              case Some(equiv) => ()
+              case _ => Unreachable
+          case _ => Unreachable
+      case _ => Unreachable
+  }.ensuring(decideTypeChecking(td.env, td.term, td.t) match
+    case Some(dT) =>
+      dT.term == td.term &&
+      dT.t    == td.t    &&
+      dT.env  == td.env
+    case _ => false)
 
 }
