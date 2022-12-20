@@ -79,46 +79,6 @@ object TypingProperties {
   import KindingProperties._
   import ARS._
 
-
-//   /// Type derivations
-//   @opaque @pure
-//   def deriveTypeCompleteness(@induct td: TypeDerivation): Unit = {
-//     require(td.isSound)
-//   }.ensuring(deriveType(td.env, td.term) == Some(td))
-
-//   @opaque @pure
-//   def deriveTypeSoundness(env: TypeEnvironment, t: Term): Unit = {
-//     require(deriveType(env, t).isDefined)
-//     t match {
-//       case Var(_) => ()
-//       case Abs(targ, body) => {
-//         deriveTypeSoundness(targ :: env, body)
-//       }
-//       case App(t1, t2) => {
-//         deriveTypeSoundness(env, t1)
-//         deriveTypeSoundness(env, t2)
-//       }
-//       case Fix(f) => {
-//         deriveTypeSoundness(env, f)
-//       }
-//     }
-//   }.ensuring(
-//     deriveType(env, t).get.isSound && 
-//     deriveType(env, t).get.term == t && 
-//     deriveType(env, t).get.env == env
-//   )
-
-//   @opaque @pure
-//   def typeDerivationsUniqueness(td1: TypeDerivation, td2: TypeDerivation): Unit = {
-//     require(td1.isSound)
-//     require(td2.isSound)
-//     require(td1.term == td2.term)
-//     require(td1.env == td2.env)
-
-//     deriveTypeCompleteness(td1)
-//     deriveTypeCompleteness(td2)
-//   }.ensuring(td1 == td2)
-
 //   /// Progress
   @pure @inlineOnce @opaque
   def callByValueProgress(td: TypeDerivation): Unit = {
@@ -129,7 +89,6 @@ object TypingProperties {
       case VarTypingDerivation(_, _, _) => ()
       case AbsTypingDerivation(_, _, _, _, _) => ()
       case AppTypingDerivation(_, _, _, btd1, btd2) => 
-        callByValueProgress(btd1)
         callByValueProgress(btd1)
       case EquivTypingDerivation(_, _, _, btd, _, _) => 
         callByValueProgress(btd)
