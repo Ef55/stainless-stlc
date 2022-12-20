@@ -36,6 +36,7 @@ object EvalTypeReduction{
         case AppTypeDerivationL(t1, _, _) => t1
         case AppTypeDerivationR(t1, _, _) => t1
         case AppAbsTypeDerivation(abs, arg) => AppType(abs, arg)
+        case UniversalTypeDerivation(t1, _, _) => t1
 
     @pure
     def type2: Type = 
@@ -46,6 +47,7 @@ object EvalTypeReduction{
         case AppTypeDerivationL(_, t2, _) => t2
         case AppTypeDerivationR(_, t2, _) => t2
         case AppAbsTypeDerivation(abs, arg) => absSubstitution(abs.body, arg)
+        case UniversalTypeDerivation(_, t2, _) => t2
 
 
     /**
@@ -61,7 +63,8 @@ object EvalTypeReduction{
         case AbsTypeDerivation(_, _, rd) => rd.size + 1
         case AppTypeDerivationL(_, _, rd) => rd.size + 1
         case AppTypeDerivationR(_, _, rd) => rd.size + 1
-        case AppAbsTypeDerivation(abs, arg) => BigInt(1)
+        case AppAbsTypeDerivation(_, _) => BigInt(1)
+        case UniversalTypeDerivation(_, _, rd) => rd.size + 1
     }.ensuring(_ > BigInt(0))
 
     /**
@@ -86,6 +89,8 @@ object EvalTypeReduction{
           rd.isSound && rd.type1 == t11 && rd.type2 == t21 && t12 == t22
         case AppTypeDerivationR(AppType(t11, t12), AppType(t21, t22), rd) =>
           rd.isSound && rd.type1 == t12 && rd.type2 == t22 && t11 == t21
+        case UniversalTypeDerivation(UniversalType(k1, b1), UniversalType(k2, b2), rd) => 
+          rd.isSound && rd.type1 == b1 && rd.type2 == b2 && k1 == k2
         case AppAbsTypeDerivation(_, _) => true
 
     @pure @opaque @inlineOnce
@@ -103,6 +108,7 @@ object EvalTypeReduction{
   case class AppTypeDerivationL(t1: AppType, t2: AppType, rd: EvalReductionDerivation) extends EvalReductionDerivation
   case class AppTypeDerivationR(t1: AppType, t2: AppType, rd: EvalReductionDerivation) extends EvalReductionDerivation
   case class AppAbsTypeDerivation(abs: AbsType, arg: Type) extends EvalReductionDerivation
+  case class UniversalTypeDerivation(t1: UniversalType, t2: UniversalType, rd: EvalReductionDerivation) extends EvalReductionDerivation
   
   /**
    * Outputs the set of all the types to to which t reduces along with the proof of the reduction
@@ -128,6 +134,7 @@ object EvalTypeReduction{
             Cons(AppAbsTypeDerivation(abs, t2), Nil())
           case _ => Nil()
         (l1 ++ l2) ++ l3
+      case univ@UniversalType(k, b) => reduce(b).map(b2 => UniversalTypeDerivation(univ, UniversalType(k, b2.type2), b2))
   }
 
   /**
@@ -179,6 +186,14 @@ object EvalTypeReduction{
   }.ensuring(l.forall(t2d => AppTypeDerivationR(AppType(t1, t2), AppType(t1, t2d.type2), t2d).isSound) &&
              l.forall(t2d => AppTypeDerivationR(AppType(t1, t2), AppType(t1, t2d.type2), t2d).type1 == AppType(t1, t2)))
 
+  @pure @opaque @inlineOnce
+  def reduceSoundnessLemmaUniversal(@induct l: List[EvalReductionDerivation], k: Kind, b: Type): Unit = {
+    require(l.forall(_.isSound))
+    require(l.forall(_.type1 == b))
+  }.ensuring(l.forall(b2 => UniversalTypeDerivation(UniversalType(k, b), UniversalType(k, b2.type2), b2).isSound) &&
+             l.forall(b2 => UniversalTypeDerivation(UniversalType(k, b), UniversalType(k, b2.type2), b2).type1 == UniversalType(k, b)))
+
+
   /**
     * Soudness of reduce
     * That is all the proofs in the set outputed by reduce are sound and they all witness T -> T' for some T'
@@ -194,8 +209,15 @@ object EvalTypeReduction{
         reduceSoundnessLemmaAbs(reduce(b), k, b)
         ListSpecs.mapPred[EvalReductionDerivation, EvalReductionDerivation](reduce(b), (b2: EvalReductionDerivation) => AbsTypeDerivation(abs, AbsType(k, b2.type2), b2), (r: EvalReductionDerivation) => r.isSound)
         ListSpecs.mapPred[EvalReductionDerivation, EvalReductionDerivation](reduce(b), (b2: EvalReductionDerivation) => AbsTypeDerivation(abs, AbsType(k, b2.type2), b2), (r: EvalReductionDerivation) => r.type1 == t)
-
         assert(reduce(b).map((b2: EvalReductionDerivation) => AbsTypeDerivation(abs, AbsType(k, b2.type2), b2)).forall((r: EvalReductionDerivation) => r.isSound))
+
+      case univ@UniversalType(k, b) => 
+        reduceSoundness(b)
+        reduceSoundnessLemmaUniversal(reduce(b), k, b)
+        ListSpecs.mapPred[EvalReductionDerivation, EvalReductionDerivation](reduce(b), (b2: EvalReductionDerivation) => UniversalTypeDerivation(univ, UniversalType(k, b2.type2), b2), (r: EvalReductionDerivation) => r.isSound)
+        ListSpecs.mapPred[EvalReductionDerivation, EvalReductionDerivation](reduce(b), (b2: EvalReductionDerivation) => UniversalTypeDerivation(univ, UniversalType(k, b2.type2), b2), (r: EvalReductionDerivation) => r.type1 == t)
+        assert(reduce(b).map((b2: EvalReductionDerivation) => UniversalTypeDerivation(univ, UniversalType(k, b2.type2), b2)).forall((r: EvalReductionDerivation) => r.isSound))
+
       case arr@ArrowType(t1, t2) => 
         reduceSoundness(t1)
         reduceSoundness(t2)
@@ -268,6 +290,11 @@ object EvalTypeReduction{
         ListProperties.mapContains(reduce(b1), (bd: EvalReductionDerivation) => AbsTypeDerivation(AbsType(k1, b1), AbsType(k2, bd.type2), bd), rd)
         val l: List[EvalReductionDerivation] = reduce(b1).map(bd => AbsTypeDerivation(AbsType(k1, b1), AbsType(k2, bd.type2), bd))
 
+      case UniversalTypeDerivation(UniversalType(k1, b1), UniversalType(k2, b2), rd) => 
+        reduceCompleteness(rd)
+        ListProperties.mapContains(reduce(b1), (bd: EvalReductionDerivation) => UniversalTypeDerivation(UniversalType(k1, b1), UniversalType(k2, bd.type2), bd), rd)
+        val l: List[EvalReductionDerivation] = reduce(b1).map(bd => UniversalTypeDerivation(UniversalType(k1, b1), UniversalType(k2, bd.type2), bd))
+
       case AppTypeDerivationL(AppType(t11, t12), AppType(t21, t22), rd) =>
         reduceCompleteness(rd)
         ListProperties.mapContains(reduce(t11), (t1d: EvalReductionDerivation) => AppTypeDerivationL(AppType(t11, t12), AppType(t1d.type2, t12), t1d), rd)
@@ -333,6 +360,9 @@ object EvalTypeReduction{
       case abs@AbsType(k, b) => 
         val l = reduce(b).map(b2 => AbsTypeDerivation(abs, AbsType(k, b2.type2), b2))
         assert(l.isEmpty)
+      case univ@UniversalType(k, b) => 
+        val l = reduce(b).map(b2 => UniversalTypeDerivation(univ, UniversalType(k, b2.type2), b2))
+        assert(l.isEmpty)
       case arr@ArrowType(t1, t2) => 
         val l1: List[EvalReductionDerivation] = reduce(t1).map(t1d => ArrowTypeDerivationL(arr, ArrowType(t1d.type2, t2), t1d)) 
         val l2: List[EvalReductionDerivation] = reduce(t2).map(t2d => ArrowTypeDerivationR(arr, ArrowType(t1, t2d.type2), t2d))    
@@ -389,6 +419,11 @@ object EvalTypeReduction{
           case Some(prd) => Some(AbsTypeDerivation(abs, AbsType(k, prd.type2), prd))
           case _ => None()
 
+      case (univ@UniversalType(k, b)) =>
+        fullBetaReduce(b) match
+          case Some(prd) => Some(UniversalTypeDerivation(univ, UniversalType(k, prd.type2), prd))
+          case _ => None()
+
       case _ => None()
   }
 
@@ -417,10 +452,16 @@ object EvalTypeReduction{
               case AbsType(argK, body) => ()
               case _ => ()
 
-      case (abs@AbsType(k, b)) =>
+      case (AbsType(k, b)) =>
         fullBetaReduce(b) match
           case Some(prd) => fullBetaReduceSoundness(b)
           case _ => ()
+
+      case (UniversalType(k, b)) =>
+        fullBetaReduce(b) match
+          case Some(prd) => fullBetaReduceSoundness(b)
+          case _ => ()
+
       case _ => ()
 
   }.ensuring(fullBetaReduce(t).get.isSound && fullBetaReduce(t).get.type1 == t)
@@ -728,6 +769,34 @@ object EvalTypeReductionProperties {
       case ARSComposition(h, t) => ARSComposition(AbsTypeDerivation(AbsType(k, h.t1), AbsType(k, h.t2), h.unfold).toARSStep, absDerivationMap(k, t))
     
   }.ensuring(res => res.isValid && res.t1 == AbsType(k, prd.t1) && res.t2 == AbsType(k, prd.t2) && res.size == prd.size)
+
+  /**
+   * Soudness of reduction mapping for UniversalTypeDerivation
+   * 
+   * * Short version: If T1 -k-> T2 then ∀.T1 -k-> ∀.T2
+   * 
+   * Long version:
+   *
+   * Preconditions:
+   *   - prd, the step sequence witnessing T1 -k-> T2 isValid
+   * 
+   * Postcondition:
+   *   There exists a step sequence witnessing ∀.T -k'-> ∀.T' such that:
+   *     - T  = T1
+   *     - T' = T2
+   *     - k  = k'
+   * 
+   * * The proof is constructive and outputs this step sequence
+   */
+  @pure @opaque @inlineOnce
+  def universalDerivationMap(k: Kind, prd: MultiStepEvalReduction): MultiStepEvalReduction = {
+    decreases(prd)
+    require(prd.isValid)
+    prd match
+      case ARSIdentity(b) => ARSIdentity(UniversalType(k, b))
+      case ARSComposition(h, t) => ARSComposition(UniversalTypeDerivation(UniversalType(k, h.t1), UniversalType(k, h.t2), h.unfold).toARSStep, universalDerivationMap(k, t))
+    
+  }.ensuring(res => res.isValid && res.t1 == UniversalType(k, prd.t1) && res.t2 == UniversalType(k, prd.t2) && res.size == prd.size)
 }
 
 object EvalTypeReductionConfluence {

@@ -14,6 +14,7 @@ import TypeTransformations._
 
 object TypeTermTransformations {
   
+  import TypeTransformationsProperties._
   import TypeTermTransformationsProperties._
 
   /**
@@ -46,13 +47,13 @@ object TypeTermTransformations {
       case TAbs(arg, body) => TAbs(arg, substituteType(body, j + 1, shift(s, 1, 0)))
   }
 
-  // // ↑⁻¹[0 -> ↑¹(arg)]body
-  // @pure
-  // def absSubstitution(body: Term, arg: Term): Term = {
-  //   boundRangeShift(arg, 1, 0, 0, 0)
-  //   boundRangeSubstitutionLemma(body, 0, shift(arg, 1, 0))
-  //   shift(substitute(body, 0, shift(arg, 1, 0)), -1, 0)
-  // }
+  // ↑⁻¹[0 -> ↑¹(arg)]body
+  @pure
+  def absSubstitutionType(body: Term, arg: Type): Term = {
+    boundRangeShift(arg, 1, 0, 0, 0)
+    boundTypeRangeSubstitutionLemma(body, 0, shift(arg, 1, 0))
+    shiftType(substituteType(body, 0, shift(arg, 1, 0)), -1, 0)
+  }
 }
 
 object TypeTermTransformationsProperties {
@@ -387,14 +388,14 @@ object TypeTermTransformationsProperties {
         
       
     }
-  }.ensuring(if d >= c                then !subs.hasFreeTypeVariablesIn(c, -b) && !subs.hasFreeTypeVariablesIn(d - b, -a) && 
+  }.ensuring( if d >= c                then !subs.hasFreeTypeVariablesIn(c, -b) && !subs.hasFreeTypeVariablesIn(d - b, -a) && 
                                             !shiftType(subs, a, d - b).hasFreeTypeVariablesIn(c, -b) && !shiftType(subs, b, c).hasFreeTypeVariablesIn(d, -a) &&
                                             shiftType(shiftType(subs, b, c), a, d) == shiftType(shiftType(subs, a, d - b), b, c) else
-              if d <= c && -a <= c - d then !subs.hasFreeVariablesIn(c, -b) && !subs.hasFreeVariablesIn(d, -a) && 
-                                            !shiftType(subs, a, d).hasFreeVariablesIn(c + a, -b) && !shiftType(subs, b, c).hasFreeTypeVariablesIn(d, -a) &&
+              if d <= c && -a <= c - d then !subs.hasFreeTypeVariablesIn(c, -b) && !subs.hasFreeTypeVariablesIn(d, -a) && 
+                                            !shiftType(subs, a, d).hasFreeTypeVariablesIn(c + a, -b) && !shiftType(subs, b, c).hasFreeTypeVariablesIn(d, -a) &&
                                             shiftType(shiftType(subs, b, c), a, d) == shiftType(shiftType(subs, a, d), b, c + a) else
               if d <= c && -a >= c - d then !subs.hasFreeTypeVariablesIn(c, -b) && !subs.hasFreeTypeVariablesIn(d, -a) && 
-                                            !shiftType(subs, a, d).hasFreeVariablesIn(d, -b) && !shiftType(subs, b, c).hasFreeTypeVariablesIn(d, -a) &&
+                                            !shiftType(subs, a, d).hasFreeTypeVariablesIn(d, -b) && !shiftType(subs, b, c).hasFreeTypeVariablesIn(d, -a) &&
                                             shiftType(shiftType(subs, b, c), a, d) == shiftType(shiftType(subs, a, d), b, d) else
               true)
 
@@ -534,103 +535,103 @@ object TypeTermTransformationsProperties {
   )
 
   
-  // /**
-  //  * States how free variable behave when reducing redexed
-  //  * 
-  //  * * Short version: FV((λ.t1)(t2)) ∩ [c, c + d[ = ∅ => FV(↑⁻¹([0 -> ↑¹t2]t1)) ∩ [c, c + d[ = ∅
-  //  * 
-  //  * Long version:
-  //  * 
-  //  * Preconditions:
-  //  *   - c and d are non negative integers
-  //  *   - FV(arg) ∩ [c, c + d[ = ∅ (arg = t2 in the above statement)
-  //  *   - FV(body) ∩ [c + 1, c + 1 + d[ = ∅ (body = T1 in the above statement)
-  //  *   ! These two conditions imply FV((λ.body)(arg)) ∩ [c, c + d[ = ∅
-  //  * 
-  //  * Postcondition:
-  //  *   FV(↑⁻¹([0 -> ↑¹arg]body)) ∩ [c, c + d[ = ∅
-  //  */
-  // @inlineOnce @opaque @pure
-  // def boundRangeAbsSubst(body: Term, arg: Term, c: BigInt, d: BigInt) = {
-  //   require(c >= 0)
-  //   require(d >= 0)
-  //   require(!arg.hasFreeVariablesIn(c, d))
-  //   require(!body.hasFreeVariablesIn(c + 1, d))
+  /**
+   * States how free variable behave when reducing redexed
+   * 
+   * * Short version: FV((λ.t1)(t2)) ∩ [c, c + d[ = ∅ => FV(↑⁻¹([0 -> ↑¹t2]t1)) ∩ [c, c + d[ = ∅
+   * 
+   * Long version:
+   * 
+   * Preconditions:
+   *   - c and d are non negative integers
+   *   - FV(arg) ∩ [c, c + d[ = ∅ (arg = t2 in the above statement)
+   *   - FV(body) ∩ [c + 1, c + 1 + d[ = ∅ (body = T1 in the above statement)
+   *   ! These two conditions imply FV((λ.body)(arg)) ∩ [c, c + d[ = ∅
+   * 
+   * Postcondition:
+   *   FV(↑⁻¹([0 -> ↑¹arg]body)) ∩ [c, c + d[ = ∅
+   */
+  @inlineOnce @opaque @pure
+  def boundTypeRangeAbsSubst(body: Term, arg: Type, c: BigInt, d: BigInt) = {
+    require(c >= 0)
+    require(d >= 0)
+    require(!arg.hasFreeVariablesIn(c, d))
+    require(!body.hasFreeTypeVariablesIn(c + 1, d))
 
-  //   boundRangeShift(arg, 1, 0, c, d)
-  //   boundRangeSubstitutionLemma(body, 0, shift(arg, 1, 0), d, d, c + 1, c + 1)
-  //   boundRangeShift(arg, 1, 0, 0, 0)
-  //   boundRangeSubstitutionLemma(body, 0, shift(arg, 1, 0))
-  //   boundRangeShift(substitute(body, 0, shift(arg, 1, 0)), -1, 0, c + 1, d)
-  // }.ensuring(!absSubstitution(body, arg).hasFreeVariablesIn(c, d))
+    boundRangeShift(arg, 1, 0, c, d)
+    boundTypeRangeSubstitutionLemma(body, 0, shift(arg, 1, 0), d, d, c + 1, c + 1)
+    boundRangeShift(arg, 1, 0, 0, 0)
+    boundTypeRangeSubstitutionLemma(body, 0, shift(arg, 1, 0))
+    boundTypeRangeShift(substituteType(body, 0, shift(arg, 1, 0)), -1, 0, c + 1, d)
+  }.ensuring(!absSubstitutionType(body, arg).hasFreeTypeVariablesIn(c, d))
 
-  // /**
-  //   * States how shift commutes with redex reduction 
-  //   * 
-  //   * * Short version: shift(↑⁻¹([0 -> ↑¹t2]t1), d, c) = ↑⁻¹([0 -> ↑¹shift(t2, d, c)]shift(t1, d, c + 1))
-  //   * 
-  //   * Long version:
-  //   *  
-  //   * Preconditions:
-  //   *   - c is a non negative integer
-  //   *   - if d < 0 then  FV(arg) ∩ [c, c + d[ = ∅ and FV(body) ∩ [c + 1, c + 1 + d[ = ∅ (where body = T1 and arg = T2
-  //   *     in the above version)
-  //   *   ! Therefore if d < 0 then FV((λ.body)(arg)) ∩ [c, c + d[ = ∅
-  //   * 
-  //   * Postcondition:
-  //   *   shift(↑⁻¹([0 -> ↑¹arg]body), d, c) = ↑⁻¹([0 -> ↑¹shift(arg, d, c)]shift(body, d, c + 1))
-  //   */
-  // @inlineOnce @opaque @pure
-  // def shiftAbsSubstitutionCommutativity(body: Term, arg: Term, d: BigInt, c: BigInt) = {
-  //   require(c >= 0)
-  //   require(d < 0 ==> (!arg.hasFreeVariablesIn(c, -d) && !body.hasFreeVariablesIn(c + 1, -d)))
+  /**
+    * States how shift commutes with redex reduction 
+    * 
+    * * Short version: shift(↑⁻¹([0 -> ↑¹t2]t1), d, c) = ↑⁻¹([0 -> ↑¹shift(t2, d, c)]shift(t1, d, c + 1))
+    * 
+    * Long version:
+    *  
+    * Preconditions:
+    *   - c is a non negative integer
+    *   - if d < 0 then  FV(arg) ∩ [c, c + d[ = ∅ and FV(body) ∩ [c + 1, c + 1 + d[ = ∅ (where body = T1 and arg = T2
+    *     in the above version)
+    *   ! Therefore if d < 0 then FV((λ.body)(arg)) ∩ [c, c + d[ = ∅
+    * 
+    * Postcondition:
+    *   shift(↑⁻¹([0 -> ↑¹arg]body), d, c) = ↑⁻¹([0 -> ↑¹shift(arg, d, c)]shift(body, d, c + 1))
+    */
+  @inlineOnce @opaque @pure
+  def shiftTypeAbsSubstitutionCommutativity(body: Term, arg: Type, d: BigInt, c: BigInt) = {
+    require(c >= 0)
+    require(d < 0 ==> (!arg.hasFreeVariablesIn(c, -d) && !body.hasFreeTypeVariablesIn(c + 1, -d)))
 
-  //   boundRangeShift(arg, 1, 0, 0, 0)
-  //   boundRangeSubstitutionLemma(body, 0, shift(arg, 1, 0))
+    boundRangeShift(arg, 1, 0, 0, 0)
+    boundTypeRangeSubstitutionLemma(body, 0, shift(arg, 1, 0))
 
-  //   if d < 0 then
-  //     boundRangeShift(arg, 1, 0, c, -d)
-  //     boundRangeSubstitutionLemma(body, 0, shift(arg, 1, 0), -d, -d, c + 1, c + 1)
-  //     boundRangeShift(substitute(body, 0, shift(arg, 1, 0)), -1, 0, c + 1, -d)
-  //     shiftCommutativityNegNeg(substitute(body, 0, shift(arg, 1, 0)), -1, 0, d, c)
-  //     shiftSubstitutionCommutativity(body, d, c + 1, 0, shift(arg, 1, 0))
-  //     shiftCommutativityPosNeg(arg, 1, 0, d, c + 1)
-  //   else
-  //     shiftCommutativityNegPos(substitute(body, 0, shift(arg, 1, 0)), -1, 0, d, c)
-  //     shiftSubstitutionCommutativity(body, d, c + 1, 0, shift(arg, 1, 0))
-  //     shiftCommutativityPosPos(arg, d, c, 1, 0)
-  // }.ensuring(_ => shift(absSubstitution(body, arg), d, c) == absSubstitution(shift(body, d, c + 1), shift(arg, d, c)))
+    if d < 0 then
+      boundRangeShift(arg, 1, 0, c, -d)
+      boundTypeRangeSubstitutionLemma(body, 0, shift(arg, 1, 0), -d, -d, c + 1, c + 1)
+      boundTypeRangeShift(substituteType(body, 0, shift(arg, 1, 0)), -1, 0, c + 1, -d)
+      shiftTypeCommutativityNegNeg(substituteType(body, 0, shift(arg, 1, 0)), -1, 0, d, c)
+      shiftTypeSubstitutionCommutativity(body, d, c + 1, 0, shift(arg, 1, 0))
+      shiftCommutativityPosNeg(arg, 1, 0, d, c + 1)
+    else
+      shiftTypeCommutativityNegPos(substituteType(body, 0, shift(arg, 1, 0)), -1, 0, d, c)
+      shiftTypeSubstitutionCommutativity(body, d, c + 1, 0, shift(arg, 1, 0))
+      shiftCommutativityPosPos(arg, d, c, 1, 0)
+  }.ensuring(_ => shiftType(absSubstitutionType(body, arg), d, c) == absSubstitutionType(shiftType(body, d, c + 1), shift(arg, d, c)))
 
-  // /**
-  //   * States how substitution commutes with redex reduction 
-  //   * 
-  //   * * Short version: If 0 ∉ FV(s) then [j -> s]↑⁻¹([0 -> ↑¹t2]t1) = ↑⁻¹([0 -> ↑¹[j -> s]t2][j + 1 -> ↑¹s]t1)
-  //   * 
-  //   * Long version: (where body = t1 and arg = t2)
-  //   *  
-  //   * Preconditions:
-  //   *   - j is a non negative variable
-  //   *   - FV(s) ∩ [0, 1[ = ∅
-  //   * 
-  //   * Postcondition:
-  //   *   [j -> s]↑⁻¹([0 -> ↑¹arg]body) = ↑⁻¹([0 -> ↑¹[j -> s]arg][j + 1 -> ↑¹s]body
-  //   */
-  // @inlineOnce @opaque @pure
-  // def absSubstSubstCommutativity(body: Term, arg: Term, j: BigInt, s: Term): Unit = {
-  //   require(j >= 0)
-  //   require(!s.hasFreeVariablesIn(0, 1))
+  /**
+    * States how substitution commutes with redex reduction 
+    * 
+    * * Short version: If 0 ∉ FV(s) then [j -> s]↑⁻¹([0 -> ↑¹t2]t1) = ↑⁻¹([0 -> ↑¹[j -> s]t2][j + 1 -> ↑¹s]t1)
+    * 
+    * Long version: (where body = t1 and arg = t2)
+    *  
+    * Preconditions:
+    *   - j is a non negative variable
+    *   - FV(s) ∩ [0, 1[ = ∅
+    * 
+    * Postcondition:
+    *   [j -> s]↑⁻¹([0 -> ↑¹arg]body) = ↑⁻¹([0 -> ↑¹[j -> s]arg][j + 1 -> ↑¹s]body
+    */
+  @inlineOnce @opaque @pure
+  def absSubstSubstCommutativity(body: Term, arg: Type, j: BigInt, s: Type): Unit = {
+    require(j >= 0)
+    require(!s.hasFreeVariablesIn(0, 1))
 
-  //   boundRangeShift(arg, 1, 0, 0, 0)
-  //   boundRangeSubstitutionLemma(body, 0, shift(arg, 1, 0))
-  //   shiftSubstitutionCommutativity(substitute(body, 0, shift(arg, 1, 0)), -1, 0, j, s)
-  //   boundRangeShift(s, 1, 0, 0, 0)
-  //   substitutionCommutativity(body, 0, shift(arg, 1, 0), j + 1, shift(s, 1, 0))
-  //   shiftSubstitutionCommutativity(arg, 1, 0, j, s)
+    boundRangeShift(arg, 1, 0, 0, 0)
+    boundTypeRangeSubstitutionLemma(body, 0, shift(arg, 1, 0))
+    shiftTypeSubstitutionCommutativity(substituteType(body, 0, shift(arg, 1, 0)), -1, 0, j, s)
+    boundRangeShift(s, 1, 0, 0, 0)
+    substitutionTypeCommutativity(body, 0, shift(arg, 1, 0), j + 1, shift(s, 1, 0))
+    shiftSubstitutionCommutativity(arg, 1, 0, j, s)
 
-  // }.ensuring(
-  //   substitute(absSubstitution(body, arg), j, s)
-  //   ==
-  //   absSubstitution(substitute(body, j + 1, shift(s, 1, 0)), substitute(arg, j, s))
-  // )    
+  }.ensuring(
+    substituteType(absSubstitutionType(body, arg), j, s)
+    ==
+    absSubstitutionType(substituteType(body, j + 1, shift(s, 1, 0)), substitute(arg, j, s))
+  )    
 }
      

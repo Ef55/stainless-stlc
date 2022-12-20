@@ -105,10 +105,10 @@ object KindingProperties{
   import LambdaOmega._
   import Kinding._
   import ListProperties._
-  // import ParallelTypeReduction._
-  // import ParallelTypeReductionProperties._
-  // import ParallelTypeReductionValidity._
-  // import ARS._
+  import ParallelTypeReduction._
+  import ParallelTypeReductionProperties._
+  import ParallelTypeReductionValidity._
+  import ARS._
 
   @inlineOnce @opaque @pure
   def kindDerivationUniqueness(kd1: KindDerivation, kd2: KindDerivation): Unit = {
@@ -391,90 +391,90 @@ object KindingProperties{
     ( res.k == bkd.k)
   )
 
-  // @opaque @inlineOnce @pure
-  // def kindPreservation(kd: KindDerivation, red: ParallelReductionDerivation): KindDerivation = {
-  //   decreases(kd.size + red.size)
-  //   require(kd.isSound)
-  //   require(red.isSound)
-  //   require(red.type1 == kd.typ)
+  @opaque @inlineOnce @pure
+  def kindPreservation(kd: KindDerivation, red: ParallelReductionDerivation): KindDerivation = {
+    decreases(kd.size + red.size)
+    require(kd.isSound)
+    require(red.isSound)
+    require(red.type1 == kd.typ)
 
-  //   (kd, red) match
-  //     case (_, ReflDerivation(_)) => kd
-  //     case (AbsKindingDerivation(env, k, AbsType(argKind, body), bkd), AbsTypeDerivation(t1, t2, rd)) => 
-  //       val bodyPreservation = kindPreservation(bkd, rd)
-  //       AbsKindingDerivation(env, k, t2, bodyPreservation)
-  //     case (ArrowKindingDerivation(env, k, ArrowType(t11, t12), kd1, kd2), ArrowTypeDerivation(_, ArrowType(t21, t22), brd1, brd2)) =>
-  //       val bodyPreservation1 = kindPreservation(kd1, brd1)
-  //       val bodyPreservation2 = kindPreservation(kd2, brd2)
-  //       ArrowKindingDerivation(env, k, ArrowType(t21, t22), bodyPreservation1, bodyPreservation2)        
-  //     case (AppKindingDerivation(env, k, AppType(typ1, typ2), kd1, kd2), AppTypeDerivation(t1, AppType(t21, t22), brd1, brd2)) => 
-  //       val bodyPreservation1 = kindPreservation(kd1, brd1)
-  //       val bodyPreservation2 = kindPreservation(kd2, brd2)
-  //       AppKindingDerivation(env, k, AppType(t21, t22), bodyPreservation1, bodyPreservation2)
-  //     case (AppKindingDerivation(env, k, AppType(AbsType(argK1, body11), arg11), AbsKindingDerivation(_, _, _, bkd), kd2), AppAbsTypeDerivation(AbsType(argK2, body21), arg21, body22, arg22, rdBody, rdArg)) =>
-  //       val bodyPreservation = kindPreservation(bkd, rdBody)
-  //       val argPreservation = kindPreservation(kd2, rdArg)
-  //       kindPreservationUnderAbsSubst(bodyPreservation, argPreservation)
-  //     case (UniversalKindingDerivation(env, k, AbsType(argKind, body), bkd), UniversalTypeDerivation(t1, t2, rd)) => 
-  //       val bodyPreservation = kindPreservation(bkd, rd)
-  //       UniversalKindingDerivation(env, k, t2, bodyPreservation)
-  //     case _ => Unreachable
-  // }.ensuring(res => 
-  //   res.isSound &&
-  //   ( res.typ == red.type2 ) &&
-  //   ( res.env == kd.env ) &&
-  //   ( res.k == kd.k)
-  // )
+    (kd, red) match
+      case (_, ReflDerivation(_)) => kd
+      case (AbsKindingDerivation(env, k, AbsType(argKind, body), bkd), AbsTypeDerivation(t1, t2, rd)) => 
+        val bodyPreservation = kindPreservation(bkd, rd)
+        AbsKindingDerivation(env, k, t2, bodyPreservation)
+      case (ArrowKindingDerivation(env, k, ArrowType(t11, t12), kd1, kd2), ArrowTypeDerivation(_, ArrowType(t21, t22), brd1, brd2)) =>
+        val bodyPreservation1 = kindPreservation(kd1, brd1)
+        val bodyPreservation2 = kindPreservation(kd2, brd2)
+        ArrowKindingDerivation(env, k, ArrowType(t21, t22), bodyPreservation1, bodyPreservation2)        
+      case (AppKindingDerivation(env, k, AppType(typ1, typ2), kd1, kd2), AppTypeDerivation(t1, AppType(t21, t22), brd1, brd2)) => 
+        val bodyPreservation1 = kindPreservation(kd1, brd1)
+        val bodyPreservation2 = kindPreservation(kd2, brd2)
+        AppKindingDerivation(env, k, AppType(t21, t22), bodyPreservation1, bodyPreservation2)
+      case (AppKindingDerivation(env, k, AppType(AbsType(argK1, body11), arg11), AbsKindingDerivation(_, _, _, bkd), kd2), AppAbsTypeDerivation(AbsType(argK2, body21), arg21, body22, arg22, rdBody, rdArg)) =>
+        val bodyPreservation = kindPreservation(bkd, rdBody)
+        val argPreservation = kindPreservation(kd2, rdArg)
+        kindPreservationUnderAbsSubst(bodyPreservation, argPreservation)
+      case (UniversalKindingDerivation(env, k, UniversalType(argKind, body), bkd), UniversalTypeDerivation(t1, t2, rd)) => 
+        val bodyPreservation = kindPreservation(bkd, rd)
+        UniversalKindingDerivation(env, k, t2, bodyPreservation)
+      case _ => Unreachable
+  }.ensuring(res => 
+    res.isSound &&
+    ( res.typ == red.type2 ) &&
+    ( res.env == kd.env ) &&
+    ( res.k == kd.k)
+  )
 
-  // @opaque @inlineOnce @pure
-  // def kindMultiStepPreservation(kd: KindDerivation, red: MultiStepParallelReduction): KindDerivation = {
-  //   decreases(red)
-  //   require(kd.isSound)
-  //   require(red.isValid)
-  //   require(red.t1 == kd.typ)
+  @opaque @inlineOnce @pure
+  def kindMultiStepPreservation(kd: KindDerivation, red: MultiStepParallelReduction): KindDerivation = {
+    decreases(red)
+    require(kd.isSound)
+    require(red.isValid)
+    require(red.t1 == kd.typ)
 
-  //   red match
-  //     case ARSIdentity(_) => kd
-  //     case ARSComposition(h, t) => 
-  //       assert(h.isValid)
-  //       val headPres = kindPreservation(kd, h.unfold)
-  //       kindMultiStepPreservation(headPres, t)
-  // }.ensuring(res => 
-  //   res.isSound &&
-  //   ( res.typ == red.t2 ) &&
-  //   ( res.env == kd.env ) &&
-  //   ( res.k == kd.k)
-  // )
+    red match
+      case ARSIdentity(_) => kd
+      case ARSComposition(h, t) => 
+        assert(h.isValid)
+        val headPres = kindPreservation(kd, h.unfold)
+        kindMultiStepPreservation(headPres, t)
+  }.ensuring(res => 
+    res.isSound &&
+    ( res.typ == red.t2 ) &&
+    ( res.env == kd.env ) &&
+    ( res.k == kd.k)
+  )
 
-  // @opaque @inlineOnce @pure
-  // def kindEvalMultiStepPreservation(kd: KindDerivation, red: EvalTypeReduction.MultiStepEvalReduction): KindDerivation = {
-  //   require(kd.isSound)
-  //   require(red.isValid)
-  //   require(red.t1 == kd.typ)
+  @opaque @inlineOnce @pure
+  def kindEvalMultiStepPreservation(kd: KindDerivation, red: EvalTypeReduction.MultiStepEvalReduction): KindDerivation = {
+    require(kd.isSound)
+    require(red.isValid)
+    require(red.t1 == kd.typ)
 
-  //   kindMultiStepPreservation(kd, ARSEquivalences.evalToParallel(red))
+    kindMultiStepPreservation(kd, ARSEquivalences.evalToParallel(red))
 
-  // }.ensuring(res => 
-  //   res.isSound &&
-  //   ( res.typ == red.t2 ) &&
-  //   ( res.env == kd.env ) &&
-  //   ( res.k == kd.k)
-  // )
+  }.ensuring(res => 
+    res.isSound &&
+    ( res.typ == red.t2 ) &&
+    ( res.env == kd.env ) &&
+    ( res.k == kd.k)
+  )
 
-  // @opaque @inlineOnce @pure
-  // def kindEquivalencePreservation(kd1: KindDerivation, kd2: KindDerivation, eq: ParallelEquivalenceSeq): Unit  = {
-  //   require(kd1.isSound)
-  //   require(kd2.isSound)
-  //   require(kd1.env == kd2.env)
-  //   require(eq.isValid && eq.isDeepValid)
-  //   require(eq.t1 == kd1.typ)
-  //   require(eq.t2 == kd2.typ)
+  @opaque @inlineOnce @pure
+  def kindEquivalencePreservation(kd1: KindDerivation, kd2: KindDerivation, eq: ParallelEquivalenceSeq): Unit  = {
+    require(kd1.isSound)
+    require(kd2.isSound)
+    require(kd1.env == kd2.env)
+    require(eq.isValid && eq.isDeepValid)
+    require(eq.t1 == kd1.typ)
+    require(eq.t2 == kd2.typ)
 
-  //   val (prd1, prd2) = churchRosser(eq)
-  //   val res1 = kindMultiStepPreservation(kd1, prd1)
-  //   val res2 = kindMultiStepPreservation(kd2, prd2)
-  //   kindDerivationUniqueness(res1, res2)
+    val (prd1, prd2) = churchRosser(eq)
+    val res1 = kindMultiStepPreservation(kd1, prd1)
+    val res2 = kindMultiStepPreservation(kd2, prd2)
+    kindDerivationUniqueness(res1, res2)
 
-  // }.ensuring(kd1.k == kd2.k)
+  }.ensuring(kd1.k == kd2.k)
 
 }

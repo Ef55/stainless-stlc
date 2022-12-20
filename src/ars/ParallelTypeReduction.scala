@@ -251,8 +251,6 @@ object ParallelTypeReductionValidity{
       case ARSComposition(h, t) =>
         symmClosureInverseDeepValid(t)
         inverseDeepValid(h.unfold)
-        assert(h.unfold.inverse.isDeepValid)
-        assert(ARS1Fold(h.unfold.inverse.toARSStep).isDeepValid)
         concatDeepValid(symmClosureInverse(t), ARS1Fold(h.unfold.inverse.toARSStep))
   }.ensuring(symmClosureInverse(eq).isDeepValid)
 
@@ -554,9 +552,9 @@ object ParallelTypeReductionProperties {
         case (AbsTypeDerivation(AbsType(k1, b1), AbsType(k2, b2), prd11), AbsTypeDerivation(AbsType(k3, b3), AbsType(k4, b4), prd12)) =>
           val (dP1, dP2) = diamondProperty(prd11, prd12)
           (AbsTypeDerivation(AbsType(k2, dP1.type1), AbsType(k2, dP1.type2), dP1), AbsTypeDerivation(AbsType(k2, dP2.type1), AbsType(k2, dP2.type2), dP2))
-        // case (UniversalTypeDerivation(UniversalType(k1, b1), UniversalType(k2, b2), prd11), UniversalTypeDerivation(UniversalType(k3, b3), UniversalType(k4, b4), prd12)) =>
-        //   val (dP1, dP2) = diamondProperty(prd11, prd12)
-        //   (UniversalTypeDerivation(UniversalType(k2, dP1.type1), UniversalType(k2, dP1.type2), dP1), UniversalTypeDerivation(UniversalType(k2, dP2.type1), UniversalType(k2, dP2.type2), dP2))
+        case (UniversalTypeDerivation(UniversalType(k1, b1), UniversalType(k2, b2), prd11), UniversalTypeDerivation(UniversalType(k3, b3), UniversalType(k4, b4), prd12)) =>
+          val (dP1, dP2) = diamondProperty(prd11, prd12)
+          (UniversalTypeDerivation(UniversalType(k2, dP1.type1), UniversalType(k2, dP1.type2), dP1), UniversalTypeDerivation(UniversalType(k2, dP2.type1), UniversalType(k2, dP2.type2), dP2))
         case (AppTypeDerivation(AppType(t11, t12), AppType(t21, t22), prd11, prd12), AppTypeDerivation(AppType(t31, t32), AppType(t41, t42), prd21, prd22)) =>
           val (dP11, dP12) = diamondProperty(prd11, prd21)
           val (dP21, dP22) = diamondProperty(prd12, prd22)
@@ -625,7 +623,6 @@ object ParallelTypeReductionProperties {
         assert(h.isValid) //needed
         val (dP1, dP2) = diamondProperty(h.unfold, h2.unfold)
         val (conf1, conf2) = semiConfluence(t, dP1.toARSStep)
-        //assert(dP2.toARSStep.isValid) //needed
         (conf1, ARSComposition(dP2.toARSStep, conf2))
   }.ensuring(res =>
     res._1.t2 == res._2.t2 &&
@@ -705,7 +702,6 @@ object ParallelTypeReductionProperties {
       case ARSComposition(h, t) => 
         val (cr1, cr2) = churchRosser(t)
         assert(h.isValid) //needed
-        assert(h.unfold.t1 == eq.t1) //needed
         h.unfold match
           case ARSBaseStepClass(s) => (ARSComposition(s, cr1), cr2)
           case ARSSymmStepClass(s) => 
@@ -859,33 +855,13 @@ object ParallelTypeReductionProperties {
     (prd1, prd2) match
       case (ARSIdentity(t1), ARSIdentity(t2))               => ARSIdentity(AppType(t1, t2))
       case (ARSComposition(h1, t1), ARSIdentity(t2))        => 
-        //needed
-        assert(max(t1.size, prd2.size) + 1 == prd1.size)
-        assert(h1.isValid)
-        assert(prd1.t1 == h1.t1)
-        assert(prd2.t1 == t2)
-        assert(prd1.t2 == t1.t2)
-        assert(prd2.t2 == t2)
+        assert(max(t1.size, prd2.size) + 1 == prd1.size) //needed
         ARSComposition(AppTypeDerivation(AppType(h1.t1, t2), AppType(h1.t2, t2), h1.unfold, ReflDerivation(t2)).toARSStep, appDerivationMap(t1, prd2))
       case (ARSIdentity(t1), ARSComposition(h2, t2))        => 
-        //needed
-        assert(max(prd1.size, t2.size) + 1 == prd2.size)
-        assert(h2.isValid)
-        assert(prd1.t1 == t1)
-        assert(prd2.t1 == h2.t1)
-        assert(prd1.t2 == t1)
-        assert(prd2.t2 == t2.t2)
+        assert(max(prd1.size, t2.size) + 1 == prd2.size) //needed
         ARSComposition(AppTypeDerivation(AppType(t1, h2.t1), AppType(t1, h2.t2), ReflDerivation(t1), h2.unfold).toARSStep, appDerivationMap(prd1, t2))
       case (ARSComposition(h1, t1), ARSComposition(h2, t2)) => 
-        //needed
-        assert(h1.isValid)
-        assert(h2.isValid)
-        assert(prd1.t1 == h1.t1)
-        assert(prd2.t1 == h2.t1)
-        assert(prd1.t2 == t1.t2)
-        assert(prd2.t2 == t2.t2)
-        maxAdd(t1.size, t2.size, 1)
-        assert(ARSComposition(AppTypeDerivation(AppType(h1.t1, h2.t1), AppType(h1.t2, h2.t2), h1.unfold, h2.unfold).toARSStep, appDerivationMap(t1, t2)).size == max(prd1.size, prd2.size))
+        maxAdd(t1.size, t2.size, 1) //needed
         ARSComposition(AppTypeDerivation(AppType(h1.t1, h2.t1), AppType(h1.t2, h2.t2), h1.unfold, h2.unfold).toARSStep, appDerivationMap(t1, t2))
     
   }.ensuring(res => res.isValid && res.t1 == AppType(prd1.t1, prd2.t1) && res.t2 == AppType(prd1.t2, prd2.t2) && res.size == max(prd1.size, prd2.size))

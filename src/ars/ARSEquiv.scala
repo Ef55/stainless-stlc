@@ -44,6 +44,9 @@ object ARSEquivalences{
       case ParallelTypeReduction.AbsTypeDerivation(AbsType(k1, b1), AbsType(k2, b2), prd) =>
         val conv = parallelToEval(prd)
         EvalTypeReductionProperties.absDerivationMap(k1, conv)
+      case ParallelTypeReduction.UniversalTypeDerivation(UniversalType(k1, b1), UniversalType(k2, b2), prd) =>
+        val conv = parallelToEval(prd)
+        EvalTypeReductionProperties.universalDerivationMap(k1, conv)
       case ParallelTypeReduction.AppAbsTypeDerivation(AbsType(k, body1), arg1, body2, arg2, prd1, prd2) =>
         val conv1 = parallelToEval(prd1)
         val conv2 = parallelToEval(prd2)
@@ -89,6 +92,7 @@ object ARSEquivalences{
       case EvalTypeReduction.AppTypeDerivationL(AppType(t11, t12), AppType(t21, t22), rd) => ParallelTypeReduction.AppTypeDerivation(AppType(t11, t12), AppType(t21, t22), evalToParallel(rd), ParallelTypeReduction.ReflDerivation(t12))
       case EvalTypeReduction.AppTypeDerivationR(AppType(t11, t12), AppType(t21, t22), rd) => ParallelTypeReduction.AppTypeDerivation(AppType(t11, t12), AppType(t21, t22), ParallelTypeReduction.ReflDerivation(t11), evalToParallel(rd))
       case EvalTypeReduction.AbsTypeDerivation(AbsType(k1, b1), AbsType(k2, b2), rd) => ParallelTypeReduction.AbsTypeDerivation(AbsType(k1, b1), AbsType(k2, b2), evalToParallel(rd))
+      case EvalTypeReduction.UniversalTypeDerivation(UniversalType(k1, b1), UniversalType(k2, b2), rd) => ParallelTypeReduction.UniversalTypeDerivation(UniversalType(k1, b1), UniversalType(k2, b2), evalToParallel(rd))
       case EvalTypeReduction.AppAbsTypeDerivation(abs, arg) => ParallelTypeReduction.AppAbsTypeDerivation(abs, arg, abs.body, arg, ParallelTypeReduction.ReflDerivation(abs.body), ParallelTypeReduction.ReflDerivation(arg)))
     
   }.ensuring(res => res.isSound && res.type1 == prd.type1 && res.type2 == prd.type2)
