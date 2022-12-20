@@ -756,11 +756,11 @@ object ParallelTypeReductionProperties {
     
   }.ensuring(
     res => 
-      res._1.isValid //&&
-      //res._2.isValid &&
-      //res._1.t1 == s1 &&
-      //res._2.t1 == s2 &&
-      //red.t2 == ArrowType(res._1.t2, res._2.t2)
+      res._1.isValid &&
+      res._2.isValid &&
+      res._1.t1 == s1 &&
+      res._2.t1 == s2 &&
+      red.t2 == ArrowType(res._1.t2, res._2.t2)
   )
 
   @opaque @inlineOnce @pure

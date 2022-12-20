@@ -27,6 +27,8 @@ object TermTransformations {
       case Var(k) => if k < c then Var(k) else Var(k + d)
       case Abs(arg, body) => Abs(arg, shift(body, d, c + 1))
       case App(t1, t2) => App(shift(t1, d, c), shift(t2, d, c))
+      case TApp(body, typ) => TApp(shift(body, d, c), typ)
+      case TAbs(arg, body) => TAbs(arg, shift(body, d, c))
   }.ensuring(_.size == t.size)
 
   /**
@@ -39,6 +41,8 @@ object TermTransformations {
       case Var(k) => if j == k then s else t  
       case Abs(k, b) => Abs(k, substitute(b, j + 1, shift(s, 1, 0)))
       case App(t1, t2) => App(substitute(t1, j, s), substitute(t2, j, s))
+      case TApp(body, typ) => TApp(substitute(body, j, s), typ)
+      case TAbs(arg, body) => TAbs(arg, substitute(body, j, s))
   }
 
   // ↑⁻¹[0 -> ↑¹(arg)]body
@@ -80,6 +84,8 @@ object TermTransformationsProperties {
       case App(t1, t2) => 
         boundRangeSubstitutionIdentity(t1, j, typ)
         boundRangeSubstitutionIdentity(t2, j, typ)
+      case TApp(body, _) => boundRangeSubstitutionIdentity(body, j, typ)
+      case TAbs(_, body) => boundRangeSubstitutionIdentity(body, j, typ)
 
   }.ensuring(substitute(t, j, typ) == t)
 
@@ -98,6 +104,8 @@ object TermTransformationsProperties {
       case App(t1, t2) => 
         shift0Identity(t1, c)
         shift0Identity(t2, c)
+      case TApp(body, _) => shift0Identity(body, c)
+      case TAbs(_, body) => shift0Identity(body, c)
 
   }.ensuring(shift(t, 0, c) == t)
 
@@ -148,6 +156,8 @@ object TermTransformationsProperties {
       case App(t1, t2) => 
         boundRangeShiftComposition(t1, a, b, c, d)
         boundRangeShiftComposition(t2, a, b, c, d)
+      case TApp(body, _) => boundRangeShiftComposition(body, a, b, c, d)
+      case TAbs(_, body) => boundRangeShiftComposition(body, a, b, c, d)
   }.ensuring(
     (b < 0 ==> !shift(t, a, c).hasFreeVariablesIn(d, -b)) &&
     shift(shift(t, a, c), b, d) == shift(t, a + b, c)
@@ -171,6 +181,8 @@ object TermTransformationsProperties {
       case App(t1, t2) => 
         boundRangeShift(t1, d, c, a, b)
         boundRangeShift(t2, d, c, a, b)
+      case TApp(body, _) => boundRangeShift(body, d, c, a, b)
+      case TAbs(_, body) => boundRangeShift(body, d, c, a, b)
 
   }.ensuring(
       !t.hasFreeVariablesIn(a, b)
@@ -215,6 +227,8 @@ object TermTransformationsProperties {
       case App(t1, t2) => 
         boundRangeSubstitutionLemma(t1, j, s)
         boundRangeSubstitutionLemma(t2, j, s)
+      case TApp(body, _) => boundRangeSubstitutionLemma(body, j, s)
+      case TAbs(_, body) => boundRangeSubstitutionLemma(body, j, s)
 
   }.ensuring(!substitute(t, j, s).hasFreeVariablesIn(j, 1))
 
@@ -236,6 +250,8 @@ object TermTransformationsProperties {
         shiftCommutativityPosPos(t2, b, c, a, d)
       case Var(_) => ()
       case Abs(_, t) => shiftCommutativityPosPos(t, b, c+1, a, d+1) 
+      case TApp(body, _) => shiftCommutativityPosPos(body, b, c, a, d) 
+      case TAbs(_, body) => shiftCommutativityPosPos(body, b, c, a, d) 
       
   }.ensuring(
     if d <= c                then shift(shift(subs, b, c), a, d) == shift(shift(subs, a, d), b, c + a) else
@@ -261,7 +277,9 @@ object TermTransformationsProperties {
         shiftCommutativityPosNeg(t1, b, c, a, d)
         shiftCommutativityPosNeg(t2, b, c, a, d)
       case Var(_) => ()
-      case Abs(_, t) => shiftCommutativityPosNeg(t, b, c+1, a, d+1) 
+      case Abs(_, t) => shiftCommutativityPosNeg(t, b, c+1, a, d+1)
+      case TApp(body, _) => shiftCommutativityPosNeg(body, b, c, a, d)
+      case TAbs(_, body) => shiftCommutativityPosNeg(body, b, c, a, d)
 
   }.ensuring(
     if d >= c && b >= d - c  then !shift(subs, b, c).hasFreeVariablesIn(d, -a) && !subs.hasFreeVariablesIn(c, -a) &&
@@ -294,6 +312,8 @@ object TermTransformationsProperties {
         shiftCommutativityNegPos(t2, b, c, a, d)
       case Var(_) => ()
       case Abs(_, t) => shiftCommutativityNegPos(t, b, c+1, a, d+1) 
+      case TApp(body, _) => shiftCommutativityNegPos(body, b, c, a, d)
+      case TAbs(_, body) => shiftCommutativityNegPos(body, b, c, a, d)
       
     }
   }.ensuring(if d >= c                then !subs.hasFreeVariablesIn(c, -b) && !shift(subs, a, d - b).hasFreeVariablesIn(c, - b) && 
@@ -322,6 +342,8 @@ object TermTransformationsProperties {
         shiftCommutativityNegNeg(t2, b, c, a, d)
       case Var(_) => ()
       case Abs(_, t) => shiftCommutativityNegNeg(t, b, c+1, a, d+1) 
+      case TApp(body, _) => shiftCommutativityNegNeg(body, b, c, a, d)
+      case TAbs(_, body) => shiftCommutativityNegNeg(body, b, c, a, d)
       
     }
   }.ensuring(if d >= c                then !subs.hasFreeVariablesIn(c, -b) && !subs.hasFreeVariablesIn(d - b, -a) && 
@@ -361,7 +383,7 @@ object TermTransformationsProperties {
               shift0Identity(subs, c)
           else ()
         else ()
-      case Abs(argK, t) => {
+      case Abs(argK, t) => 
         if s >= 0 then
           shiftCommutativityPosPos(subs, s, c, 1, 0)
         else
@@ -371,7 +393,9 @@ object TermTransformationsProperties {
           else
             shiftCommutativityPosPos(subs, -s, c, 1, 0)
         shiftSubstitutionCommutativity(t, s, c+1, k+1, shift(subs, 1, 0))
-      }
+
+      case TApp(body, _) => shiftSubstitutionCommutativity(body, s, c, k, subs)
+      case TAbs(_, body) => shiftSubstitutionCommutativity(body, s, c, k, subs)
     }
   }.ensuring(
     if s >= 0 then
@@ -426,6 +450,8 @@ object TermTransformationsProperties {
           boundRangeShift(s, 1, 0, 0, a)
           boundRangeIncreaseCutoff(shift(s, 1, 0), 0, 1 , a + 1)
         boundRangeSubstitutionLemma(body, j + 1, shift(s, 1, 0), a, b, c + 1, d + 1)
+      case TApp(body, _) => boundRangeSubstitutionLemma(body, j, s, a, b, c, d)
+      case TAbs(_, body) => boundRangeSubstitutionLemma(body, j, s, a, b, c, d)
   }.ensuring(
     if c <= d then
       if c + a >= d + b               then !substitute(t, j, s).hasFreeVariablesIn(d, b) else
@@ -470,6 +496,8 @@ object TermTransformationsProperties {
         shiftSubstitutionCommutativity(s, 1, 0, k, u)
         boundRangeShift(u, 1, 0, j, 1)
         substitutionCommutativity(b, j+1, shift(s, 1, 0), k+1, shift(u, 1, 0))
+      case TApp(body, _) => substitutionCommutativity(body, j, s, k, u)
+      case TAbs(_, body) => substitutionCommutativity(body, j, s, k, u)
   }.ensuring(
     substitute(substitute(t, j, s), k, u)
     ==

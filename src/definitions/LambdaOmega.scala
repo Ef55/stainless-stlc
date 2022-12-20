@@ -137,7 +137,7 @@ object LambdaOmega {
       * Returns whether the term is a value as defined in Figure 29-1 of TAPL
       */
     @pure
-    def isValue: Boolean = isInstanceOf[Abs]
+    def isValue: Boolean = isInstanceOf[Abs] || isInstanceOf[TAbs]
 
     /**
       * Set of free variables of a term also noted FV(t).
@@ -155,7 +155,19 @@ object LambdaOmega {
         case TApp(b, _) => b.freeVars
         case TAbs(_, b) => b.freeVars
         case Var(j) => Cons(j, Nil())
-    }            
+    }
+
+    @pure
+    def freeTypeVars: List[BigInt] = {
+      decreases(this)
+      this match
+        case App(t1, t2) => t1.freeTypeVars ++ t2.freeTypeVars
+        case Abs(argT, b) => argT.freeVars ++ b.freeTypeVars
+        case TApp(b, arg) => b.freeTypeVars ++ arg.freeVars
+        case TAbs(_, b) => b.freeTypeVars.filter(x => x > 0).map(x => x - 1)
+        case Var(j) => Nil()
+    }   
+
     /**
       * Checks whether there are free variable occurences in the range [c, c + d[.
       * Formally the function returns whether FV(T) ∩ [c, c + d[ ≠ ∅
@@ -182,6 +194,20 @@ object LambdaOmega {
 
     }.ensuring(res => (d == 0) ==> !res)
 
+    @pure
+    def hasFreeTypeVariablesIn(c: BigInt, d: BigInt): Boolean = {
+      decreases(this)
+      require(c >= 0)
+      require(d >= 0)
+      this match
+        case Var(k)          => false
+        case Abs(argT, body) => argT.hasFreeVariablesIn(c, d) || body.hasFreeTypeVariablesIn(c, d)
+        case App(t1, t2)     => t1.hasFreeTypeVariablesIn(c, d) || t2.hasFreeTypeVariablesIn(c, d)
+        case TApp(b, arg)    => b.hasFreeTypeVariablesIn(c, d) || arg.hasFreeVariablesIn(c, d)
+        case TAbs(_, b)      => b.hasFreeTypeVariablesIn(c+1, d)
+
+    }.ensuring(res => (d == 0) ==> !res)
+
     /**
       * Checks whether there are free variable greater or equal to c in the term.
       * Formally the function returns whether FV(t) ∩ [c, ∞[ ≠ ∅
@@ -189,6 +215,7 @@ object LambdaOmega {
       * 
       * For the equivalence between this definition and the classical one cf. hasFreeVariablesAboveSoundness
       */
+    @pure
     def hasFreeVariablesAbove(c: BigInt): Boolean = {
       decreases(this)
       require(c >= 0)
@@ -200,6 +227,18 @@ object LambdaOmega {
         case TAbs(_, b)       => b.hasFreeVariablesAbove(c)
     }
 
+    @pure
+    def hasFreeTypeVariablesAbove(c: BigInt): Boolean = {
+      decreases(this)
+      require(c >= 0)
+      this match
+        case Var(k)          => false
+        case Abs(argT, body) => argT.hasFreeVariablesAbove(c) || body.hasFreeTypeVariablesAbove(c)
+        case App(t1, t2)     => t1.hasFreeTypeVariablesAbove(c) || t2.hasFreeTypeVariablesAbove(c)
+        case TApp(b, arg)    => b.hasFreeTypeVariablesAbove(c) || arg.hasFreeVariablesAbove(c)
+        case TAbs(_, b)      => b.hasFreeTypeVariablesAbove(c+1)
+    }
+
     /**
       * Checks whether FV(T) = ∅
       * ! The body of the function relies on an inductive definition and not a set based one,
@@ -209,6 +248,9 @@ object LambdaOmega {
       */
     @pure
     def isClosed: Boolean = !hasFreeVariablesAbove(0)
+
+    @pure
+    def isTypeClosed: Boolean = !hasFreeTypeVariablesAbove(0)
 
     /**
       * Measure for terms
@@ -620,6 +662,30 @@ object LambdaOmegaProperties{
 
     }.ensuring(!t.hasFreeVariablesIn(c, d2))
 
+    @inlineOnce @opaque @pure
+    def boundTypeRangeDecrease(t: Term, c: BigInt, d1: BigInt, d2: BigInt): Unit = {
+      decreases(t)
+      require(d1 >= 0 && d2 >= 0)
+      require(c >= 0)
+      require(d2 <= d1)
+      require(!t.hasFreeTypeVariablesIn(c, d1))
+
+      t match
+        case Var(v) => ()
+        case Abs(argT, body) => 
+          Types.boundRangeDecrease(argT, c, d1, d2)
+          boundTypeRangeDecrease(body, c, d1, d2)
+        case App(t1, t2) => 
+          boundTypeRangeDecrease(t1, c, d1, d2)
+          boundTypeRangeDecrease(t2, c, d1, d2)
+        case TApp(b, arg) => 
+          boundTypeRangeDecrease(b, c, d1, d2)
+          Types.boundRangeDecrease(arg, c, d1, d2)
+        case TAbs(_, b) => boundTypeRangeDecrease(b, c + 1, d1, d2)
+
+    }.ensuring(!t.hasFreeTypeVariablesIn(c, d2))
+
+
     /**
       * * Short version: If c1 ≤ c2, FV(t) ∩ [c1, c1 + d[ = ∅ => FV(t) ∩ [c2, c1 + d[ = ∅
       * 
@@ -651,6 +717,29 @@ object LambdaOmegaProperties{
         case TAbs(_, b) => boundRangeIncreaseCutoff(b, c1, c2, d)
         
     }.ensuring(!t.hasFreeVariablesIn(c2, d - (c2 - c1)))
+
+    @inlineOnce @opaque @pure
+    def boundTypeRangeIncreaseCutoff(t: Term, c1: BigInt, c2: BigInt, d: BigInt): Unit = {
+      decreases(t)
+      require(c1 >= 0 && c2 >= 0)
+      require(0 <= d && c2 - c1 <= d)
+      require(c1 <= c2)
+      require(!t.hasFreeTypeVariablesIn(c1, d))
+
+      t match 
+        case Var(v) => ()
+        case Abs(argT, body) => 
+          Types.boundRangeIncreaseCutoff(argT, c1, c2, d)
+          boundTypeRangeIncreaseCutoff(body, c1, c2, d)
+        case App(t1, t2) => 
+          boundTypeRangeIncreaseCutoff(t1, c1, c2, d)
+          boundTypeRangeIncreaseCutoff(t2, c1, c2, d)
+        case TApp(b, arg) => 
+          boundTypeRangeIncreaseCutoff(b, c1, c2, d)
+          Types.boundRangeIncreaseCutoff(arg, c1, c2, d)
+        case TAbs(_, b) => boundTypeRangeIncreaseCutoff(b, c1 + 1, c2 + 1, d)
+        
+    }.ensuring(!t.hasFreeTypeVariablesIn(c2, d - (c2 - c1)))
 
     /**
       * * Short version: FV(t) ∩ [a, a + b[ = ∅ /\  FV(t) ∩ [a + b, a + b + c[ = ∅ => FV(t) ∩ [a, a + b + c[ = ∅
@@ -684,6 +773,30 @@ object LambdaOmegaProperties{
         case TAbs(_, bt) => boundRangeConcatenation(bt, a, b, c)
 
     }.ensuring(!t.hasFreeVariablesIn(a, b + c))
+
+    @inlineOnce @opaque @pure
+    def boundTypeRangeConcatenation(t: Term, a: BigInt, b: BigInt, c: BigInt): Unit = {
+      decreases(t)
+      require(a >= 0)
+      require(b >= 0)
+      require(c >= 0)
+      require(!t.hasFreeTypeVariablesIn(a, b))
+      require(!t.hasFreeTypeVariablesIn(a + b, c))
+
+      t match
+        case Var(v) => ()
+        case Abs(argT, body) => 
+          Types.boundRangeConcatenation(argT, a, b, c)
+          boundTypeRangeConcatenation(body, a, b, c)
+        case App(t1, t2) => 
+          boundTypeRangeConcatenation(t1, a, b, c)
+          boundTypeRangeConcatenation(t2, a, b, c)
+        case TApp(bt, arg) => 
+          boundTypeRangeConcatenation(bt, a, b, c)
+          Types.boundRangeConcatenation(arg, a, b, c)
+        case TAbs(_, bt) => boundTypeRangeConcatenation(bt, a + 1, b, c)
+
+    }.ensuring(!t.hasFreeTypeVariablesIn(a, b + c))
     
   }
 }
