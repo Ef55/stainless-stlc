@@ -2,11 +2,11 @@ import stainless.lang._
 import stainless.collection._
 import stainless.annotation._
 import stainless.proof._
+import LambdaOmega.*
 
 object Kinding {
-  import LambdaOmega._
 
-  sealed trait KindDerivation{
+  sealed trait KindDerivation {
 
     @pure
     def env: KindEnvironment = this match
@@ -91,13 +91,13 @@ object Kinding {
 
 
   @pure
-  def isWellFormed(env: TypeEnvironment, wf: List[KindDerivation]): Boolean = {
-    decreases(env.length + wf.length)
-    (env, wf) match
+  def isWellFormed(kEnv: KindEnvironment, tEnv: TypeEnvironment, wf: List[KindDerivation]): Boolean = {
+    decreases(tEnv.length + wf.length)
+    (tEnv, wf) match
       case (Nil(), Nil()) => true
-      case (Cons(h1, t1), Cons(h2, t2)) => h2.isSound && h1 == h2.typ && h2.env == Nil() && h2.k == ProperKind && isWellFormed(t1, t2)
+      case (Cons(h1, t1), Cons(h2, t2)) => h2.isSound && h1 == h2.typ && h2.env == kEnv && h2.k == ProperKind && isWellFormed(kEnv, t1, t2)
       case _ => false
-  }.ensuring(_ ==> (wf.length == env.length))
+  }.ensuring(_ ==> (wf.length == tEnv.length))
 
 }
 
@@ -138,17 +138,30 @@ object KindingProperties{
   }.ensuring(kd.isInstanceOf[ArrowKindingDerivation])
 
   @inlineOnce @opaque @pure
-  def isWellFormedApply(env: TypeEnvironment, wf: List[KindDerivation], j: BigInt): Unit = {
-    decreases(env.length + wf.length)
-    require(Kinding.isWellFormed(env, wf))
-    require(j < env.length)
+  def universalKindingInversion(kd: KindDerivation): Unit = {
+    require(kd.typ.isInstanceOf[UniversalType])
+  }.ensuring(kd.isInstanceOf[UniversalKindingDerivation])
+
+  @inlineOnce @opaque @pure
+  def isWellFormedApply(kEnv: KindEnvironment, tEnv: TypeEnvironment, wf: List[KindDerivation], j: BigInt): Unit = {
+    decreases(tEnv.length + wf.length)
+    require(Kinding.isWellFormed(kEnv, tEnv, wf))
+    require(j < tEnv.length)
     require(0 <= j) 
-    (env, wf) match
+    (tEnv, wf) match
       case (Nil(), Nil()) => ()
       case (Cons(h1, t1), Cons(h2, t2)) => 
-        if j > 0 then isWellFormedApply(t1, t2, j - 1) else ()
+        if j > 0 then isWellFormedApply(kEnv, t1, t2, j - 1) else ()
       case _ => Unreachable
-  }.ensuring(wf(j).isSound && wf(j).env == Nil() && wf(j).k == ProperKind && wf(j).typ == env(j))
+  }.ensuring(wf(j).isSound && wf(j).env == kEnv && wf(j).k == ProperKind && wf(j).typ == tEnv(j))
+
+  def insertWellFormed(kEnv: KindEnvironment, tEnv: TypeEnvironment, wf: List[KindDerivation], insert: Kind): List[KindDerivation] = {
+    decreases(tEnv.length + wf.length) 
+    require(Kinding.isWellFormed(kEnv, tEnv, wf))
+    (tEnv, wf) match
+      case (Nil(), Nil()) => Nil()
+      case (Cons(h1, t1), Cons(h2, t2)) => Cons(insertKindInEnv(Nil(), insert, kEnv, h2), insertWellFormed(kEnv, t1, t2, insert))
+  }.ensuring(res => Kinding.isWellFormed(insert :: kEnv, TypeTransformations.shift(tEnv, 1, 0), res))
 
   @opaque @inlineOnce @pure
   def kindEnvironmentWeakening(kd: KindDerivation, envExt: KindEnvironment): KindDerivation = {

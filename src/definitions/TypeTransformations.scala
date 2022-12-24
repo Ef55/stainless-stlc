@@ -32,6 +32,16 @@ object TypeTransformations {
       case UniversalType(arg, body) => UniversalType(arg, shift(body, d, c + 1))
   }.ensuring(_.size == t.size)
 
+  @pure
+  def shift(env: TypeEnvironment, d: BigInt, c: BigInt): TypeEnvironment = {
+    decreases(env)
+    require(c >= 0)
+    require(if(d < 0) !env.hasFreeVariablesIn(c, -d) else true)
+    env match
+      case Nil() => Nil() 
+      case Cons(h, t) => Cons(shift(h, d, c), shift(t, d, c))
+  }.ensuring(res => res.length == env.length)
+
   /**
   * Substitution of a type s for variable number j in type t - TAPL Definition 6.2.4
   */
@@ -681,3 +691,235 @@ object TypeTransformationsProperties {
   )    
 }
 
+object EnvTransformationsProperties {
+
+  import LambdaOmega.*
+  import TypeTransformations.*
+  import LambdaOmegaProperties.Env.*
+
+  def shiftApply(env: TypeEnvironment, d: BigInt, c: BigInt, j: BigInt): Unit = {
+    decreases(env)
+    require(c >= 0)
+    require(d < 0 ==> !env.hasFreeVariablesIn(c, -d))
+    require(0 <= j)
+    require(j < env.length)
+    
+    env match
+      case Nil() => ()
+      case Cons(h, t) => if j == 0 then () else shiftApply(t, d, c, j - 1)
+
+  }.ensuring(shift(env, d, c)(j) == shift(env(j), d, c))
+
+  def shiftConcat(@induct env1: TypeEnvironment, env2: TypeEnvironment, d: BigInt, c: BigInt): Unit = {
+    require(c >= 0)
+    require(d < 0 ==> !env.hasFreeVariablesIn(c, -d)) 
+  }.ensuring(shift(env1, d, c) ++ shift(env2, d, c) == shift(env1 ++ env2, d, c))
+
+  /**
+    * A 0 place shift does not affect the time
+    */
+  @inlineOnce @opaque @pure
+  def shift0Identity(env: TypeEnvironment, c: BigInt): Unit = {
+    decreases(env)
+    require(c >= 0)
+    env match
+      case Nil() => ()
+      case Cons(h, t) => 
+        TypeTransformationsProperties.shift0Identity(h, c)
+        shift0Identity(t, c)
+
+  }.ensuring(shift(env, 0, c) == env)
+
+  /**
+    * This theorem states how to compose two shifts into one bigger shift under some conditions
+    * 
+    * * Short and less general version: shift(shift(T, a, c), b, c) == shift(T, a + b, c)
+    * 
+    * Long version:
+    *
+    * Preconditions:
+    *   - a, c and d are non negative (could be generalized for a < 0 as well)
+    *   - d <= c + a
+    *   - FV(t) ∩ [c, d[ = ∅ if c <= d, otherwise invert c and d
+    *   - b >= - a
+    * 
+    * Postcondition:
+    *   - If b < 0, FV(shift(t, a, c)) ∩ [d, d - b[ = ∅ (not interesting, but needed in order to express the second result)
+    *   - shift(shift(t, a, c), b, d) == shift(t, a + b, c)
+    * 
+    */
+  @inlineOnce @opaque @pure
+  def boundRangeShiftComposition(env: TypeEnvironment, a: BigInt, b: BigInt, c: BigInt, d: BigInt): Unit = {
+    decreases(env)
+    require(a >= 0)
+    require(c >= 0)
+    require(d >= 0)
+    require(d <= c + a)
+    require(if(d < c) !env.hasFreeVariablesIn(d, c - d) else !env.hasFreeVariablesIn(c, d - c))
+    require(-b <= a)
+
+
+    if d < c then
+      boundRangeShift(env, a, c, c, 0)
+      boundRangeShift(env, a, c, d, c - d)
+      boundRangeConcatenation(shift(env, a, c), d, c - d, a)
+      boundRangeDecrease(shift(env, a, c), d, c - d + a, a)
+    else
+      boundRangeShift(env, a, c, c, d - c)
+      boundRangeIncreaseCutoff(shift(env, a, c), c, d, a + d - c)
+
+    if b < 0 then boundRangeDecrease(shift(env, a, c), d, a, -b) else () 
+
+    env match
+      case Nil() => ()
+      case Cons(h, t) => 
+        TypeTransformationsProperties.boundRangeShiftComposition(h, a, b, c, d)
+        boundRangeShiftComposition(t, a, b, c, d)
+
+  }.ensuring(
+    (b < 0 ==> !shift(env, a, c).hasFreeVariablesIn(d, -b)) &&
+    shift(shift(env, a, c), b, d) == shift(env, a + b, c)
+  )
+
+  /**
+    * Describes exactly how free variables behave after shifts
+    */
+  @inlineOnce @opaque @pure
+  def boundRangeShift(env: TypeEnvironment, d: BigInt, c: BigInt, a: BigInt, b: BigInt): Unit = {
+    decreases(env)
+    require(c >= 0)
+    require(b >= 0)
+    require(a >= 0)
+    require(d < 0 ==> !env.hasFreeVariablesIn(c, -d))
+
+    env match
+      case Nil() => ()
+      case Cons(h, t) => 
+        TypeTransformationsProperties.boundRangeShift(h, d, c, a, b)
+        boundRangeShift(t, d, c, a, b)
+
+  }.ensuring(
+      !env.hasFreeVariablesIn(a, b)
+        ==
+      (if d >= 0 then 
+        ((c >= a && c <= a + b)           ==> !shift(env, d, c).hasFreeVariablesIn(a, b + d)) &&
+        ((c <= a + b)                     ==> !shift(env, d, c).hasFreeVariablesIn(a + d, b)) &&
+        ((c >= a)                         ==> !shift(env, d, c).hasFreeVariablesIn(a, b))
+      else
+        ((a + b <= c)                     ==> !shift(env, d, c).hasFreeVariablesIn(a, b)) &&
+        ((a + b >= c && a <= c)           ==> !shift(env, d, c).hasFreeVariablesIn(a, c - a)) &&
+        ((a + b >= -d + c && a <= -d + c) ==> !shift(env, d, c).hasFreeVariablesIn(c, a + b + d - c)) &&
+        ((a >= -d + c)                    ==> !shift(env, d, c).hasFreeVariablesIn(a + d, b)))
+    )
+
+  /** 
+    * The four following theorems state under which conditions, two shifts commute
+    */
+  @inlineOnce @opaque @pure
+  def shiftCommutativityPosPos(env: TypeEnvironment, b: BigInt, c: BigInt, a: BigInt, d: BigInt) : Unit ={
+    decreases(env)
+    require(a >= 0)
+    require(b >= 0)
+    require(c >= 0)
+    require(d >= 0)
+  
+    env match 
+      case Nil() => ()
+      case Cons(h, t) =>
+        TypeTransformationsProperties.shiftCommutativityPosPos(h, b, c, a, d)
+        shiftCommutativityPosPos(t, b, c, a, d)
+      
+  }.ensuring(
+    if d <= c                then shift(shift(env, b, c), a, d) == shift(shift(env, a, d), b, c + a) else
+    if d - b >= c            then shift(shift(env, b, c), a, d) == shift(shift(env, a, d - b), b, c) else
+    if d >= c && d - b <= c  then shift(shift(env, b, c), a, d) == shift(shift(env, a, c), b, c) else
+    true)
+
+  @inlineOnce @opaque @pure
+  def shiftCommutativityPosNeg(env: TypeEnvironment, b: BigInt, c: BigInt, a: BigInt, d: BigInt) : Unit = {
+    decreases(env)
+    require(c >= 0)
+    require(d >= 0)
+    require(b >= 0)
+    require(a < 0)
+    require(if d >= c && b >= d - c  then !shift(env, b, c).hasFreeVariablesIn(d, -a) && !env.hasFreeVariablesIn(c, -a) else
+            if b <= d - c            then !shift(env, b, c).hasFreeVariablesIn(d, -a) || !env.hasFreeVariablesIn(d - b, -a) else
+            if -a <= c - d           then !shift(env, b, c).hasFreeVariablesIn(d, -a) || !env.hasFreeVariablesIn(d, -a) else
+            if d <= c && -a >= c - d then !shift(env, b, c).hasFreeVariablesIn(d, -a) && !env.hasFreeVariablesIn(d, -a) else
+            true) 
+
+    env match 
+      case Nil() => ()
+      case Cons(h, t) =>
+        TypeTransformationsProperties.shiftCommutativityPosNeg(h, b, c, a, d)
+        shiftCommutativityPosNeg(t, b, c, a, d)
+      
+  }.ensuring(
+    if d >= c && b >= d - c  then !shift(env, b, c).hasFreeVariablesIn(d, -a) && !env.hasFreeVariablesIn(c, -a) &&
+                                  shift(shift(env, b, c), a, d) == shift(shift(env, a, c), b, c) else
+    if b <= d - c            then !shift(env, b, c).hasFreeVariablesIn(d, -a) && !env.hasFreeVariablesIn(d - b, -a) &&
+                                  shift(shift(env, b, c), a, d) == shift(shift(env, a, d - b), b, c) else
+    if -a <= c - d           then !shift(env, b, c).hasFreeVariablesIn(d, -a) && !env.hasFreeVariablesIn(d, -a) &&
+                                  shift(shift(env, b, c), a, d) == shift(shift(env, a, d), b, c + a) else
+    if d <= c && -a >= c - d then !shift(env, b, c).hasFreeVariablesIn(d, -a) && !env.hasFreeVariablesIn(d, -a) &&
+                                  shift(shift(env, b, c), a, d) == shift(shift(env, a, d), b, d)
+    else true)
+
+  @inlineOnce @opaque @pure
+  def shiftCommutativityNegPos(env: TypeEnvironment, b: BigInt, c: BigInt, a: BigInt, d: BigInt) : Unit = {
+    decreases(env)
+    require(c >= 0)
+    require(d >= 0)
+    require(b < 0)
+    require(a >= 0)
+    require(!env.hasFreeVariablesIn(c, -b))
+    
+    //Weaker but more complex precond
+    // require(if d >= c                then !subs.hasFreeVariablesIn(c, -b) || !shift(subs, a, d - b).hasFreeVariablesIn(c, - b) else 
+    //         if d <= c                then !subs.hasFreeVariablesIn(c, -b) || !shift(subs, a, d).hasFreeVariablesIn(c + a, - b) else
+    //         true) 
+
+    env match 
+      case Nil() => ()
+      case Cons(h, t) =>
+        TypeTransformationsProperties.shiftCommutativityNegPos(h, b, c, a, d)
+        shiftCommutativityNegPos(t, b, c, a, d)
+      
+  }.ensuring(if d >= c                then !env.hasFreeVariablesIn(c, -b) && !shift(env, a, d - b).hasFreeVariablesIn(c, - b) && 
+                                      shift(shift(env, b, c), a, d) == shift(shift(env, a, d - b), b, c) else
+              if d <= c                then !env.hasFreeVariablesIn(c, -b) && !shift(env, a, d).hasFreeVariablesIn(c + a, - b) && 
+                                      shift(shift(env, b, c), a, d) == shift(shift(env, a, d), b, c + a) else
+              true)
+
+
+  @inlineOnce @opaque @pure
+  def shiftCommutativityNegNeg(env: TypeEnvironment, b: BigInt, c: BigInt, a: BigInt, d: BigInt) : Unit ={
+    decreases(env)
+    require(c >= 0)
+    require(d >= 0)
+    require(a < 0)
+    require(b < 0)
+    require(if d >= c                then !env.hasFreeVariablesIn(c, -b) && !env.hasFreeVariablesIn(d - b, -a) else
+            if d <= c && -a <= c - d then !env.hasFreeVariablesIn(c, -b) && !env.hasFreeVariablesIn(d, -a) else 
+            if d <= c && -a >= c - d then !env.hasFreeVariablesIn(c, -b) && !env.hasFreeVariablesIn(d, -a) && 
+                                                            !shift(env, b, c).hasFreeVariablesIn(d, -a) else
+            true) 
+
+    env match
+      case Nil() => ()
+      case Cons(h, t) =>
+        TypeTransformationsProperties.shiftCommutativityNegNeg(h, b, c, a, d)
+        shiftCommutativityNegNeg(t, b, c, a, d)
+      
+  }.ensuring(if d >= c                 then !env.hasFreeVariablesIn(c, -b) && !env.hasFreeVariablesIn(d - b, -a) && 
+                                            !shift(env, a, d - b).hasFreeVariablesIn(c, -b) && !shift(env, b, c).hasFreeVariablesIn(d, -a) &&
+                                            shift(shift(env, b, c), a, d) == shift(shift(env, a, d - b), b, c) else
+              if d <= c && -a <= c - d then !env.hasFreeVariablesIn(c, -b) && !env.hasFreeVariablesIn(d, -a) && 
+                                            !shift(env, a, d).hasFreeVariablesIn(c + a, -b) && !shift(env, b, c).hasFreeVariablesIn(d, -a) &&
+                                            shift(shift(env, b, c), a, d) == shift(shift(env, a, d), b, c + a) else
+              if d <= c && -a >= c - d then !env.hasFreeVariablesIn(c, -b) && !env.hasFreeVariablesIn(d, -a) && 
+                                            !shift(env, a, d).hasFreeVariablesIn(d, -b) && !shift(env, b, c).hasFreeVariablesIn(d, -a) &&
+                                            shift(shift(env, b, c), a, d) == shift(shift(env, a, d), b, d) else
+              true)
+
+}

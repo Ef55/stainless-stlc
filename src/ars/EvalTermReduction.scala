@@ -13,6 +13,7 @@ import stainless.collection._
 import stainless.annotation._
 import LambdaOmega._
 import TermTransformations._
+import TypeTermTransformations._
 import ARS._
 import ARSProperties._
 
@@ -83,7 +84,7 @@ object EvalTermReduction{
           rd.isSound && rd.term1 == t11 && rd.term2 == t21 && t12 == t22
         case AppDerivationR(App(t11, t12), App(t21, t22), rd) =>
           rd.isSound && rd.term1 == t12 && rd.term2 == t22 && t11 == t21
-        case TAbsDerivation(TAbs(k1, b1), TAbs(k1, b1), rd) => 
+        case TAbsDerivation(TAbs(k1, b1), TAbs(k2, b2), rd) => 
           rd.isSound && rd.term1 == b1 && rd.term2 == b2 && k1 == k2
         case TAppDerivation(TApp(b1, t1), TApp(b2, t2), rd) => 
           rd.isSound && rd.term1 == b1 && rd.term2 == b2 && t1 == t2
@@ -288,34 +289,10 @@ object EvalTermReduction{
             case tabs@TAbs(_, _) => Some(TAppAbsDerivation(tabs, arg))
             case _ => None()
       case _ => None()
-  }
-
-  /**
-   * Full beta reduction soudness
-   * That is the proof witnessing T -> T' is sound
-   */
-  @pure @opaque @inlineOnce
-  def callByValueReduceSoundness(t: Term): Unit = {
-    decreases(t)
-    require(callByValueReduce(t).isDefined)
-    t match
-      case at@App(t11, t12) =>
-        callByValueReduce(t11) match 
-          case Some(prd1) => callByValueReduceSoundness(t11)
-          case _ => callByValueReduce(t12) match 
-            case Some(prd2) => callByValueReduceSoundness(t12)
-            case _ => t11 match 
-              case Abs(_, _) => ()
-              case _ => ()
-      case (tapp@TApp(body, arg)) => 
-        callByValueReduce(body) match 
-          case Some(bdr) => callByValueReduceSoundness(body)
-          case _ => body match 
-            case tabs@TAbs(_, _) => ()
-            case _ => None()
-      case _ => ()
-
-  }.ensuring(callByValueReduce(t).get.isSound && callByValueReduce(t).get.term1 == t)
+  }.ensuring( _ match
+    case Some(erd) => erd.isSound && erd.term1 == t
+    case None()    => true
+  )
 
   /**
     * Outputs if T1 -> T2 according to full beta reduction
@@ -326,16 +303,8 @@ object EvalTermReduction{
     callByValueReduce(t1) match
       case Some(prd) => if prd.term2 == t2 then Some(prd) else None()
       case None() => None()
-  }
-
-  /**
-   * Soudness of callByValueReducesTo
-   * That is if the procedure outputs a proof of T1 -> T2, then it is sound
-   */
-  @pure @opaque @inlineOnce
-  def callByValueReducesToSoundness(t1: Term, t2: Term): Unit = {
-    require(callByValueReducesTo(t1, t2).isDefined)
-    callByValueReduceSoundness(t1)
-  }.ensuring(callByValueReducesTo(t1, t2).get.isSound && callByValueReducesTo(t1, t2).get.term1 == t1 && callByValueReducesTo(t1, t2).get.term2 == t2)
+  }.ensuring(_ match
+    case Some(erd) => erd.isSound && erd.term1 == t1 && erd.term2 == t2
+    case None()    => true)
 
 }

@@ -281,6 +281,21 @@ object LambdaOmega {
    */
   type KindEnvironment = List[Kind]
   type TypeEnvironment = List[Type]
+
+  extension (env: TypeEnvironment){
+
+    @pure
+    def hasFreeVariablesIn(c: BigInt, d: BigInt): Boolean = {
+      decreases(env)
+      require(c >= 0)
+      require(d >= 0)
+      env match
+        case Nil() => false
+        case Cons(h, t) => h.hasFreeVariablesIn(c, d) || t.hasFreeVariablesIn(c, d)
+    }.ensuring(res => (d == 0) ==> !res)
+
+  }
+
 }
 
 object LambdaOmegaProperties{
@@ -797,6 +812,98 @@ object LambdaOmegaProperties{
         case TAbs(_, bt) => boundTypeRangeConcatenation(bt, a + 1, b, c)
 
     }.ensuring(!t.hasFreeTypeVariablesIn(a, b + c))
+    
+  }
+
+  object Env {
+
+    /**
+      * * Short version: If d2 ≤ d1, FV(T) ∩ [c, c + d1[ = ∅ => FV(T) ∩ [c, c + d2[ = ∅
+      * 
+      * Long version:
+      * 
+      * Preconditions:
+      *   - d2 and c are non negative
+      *   - d1 >= d2
+      *   - T has no free variable occurences between c and c + d1
+      * 
+      * Postcondition:
+      *   T has no free variable occurences between c and c + d2
+      */
+    @inlineOnce @opaque @pure
+    def boundRangeDecrease(env: TypeEnvironment, c: BigInt, d1: BigInt, d2: BigInt): Unit = {
+      decreases(env)
+      require(d2 >= 0)
+      require(d1 >= d2)
+      require(c >= 0)
+      require(!env.hasFreeVariablesIn(c, d1))
+
+      env match
+        case Nil() => ()
+        case Cons(h, t) => 
+          LambdaOmegaProperties.Types.boundRangeDecrease(h, c, d1, d2)
+          boundRangeDecrease(t, c, d1, d2)
+
+    }.ensuring(!env.hasFreeVariablesIn(c, d2))
+
+    /**
+      * * Short version: If c1 ≤ c2, FV(T) ∩ [c1, c1 + d[ = ∅ => FV(T) ∩ [c2, c1 + d[ = ∅
+      * 
+      * Long version:
+      * 
+      * Preconditions:
+      *   - c1 is non negative
+      *   - c1 <= c2 <= c1 + d
+      *   - T has no free variable occurences between c1 and c1 + d
+      * 
+      * Postcondition:
+      *   T has no free variable occurences between c2 and d - (c2 - c1) + c2 (= c1 + d)
+      */
+    @inlineOnce @opaque @pure
+    def boundRangeIncreaseCutoff(env: TypeEnvironment, c1: BigInt, c2: BigInt, d: BigInt): Unit = {
+      decreases(env)
+      require(0 <= c1)
+      require(c1 <= c2)
+      require(c2 <= c1 + d)
+      require(!env.hasFreeVariablesIn(c1, d))
+
+      env match
+        case Nil() => ()
+        case Cons(h, t) => 
+          LambdaOmegaProperties.Types.boundRangeIncreaseCutoff(h, c1, c2, d)
+          boundRangeIncreaseCutoff(t, c1, c2, d)
+        
+    }.ensuring(!env.hasFreeVariablesIn(c2, d - (c2 - c1)))
+
+    /**
+      * * Short version: FV(T) ∩ [a, a + b[ = ∅ /\  FV(T) ∩ [a + b, a + b + c[ = ∅ => FV(T) ∩ [a, a + b + c[ = ∅
+      * 
+      * Long version:
+      * 
+      * Preconditions:
+      *   - a, b and c are non negative
+      *   - T has no free variable occurences between a and a + b
+      *   - T has no free variable occurences between a + b and a + b + c
+      * 
+      * Postcondition:
+      *   T has no free variable occurences between a and a + b + c
+      */
+    @inlineOnce @opaque @pure
+    def boundRangeConcatenation(env: TypeEnvironment, a: BigInt, b: BigInt, c: BigInt): Unit = {
+      decreases(env)
+      require(a >= 0)
+      require(b >= 0)
+      require(c >= 0)
+      require(!env.hasFreeVariablesIn(a, b))
+      require(!env.hasFreeVariablesIn(a + b, c))
+
+      env match
+        case Nil() => ()
+        case Cons(h, t) => 
+          LambdaOmegaProperties.Types.boundRangeConcatenation(h, a, b, c)
+          boundRangeConcatenation(t, a, b, c)
+
+    }.ensuring(!env.hasFreeVariablesIn(a, b + c))
     
   }
 }

@@ -744,10 +744,15 @@ object ParallelTypeReductionProperties {
         assert(h.isValid) //needed
         assert(h.unfold.type1.isInstanceOf[ArrowType]) //needed
         h.unfold match
-          case ReflDerivation(_) => arrowMultiStepReduction(s1, s2, t)
+          case ReflDerivation(_) => 
+            assert(h.unfold.type1 == t.t1)
+            arrowMultiStepReduction(s1, s2, t)
           case ArrowTypeDerivation(_, ArrowType(s3, s4), br1, br2) =>
             val (sdr1, sdr2) = arrowMultiStepReduction(s3, s4, t)
-            (ARSComposition(br1.toARSStep, sdr1), ARSComposition(br2.toARSStep, sdr2))
+            val ac1: MultiStepParallelReduction = ARSComposition(br1.toARSStep, sdr1)
+            val ac2: MultiStepParallelReduction = ARSComposition(br2.toARSStep, sdr2)
+            assert(red.t2 == ArrowType(ac1.t2, ac2.t2))
+            (ac1, ac2)
           case _ => Unreachable
     
   }.ensuring(
@@ -969,5 +974,30 @@ object ParallelTypeReductionProperties {
     reduceSameFormEquivalent(universalPrd1, universalPrd2)
 
   }.ensuring(res => res.isValid && res.t1 == UniversalType(k, eq.t1) && res.t2 == UniversalType(k, eq.t2))
+
+  def multiStepShift(ms: MultiStepParallelReduction, d: BigInt, c: BigInt): MultiStepParallelReduction = {
+    decreases(ms)
+    require(ms.isValid)
+
+    ms match
+      case ARSIdentity(t) => ARSIdentity(shift(t, d, c))
+      case ARSComposition(h, t) => 
+        assert(h.isValid)
+        ARSComposition(reduceShift(h.unfold, d, c).toARSStep, multiStepShift(t, d, c))
+
+  }.ensuring(res => res.isValid &&
+                    res.t1 == shift(ms.t1, d, c) &&
+                    res.t2 == shift(ms.t2, d, c))
+
+  def equivalenceShift(eq: ParallelEquivalence, d: BigInt, c: BigInt): ParallelEquivalence = {
+    require(eq.isValid)
+
+    val (prd11, prd12) = churchRosser(eq)
+    val (prd21, prd22) = (multiStepShift(prd11, d, c), multiStepShift(prd12, d, c))
+    reduceSameFormEquivalent(prd21, prd22)
+
+  }.ensuring(res => res.isValid &&
+                    res.t1 == shift(eq.t1, d, c) &&
+                    res.t2 == shift(eq.t2, d, c))
    
 }

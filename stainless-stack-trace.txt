@@ -1,0 +1,9 @@
+inox.package$FatalError: There were errors.
+	at inox.package$FatalError$.apply(package.scala:24)
+	at inox.Reporter.onFatal(Reporter.scala:43)
+	at inox.Reporter.fatalError(Reporter.scala:54)
+	at inox.Reporter.fatalError(Reporter.scala:111)
+	at inox.Reporter.terminateIfError(Reporter.scala:83)
+	at stainless.frontend.SplitCallBack.endExtractions(SplitCallBack.scala:76)
+	at stainless.frontend.ThreadedFrontend$$anon$1.run(ThreadedFrontend.scala:34)
+	at java.base/java.lang.Thread.run(Thread.java:1589)
