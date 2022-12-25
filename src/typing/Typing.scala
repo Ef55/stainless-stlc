@@ -414,6 +414,9 @@ object TypingProperties {
     decreases(td)
     require(td.isSound)
     require(env1 ++ (remove :: env2) == td.kindEnv)
+    require(td.typeEnv.hasFreeVariablesIn(env1.length, 1))
+    require(td.t.hasFreeVariablesIn(env1.length, 1))
+    require(td.term.hasFreeTypeVariablesIn(env1.length, 1))
 
     val newEnv = env1 ++ env2
     val newTEnv = TypeTransformations.shift(td.typeEnv, -1, env1.length)
@@ -425,29 +428,29 @@ object TypingProperties {
         VarTypingDerivation(newEnv, newTEnv, newType, Var(k))
 
       case AbsTypingDerivation(_, tEnv, typ, Abs(argType, body), kd, btd) =>
-        val resBtd = insertInKindEnv(env1, insert, env2, btd)
-        val resKd = insertKindInEnv(env1, insert, env2, kd)
+        val resBtd = removeInKindEnv(env1, remove, env2, btd)
+        val resKd  = removeKindInEnv(env1, remove, env2, kd)
         AbsTypingDerivation(newEnv, newTEnv, newType, Abs(TypeTransformations.shift(argType, -1, env1.length), resBtd.term), resKd, resBtd)
 
       case AppTypingDerivation(_, tEnv, typ, App(t1, t2), td1, td2) =>
-        val resTd1 = insertInKindEnv(env1, insert, env2, td1)
-        val resTd2 = insertInKindEnv(env1, insert, env2, td2)
+        val resTd1 = removeInKindEnv(env1, remove, env2, td1)
+        val resTd2 = removeInKindEnv(env1, remove, env2, td2)
         AppTypingDerivation(newEnv, newTEnv, newType, App(resTd1.term, resTd2.term), resTd1, resTd2)
 
       case EquivTypingDerivation(_, tEnv, typ, ter, btd, equiv, kd) => 
-        val resEtd   = insertInKindEnv(env1, insert, env2, btd)
-        val resKd    = insertKindInEnv(env1, insert, env2, kd)
+        val resEtd   = removeInKindEnv(env1, remove, env2, btd)
+        val resKd    = removeKindInEnv(env1, remove, env2, kd)
         val resEquiv = ParallelTypeReductionProperties.equivalenceShift(equiv, -1, env1.length)
         EquivTypingDerivation(newEnv, newTEnv, newType, resEtd.term, resEtd, resEquiv, resKd)
 
       case TAbsTypingDerivation(_, tEnv, typ, TAbs(k, body), btd) =>
-        val resBtd = insertInKindEnv(k :: env1, insert, env2, btd)
-        EnvTransformationsProperties.shiftCommutativityPosPos(tEnv, 1, env1.length, 1, 0)
+        val resBtd = removeInKindEnv(k :: env1, remove, env2, btd)
+        EnvTransformationsProperties.shiftCommutativityPosPos(tEnv, -1, env1.length, 1, 0)
         TAbsTypingDerivation(newEnv, newTEnv, newType, TAbs(k, resBtd.term), resBtd)
 
       case TAppTypingDerivation(_, tEnv, typ, TApp(body, arg), btd, kd) =>
-        val resBtd = insertInKindEnv(env1, insert, env2, btd)
-        val resKd  = insertKindInEnv(env1, insert, env2, kd)
+        val resBtd = removeInKindEnv(env1, remove, env2, btd)
+        val resKd  = removeKindInEnv(env1, remove, env2, kd)
         btd.t match
           case UniversalType(k, b) => 
             TypeTransformationsProperties.shiftAbsSubstitutionCommutativity(b, arg, -1, env1.size)
@@ -458,54 +461,54 @@ object TypingProperties {
   }.ensuring(res =>
     res.isSound &&
     ( res.term    == TypeTermTransformations.shiftType(td.term, -1, env1.length)) &&
-    ( res.kindEnv == env1 ++ (insert :: env2) ) &&
+    ( res.kindEnv == env1 ++ (remove :: env2) ) &&
     ( res.typeEnv == TypeTransformations.shift(td.typeEnv, -1, env1.length)) &&
     ( res.t       == TypeTransformations.shift(td.t, -1, env1.length))
   )
 
 
-  // @opaque @pure @inlineOnce
-  // def preservationUnderSubst(td: TypeDerivation, j: BigInt, sd: TypeDerivation): TypeDerivation = {
-  //   decreases(td)
-  //   require(td.isSound)
-  //   require(sd.isSound)
-  //   require(td.kindEnv == sd.kindEnv)
-  //   require(td.typeEnv == sd.typeEnv)
-  //   require(0 <= j && j < td.typeEnv.size)
-  //   require(td.typeEnv(j) == sd.t)
+  @opaque @pure @inlineOnce
+  def preservationUnderSubst(td: TypeDerivation, j: BigInt, sd: TypeDerivation): TypeDerivation = {
+    decreases(td)
+    require(td.isSound)
+    require(sd.isSound)
+    require(td.kindEnv == sd.kindEnv)
+    require(td.typeEnv == sd.typeEnv)
+    require(0 <= j && j < td.typeEnv.size)
+    require(td.typeEnv(j) == sd.t)
 
-  //   val result = TermTransformations.substitute(td.term, j, sd.term)
+    val result = TermTransformations.substitute(td.term, j, sd.term)
 
-  //   td match 
-  //     case VarTypingDerivation(kEnv, tEnv, env, typ, Var(k)) => if j == k then sd else td
+    td match 
+      case VarTypingDerivation(kEnv, tEnv, env, typ, Var(k)) => if j == k then sd else td
 
-  //     case AbsTypingDerivation(kEnv, tEnv, typ, Abs(argType, body), kd, btd) => 
-  //       val d0 = insertTypeInEnv(Nil(), argType, td.env, sd)
-  //       val d1 = preservationUnderSubst(btd, j+1, d0)
-  //       AbsTypingDerivation(kEnv, tEnv, typ, Abs(argType, d1.term), kd, d1)
+      case AbsTypingDerivation(kEnv, tEnv, typ, Abs(argType, body), kd, btd) => 
+        val d0 = insertTypeInEnv(Nil(), argType, td.env, sd)
+        val d1 = preservationUnderSubst(btd, j+1, d0)
+        AbsTypingDerivation(kEnv, tEnv, typ, Abs(argType, d1.term), kd, d1)
 
-  //     case AppTypingDerivation(kEnv, tEnv, typ, App(t1, t2), td1, td2) => 
-  //       val td1p = preservationUnderSubst(td1, j, sd)
-  //       val td2p = preservationUnderSubst(td2, j, sd)
-  //       AppTypingDerivation(kEnv, tEnv, typ, App(td1p.term, td2p.term), td1p, td2p)
+      case AppTypingDerivation(kEnv, tEnv, typ, App(t1, t2), td1, td2) => 
+        val td1p = preservationUnderSubst(td1, j, sd)
+        val td2p = preservationUnderSubst(td2, j, sd)
+        AppTypingDerivation(kEnv, tEnv, typ, App(td1p.term, td2p.term), td1p, td2p)
 
-  //     case EquivTypingDerivation(kEnv, tEnv, typ, term, btd, equiv, kd) => 
-  //       val substD = preservationUnderSubst(btd, j, sd)
-  //       EquivTypingDerivation(kEnv, tEnv, typ, substD.term, substD, equiv, kd)
+      case EquivTypingDerivation(kEnv, tEnv, typ, term, btd, equiv, kd) => 
+        val substD = preservationUnderSubst(btd, j, sd)
+        EquivTypingDerivation(kEnv, tEnv, typ, substD.term, substD, equiv, kd)
 
-  //     case TAppTypingDerivation(kEnv, tEnv, typ, term, btd) =>
-  //       // val substD = preservationUnderSubst(btd, )
-  //       TAppTypingDerivation(kEnv, tEnv, typ, substD.term, substD)
+      case TAppTypingDerivation(kEnv, tEnv, typ, term, btd) =>
+        // val substD = preservationUnderSubst(btd, )
+        TAppTypingDerivation(kEnv, tEnv, typ, substD.term, substD)
       
-  //     case _ => Unreachable
+      case _ => Unreachable
 
-  // }.ensuring(res =>
-  //   res.isSound &&
-  //   res.term == TermTransformations.substitute(td.term, j, sd.term) &&
-  //   res.t == td.t &&
-  //   res.kindEnv == td.kindEnv &&
-  //   res.typeEnv == td.typeEnv
-  // )
+  }.ensuring(res =>
+    res.isSound &&
+    res.term == TermTransformations.substitute(td.term, j, sd.term) &&
+    res.t == td.t &&
+    res.kindEnv == td.kindEnv &&
+    res.typeEnv == td.typeEnv
+  )
 
   // @opaque @pure @inlineOnce
   // def preservationUnderAbsSubst(bodyTd: TypeDerivation, argTd: TypeDerivation): TypeDerivation = {

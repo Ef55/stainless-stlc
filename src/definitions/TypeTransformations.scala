@@ -708,12 +708,19 @@ object EnvTransformationsProperties {
       case Nil() => ()
       case Cons(h, t) => if j == 0 then () else shiftApply(t, d, c, j - 1)
 
-  }.ensuring(shift(env, d, c)(j) == shift(env(j), d, c))
+  }.ensuring(
+    (d < 0 ==> !env(j).hasFreeVariablesIn(c, -d)) &&
+    shift(env, d, c)(j) == shift(env(j), d, c)
+  )
 
   def shiftConcat(@induct env1: TypeEnvironment, env2: TypeEnvironment, d: BigInt, c: BigInt): Unit = {
     require(c >= 0)
-    require(d < 0 ==> !env.hasFreeVariablesIn(c, -d)) 
-  }.ensuring(shift(env1, d, c) ++ shift(env2, d, c) == shift(env1 ++ env2, d, c))
+    require(d < 0 ==> !env1.hasFreeVariablesIn(c, -d))
+    require(d < 0 ==> !env2.hasFreeVariablesIn(c, -d))
+  }.ensuring(
+    (d < 0 ==> !(env1 ++ env2).hasFreeVariablesIn(c, -d)) &&
+    shift(env1, d, c) ++ shift(env2, d, c) == shift(env1 ++ env2, d, c)
+  )
 
   /**
     * A 0 place shift does not affect the time

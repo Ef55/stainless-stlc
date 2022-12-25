@@ -978,6 +978,8 @@ object ParallelTypeReductionProperties {
   def multiStepShift(ms: MultiStepParallelReduction, d: BigInt, c: BigInt): MultiStepParallelReduction = {
     decreases(ms)
     require(ms.isValid)
+    require(c >= 0)
+    require(d < 0 ==> !ms.t1.hasFreeVariablesIn(c, -d))
 
     ms match
       case ARSIdentity(t) => ARSIdentity(shift(t, d, c))
@@ -991,6 +993,8 @@ object ParallelTypeReductionProperties {
 
   def equivalenceShift(eq: ParallelEquivalence, d: BigInt, c: BigInt): ParallelEquivalence = {
     require(eq.isValid)
+    require(c >= 0)
+    require(d < 0 ==> (!eq.t1.hasFreeVariablesIn(c, -d) && !eq.t2.hasFreeVariablesIn(c + 1, -d)))
 
     val (prd11, prd12) = churchRosser(eq)
     val (prd21, prd22) = (multiStepShift(prd11, d, c), multiStepShift(prd12, d, c))

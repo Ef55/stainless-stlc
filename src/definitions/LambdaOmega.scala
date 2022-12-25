@@ -817,6 +817,20 @@ object LambdaOmegaProperties{
 
   object Env {
 
+    def freeVariablesApply(env: TypeEnvironment, c: BigInt, d: BigInt, j: BigInt): Unit = {
+      decreases(env)
+      require(c >= 0)
+      require(d >= 0)
+      require(0 <= j)
+      require(j < env.length)
+      require(!env.hasFreeVariablesIn(c, d))
+    
+      env match
+        case Nil() => ()
+        case Cons(h, t) => if j == 0 then () else freeVariablesApply(t, c, d, j - 1)
+
+    }.ensuring(!env(j).hasFreeVariablesIn(c, d))
+
     /**
       * * Short version: If d2 ≤ d1, FV(T) ∩ [c, c + d1[ = ∅ => FV(T) ∩ [c, c + d2[ = ∅
       * 
